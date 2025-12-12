@@ -275,7 +275,28 @@ export default function FfmpegRender({
 
       // return the output url
       const outputData = await ffmpeg.readFile("output.mp4");
-      const outputBlob = new Blob([outputData as Uint8Array], {
+      if (typeof outputData === "string") {
+        throw new Error("FFmpeg returned a string for output.mp4");
+      }
+
+      const outputBytes = outputData;
+      let outputBuffer: ArrayBuffer;
+
+      if (outputBytes.buffer instanceof ArrayBuffer) {
+        outputBuffer =
+          outputBytes.byteOffset === 0 &&
+          outputBytes.byteLength === outputBytes.buffer.byteLength
+            ? outputBytes.buffer
+            : outputBytes.buffer.slice(
+                outputBytes.byteOffset,
+                outputBytes.byteOffset + outputBytes.byteLength,
+              );
+      } else {
+        outputBuffer = new ArrayBuffer(outputBytes.byteLength);
+        new Uint8Array(outputBuffer).set(outputBytes);
+      }
+
+      const outputBlob = new Blob([outputBuffer], {
         type: "video/mp4",
       });
       const outputUrl = URL.createObjectURL(outputBlob);
