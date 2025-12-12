@@ -1,59 +1,111 @@
-import OpenAI from "openai";
 import { serverEnv } from "@/lib/env/server";
 
-const apiKey = serverEnv.OPENAI_API_KEY;
-const openai = apiKey ? new OpenAI({ apiKey }) : null;
+const OPENAI_API_BASE = "https://api.openai.com/v1";
 
-const getVideosClient = () => {
-  if (!openai) {
+async function openaiFetch(path: string, init: RequestInit) {
+  if (!serverEnv.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is required to use the Sora Videos API.");
   }
-  const client = (openai as any).videos ?? (openai as any).beta?.videos;
-  if (!client) {
-    throw new Error("OpenAI client is missing the Videos API.");
+
+  const res = await fetch(`${OPENAI_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${serverEnv.OPENAI_API_KEY}`,
+      ...(init.headers ?? {}),
+    },
+  });
+
+  return res;
+}
+
+async function openaiJson<T>(path: string, init: RequestInit) {
+  const res = await openaiFetch(path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI request failed: ${res.status} ${text}`);
   }
-  return client;
-};
+
+  return res.json() as Promise<T>;
+}
 
 export type SoraJob = {
   id: string;
   status: "queued" | "processing" | "completed" | "failed";
-  video_url?: string;
+  error?: string;
 };
 
 export async function createSoraJob(params: {
+  model?: "sora-2" | "sora-2-pro";
   prompt: string;
-  seconds?: "4" | "8" | "12";
+  seconds?: 4 | 8 | 12;
   size?: "720x1280" | "1280x720" | "1024x1792" | "1792x1024";
 }) {
-  const videosClient = getVideosClient();
-
-  const job = await videosClient.create({
-    model: "sora-2",
-    prompt: params.prompt,
-    seconds: params.seconds ?? "8",
-    size: params.size ?? "1280x720",
+  const job = await openaiJson<{ id: string }>("/videos", {
+    method: "POST",
+    body: JSON.stringify({
+      model: params.model ?? "sora-2",
+      prompt: params.prompt,
+      seconds: params.seconds ?? 8,
+      size: params.size ?? "1280x720",
+    }),
   });
 
   return job.id;
 }
 
 export async function getSoraJob(jobId: string): Promise<SoraJob> {
-  const videosClient = getVideosClient();
+  const job = await openaiJson<{
+    id: string;
+    status: string;
+    error?: { message?: string } | string;
+  }>(`/videos/${encodeURIComponent(jobId)}`, { method: "GET" });
 
-  const job = await videosClient.retrieve(jobId);
+  const rawStatus = job.status.toLowerCase();
+  const errorMessage =
+    typeof job.error === "string"
+      ? job.error
+      : job.error?.message ?? undefined;
 
-  if (job.status === "completed") {
-    const content = await videosClient.content(jobId);
-    return {
-      id: job.id,
-      status: "completed",
-      video_url: content.url,
-    };
+  if (
+    rawStatus === "completed" ||
+    rawStatus === "succeeded" ||
+    rawStatus === "success"
+  ) {
+    return { id: job.id, status: "completed" };
   }
 
-  return {
-    id: job.id,
-    status: job.status as SoraJob["status"],
-  };
+  if (
+    rawStatus === "failed" ||
+    rawStatus === "error" ||
+    rawStatus === "cancelled" ||
+    rawStatus === "canceled"
+  ) {
+    return { id: job.id, status: "failed", error: errorMessage };
+  }
+
+  if (rawStatus === "queued" || rawStatus === "pending") {
+    return { id: job.id, status: "queued" };
+  }
+
+  return { id: job.id, status: "processing" };
+}
+
+export async function getSoraContentResponse(jobId: string) {
+  const res = await openaiFetch(`/videos/${encodeURIComponent(jobId)}/content`, {
+    method: "GET",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI content failed: ${res.status} ${text}`);
+  }
+
+  return res;
 }

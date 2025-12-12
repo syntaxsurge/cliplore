@@ -6,10 +6,60 @@ import {
   ExportConfig,
   ProjectState,
   ProjectHistoryEntry,
+  ProjectExport,
+  ProjectPublishRecord,
   RenderEngine,
 } from "../../types";
 
 const MAX_HISTORY = 50;
+
+const defaultExportSettings: ExportConfig = {
+  resolution: "1080p",
+  quality: "high",
+  speed: "fastest",
+  fps: 30,
+  format: "mp4",
+  includeSubtitles: false,
+  renderEngine: "ffmpeg",
+};
+
+export const createProjectState = (
+  overrides: Partial<ProjectState> = {},
+): ProjectState => {
+  const { exportSettings: exportSettingsOverrides, ...restOverrides } =
+    overrides;
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    projectName: "",
+    createdAt: now,
+    lastModified: now,
+    mediaFiles: [],
+    textElements: [],
+    exports: [],
+    currentTime: 0,
+    isPlaying: false,
+    isMuted: false,
+    duration: 0,
+    filesID: [],
+    zoomLevel: 1,
+    timelineZoom: 100,
+    enableMarkerTracking: true,
+    activeSection: "media",
+    activeElement: null,
+    activeElementIndex: 0,
+    resolution: { width: 1920, height: 1080 },
+    fps: 30,
+    aspectRatio: "16:9",
+    history: [],
+    future: [],
+    ...restOverrides,
+    exportSettings: {
+      ...defaultExportSettings,
+      ...(exportSettingsOverrides ?? {}),
+    },
+  };
+};
 
 const snapshotState = (state: ProjectState): ProjectHistoryEntry => {
   const { history, future, ...rest } = state;
@@ -20,41 +70,10 @@ const pushHistory = (state: ProjectState) => {
   const snap = snapshotState(state);
   state.history = [...state.history, snap].slice(-MAX_HISTORY);
   state.future = [];
+  state.lastModified = new Date().toISOString();
 };
 
-export const initialState: ProjectState = {
-  id: crypto.randomUUID(),
-  projectName: "",
-  createdAt: new Date().toISOString(),
-  lastModified: new Date().toISOString(),
-  mediaFiles: [],
-  textElements: [],
-  currentTime: 0,
-  isPlaying: false,
-  isMuted: false,
-  duration: 0,
-  filesID: [],
-  zoomLevel: 1,
-  timelineZoom: 100,
-  enableMarkerTracking: true,
-  activeSection: "media",
-  activeElement: null,
-  activeElementIndex: 0,
-  resolution: { width: 1920, height: 1080 },
-  fps: 30,
-  aspectRatio: "16:9",
-  history: [],
-  future: [],
-  exportSettings: {
-    resolution: "1080p",
-    quality: "high",
-    speed: "fastest",
-    fps: 30,
-    format: "mp4",
-    includeSubtitles: false,
-    renderEngine: "ffmpeg",
-  },
-};
+export const initialState: ProjectState = createProjectState();
 
 const calculateTotalDuration = (
   mediaFiles: MediaFile[],
@@ -150,6 +169,23 @@ const projectStateSlice = createSlice({
       pushHistory(state);
       state.exportSettings.renderEngine = action.payload;
     },
+    addExport: (state, action: PayloadAction<ProjectExport>) => {
+      pushHistory(state);
+      state.exports = [action.payload, ...state.exports];
+    },
+    deleteExport: (state, action: PayloadAction<string>) => {
+      pushHistory(state);
+      state.exports = state.exports.filter((exp) => exp.id !== action.payload);
+    },
+    attachPublishToExport: (
+      state,
+      action: PayloadAction<{ exportId: string; publish: ProjectPublishRecord }>,
+    ) => {
+      pushHistory(state);
+      const exp = state.exports.find((e) => e.id === action.payload.exportId);
+      if (!exp) return;
+      exp.publish = action.payload.publish;
+    },
     setTimelineZoom: (state, action: PayloadAction<number>) => {
       pushHistory(state);
       state.timelineZoom = action.payload;
@@ -168,7 +204,7 @@ const projectStateSlice = createSlice({
       return next;
     },
     createNewProject: (state) => {
-      return { ...initialState };
+      return createProjectState();
     },
     undoState: (state) => {
       const last = state.history[state.history.length - 1];
@@ -210,6 +246,9 @@ export const {
   setSpeed,
   setFps,
   setRenderEngine,
+  addExport,
+  deleteExport,
+  attachPublishToExport,
   setMarkerTrack,
   setIsMuted,
   setActiveSection,

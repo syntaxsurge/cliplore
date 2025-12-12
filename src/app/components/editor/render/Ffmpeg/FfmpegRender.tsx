@@ -1,13 +1,14 @@
 "use client";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { useEffect, useRef, useState } from "react";
-import { getFile, useAppSelector } from "@/app/store";
+import { getFile, storeFile, useAppDispatch, useAppSelector } from "@/app/store";
 import { Heart, Save } from "lucide-react";
 import { extractConfigs } from "@/app/utils/extractConfigs";
 import { mimeToExt } from "@/app/types";
 import { toast } from "react-hot-toast";
 import FfmpegProgressBar from "./ProgressBar";
 import { renderWithDiffusionCore } from "@/lib/media/core-render";
+import { addExport } from "@/app/store/slices/projectSlice";
 
 interface FileUploaderProps {
   loadFunction: () => Promise<void>;
@@ -21,6 +22,7 @@ export default function FfmpegRender({
   ffmpeg,
   logMessages,
 }: FileUploaderProps) {
+  const dispatch = useAppDispatch();
   const { mediaFiles, projectName, exportSettings, duration, textElements } =
     useAppSelector((state) => state.projectState);
   const totalDuration = duration;
@@ -31,6 +33,12 @@ export default function FfmpegRender({
   const [isRendering, setIsRendering] = useState(false);
   const [gpuProgress, setGpuProgress] = useState<number | null>(null);
   const engine = exportSettings.renderEngine ?? "ffmpeg";
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
 
   useEffect(() => {
     if (loaded && videoRef.current && previewUrl) {
@@ -58,7 +66,7 @@ export default function FfmpegRender({
     setIsRendering(true);
     setGpuProgress(null);
 
-    const renderFunction = async () => {
+    const renderFunction = async (): Promise<Blob> => {
       const params = extractConfigs(exportSettings);
 
       if (engine === "gpu") {
@@ -71,7 +79,7 @@ export default function FfmpegRender({
             setGpuProgress(percent);
           },
         });
-        return URL.createObjectURL(blob);
+        return blob;
       }
 
       try {
@@ -299,17 +307,48 @@ export default function FfmpegRender({
       const outputBlob = new Blob([outputBuffer], {
         type: "video/mp4",
       });
-      const outputUrl = URL.createObjectURL(outputBlob);
-      return outputUrl;
+      return outputBlob;
     };
 
     // Run the function and handle the result/error
     try {
-      const outputUrl = await renderFunction();
-      setPreviewUrl(outputUrl);
+      const outputBlob = await renderFunction();
+      const now = new Date();
+      const safeProjectName = (projectName || "cliplore-export")
+        .trim()
+        .replace(/[^\w\-]+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/(^-|-$)/g, "");
+      const exportFile = new File(
+        [outputBlob],
+        `${safeProjectName || "cliplore-export"}-${now.toISOString().replace(/[:.]/g, "")}.mp4`,
+        { type: "video/mp4" },
+      );
+      const exportFileId = crypto.randomUUID();
+      const stored = await storeFile(exportFile, exportFileId);
+      if (!stored) {
+        throw new Error("Failed to store export file.");
+      }
+
+      const nextPreviewUrl = URL.createObjectURL(exportFile);
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(nextPreviewUrl);
       setLoaded(true);
       setIsRendering(false);
-      toast.success("Video rendered successfully");
+
+      dispatch(
+        addExport({
+          id: crypto.randomUUID(),
+          fileId: exportFileId,
+          name: exportFile.name,
+          createdAt: now.toISOString(),
+          durationSeconds: totalDuration,
+          fileSizeBytes: exportFile.size,
+          config: JSON.parse(JSON.stringify(exportSettings)),
+        }),
+      );
+
+      toast.success("Export saved to your project.");
     } catch (err) {
       toast.error("Failed to render video");
       console.error("Failed to render video:", err);

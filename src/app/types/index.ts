@@ -86,11 +86,42 @@ export interface ExportConfig {
 
 export type ActiveElement = "media" | "text" | "export";
 
+export type IpfsPinnedAsset = {
+  ipfsUri: string;
+  gatewayUrl: string;
+};
+
+export type ProjectPublishRecord = {
+  ipId: string;
+  licenseTermsId?: string;
+  txHash?: string;
+  title: string;
+  summary: string;
+  terms: string;
+  video: IpfsPinnedAsset;
+  thumbnail?: IpfsPinnedAsset;
+  ipMetadataUri: string;
+  nftMetadataUri: string;
+  createdAt: string;
+};
+
+export interface ProjectExport {
+  id: string;
+  fileId: string;
+  name: string;
+  createdAt: string;
+  durationSeconds: number;
+  fileSizeBytes: number;
+  config: ExportConfig;
+  publish?: ProjectPublishRecord;
+}
+
 export interface ProjectState {
   id: string;
   mediaFiles: MediaFile[];
   textElements: TextElement[];
   filesID?: string[];
+  exports: ProjectExport[];
   currentTime: number;
   isPlaying: boolean;
   isMuted: boolean;

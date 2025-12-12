@@ -20,7 +20,7 @@ export function SoraPanel() {
     (state) => state.projectState,
   );
   const [prompt, setPrompt] = useState("");
-  const [seconds, setSeconds] = useState<"4" | "8" | "12">("8");
+  const [seconds, setSeconds] = useState<4 | 8 | 12>(8);
   const [size, setSize] = useState<
     "720x1280" | "1280x720" | "1024x1792" | "1792x1024"
   >("1280x720");
@@ -74,14 +74,15 @@ export function SoraPanel() {
       const res = await fetch(`/api/sora?jobId=${jobId}`);
       const data = (await res.json()) as {
         status: string;
-        video_url?: string;
+        error?: string;
+        contentUrl?: string | null;
       };
 
-      if (data.status === "completed" && data.video_url) {
-        return data.video_url;
+      if (data.status === "completed") {
+        return data.contentUrl ?? `/api/sora/content?jobId=${jobId}`;
       }
       if (data.status === "failed") {
-        throw new Error("Sora job failed");
+        throw new Error(data.error ?? "Sora job failed");
       }
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
@@ -95,7 +96,7 @@ export function SoraPanel() {
       const res = await fetch(url);
       const blob = await res.blob();
       const file = new File([blob], `sora-${Date.now()}.mp4`, {
-        type: blob.type,
+        type: blob.type || "video/mp4",
       });
       const fileId = crypto.randomUUID();
       await storeFile(file, fileId);
@@ -125,8 +126,8 @@ export function SoraPanel() {
         throw new Error(data.error ?? "Failed to start Sora job");
       }
 
-      const videoUrl = await pollJob(data.jobId);
-      await downloadAndStore(videoUrl);
+      const contentUrl = await pollJob(data.jobId);
+      await downloadAndStore(contentUrl);
       setStatus("success");
       setMessage("Sora clip added to your media list.");
     } catch (err: any) {
@@ -163,15 +164,15 @@ export function SoraPanel() {
             <select
               className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
               value={seconds}
-              onChange={(e) => setSeconds(e.target.value as any)}
+              onChange={(e) => setSeconds(Number(e.target.value) as 4 | 8 | 12)}
             >
-              <option value="4" className="text-black">
+              <option value={4} className="text-black">
                 4s
               </option>
-              <option value="8" className="text-black">
+              <option value={8} className="text-black">
                 8s
               </option>
-              <option value="12" className="text-black">
+              <option value={12} className="text-black">
                 12s
               </option>
             </select>

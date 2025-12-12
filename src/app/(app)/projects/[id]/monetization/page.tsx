@@ -1,4 +1,4 @@
-import MonetizationClient from "./MonetizationClient";
+import { redirect } from "next/navigation";
 
 export default async function MonetizationPage({
   params,
@@ -6,5 +6,5 @@ export default async function MonetizationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <MonetizationClient projectId={id} />;
+  redirect(`/projects/${id}/publish`);
 }

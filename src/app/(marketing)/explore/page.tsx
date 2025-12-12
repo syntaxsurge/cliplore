@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getConvexClient } from "@/lib/db/convex/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ipfsUriToGatewayUrl } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -56,7 +57,7 @@ export default async function ExplorePage() {
             <Card key={ip.ipId} className="overflow-hidden">
               <div className="aspect-video overflow-hidden border-b border-border">
                 <video
-                  src={ip.videoUrl}
+                  src={ipfsUriToGatewayUrl(ip.videoUrl)}
                   controls
                   className="h-full w-full object-cover"
                 />

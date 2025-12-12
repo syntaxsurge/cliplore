@@ -6,13 +6,11 @@ Cliplore is a Sora-powered, IP-native video studio built on Next.js. It combines
 
 - 🎞️ Real-time Preview: Remotion-based preview so edits are instant.
 - 🧰 Browser render: Export with ffmpeg.wasm (CPU) or Diffusion Studio Core (hardware‑accelerated WebCodecs) for faster final renders.
-- 🤖 Sora generation: Server-side Videos API endpoints to create and poll Sora jobs.
+- 🤖 Sora generation: Server-side OpenAI video job endpoints (`/api/sora`, `/api/sora/content`) to create, poll, and download renders.
 - 🪪 Story IP: Helpers to register IP Assets, attach PIL terms, and mint license tokens on Story.
-- 👤 Wallet + profile: `/sign-in` links a wallet, saves a Convex-backed profile, and sets default license presets.
+- 👤 Wallet + profile: Wallet-first app shell (RainbowKit) with Convex-backed creator defaults in `/settings` (display name + default license preset).
 - 📊 Dashboard: `/dashboard` surfaces wallet status, Convex project/IP stats, and quick links into the editor.
-- 🪙 IP registration: `/projects/[id]/ip` uploads metadata to IPFS and registers IP Assets on Story via the connected wallet with commercial/noncommercial presets.
-- 💸 Monetization: `/projects/[id]/monetization` sends tips (`payRoyaltyOnBehalf`), checks claimable revenue, and triggers `claimAllRevenue`.
-- 🧪 Demo-friendly: load a sample project with a single click on `/projects` to try the timeline without uploading media.
+- 🪙 Publish flow: `/projects/[id]/publish` pins the exported video to IPFS, uploads Story metadata JSON, registers the IP Asset on Story, and exposes royalty actions (tips + claimable/claim-all).
 - 🕹️ Timeline editor: Arrange, trim, and control media through the custom timeline.
 - 🛠️ Element controls: Adjust position, opacity, z-index, volume, and text overlays.
 - 🔌 Wallet-ready: Wagmi + RainbowKit wired to Story testnet.

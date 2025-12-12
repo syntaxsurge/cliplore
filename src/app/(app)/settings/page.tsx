@@ -19,11 +19,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { fetchConvexUser, upsertConvexUser } from "@/lib/api/convex";
+import {
+  LICENSE_PRESETS,
+  type LicensePreset,
+} from "@/lib/story/license-presets";
 
-const LICENSE_PRESETS = [
-  { value: "commercial-5", label: "Commercial remix · 5% rev share" },
-  { value: "commercial-10", label: "Commercial remix · 10% rev share" },
-  { value: "noncommercial", label: "Non-commercial remix" },
+const LICENSE_PRESET_ORDER: LicensePreset[] = [
+  "commercial-5",
+  "commercial-10",
+  "noncommercial",
 ];
 
 const profileSchema = z.object({
@@ -43,7 +47,7 @@ export default function SettingsPage() {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       displayName: "",
-      defaultLicensePreset: LICENSE_PRESETS[0].value,
+      defaultLicensePreset: LICENSE_PRESET_ORDER[0],
     },
   });
 
@@ -69,7 +73,7 @@ export default function SettingsPage() {
           reset({
             displayName: user.displayName ?? "",
             defaultLicensePreset:
-              user.defaultLicensePreset ?? LICENSE_PRESETS[0].value,
+              user.defaultLicensePreset ?? LICENSE_PRESET_ORDER[0],
           });
         }
       } catch (error) {
@@ -166,13 +170,13 @@ export default function SettingsPage() {
                 className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
                 {...register("defaultLicensePreset")}
               >
-                {LICENSE_PRESETS.map((preset) => (
+                {LICENSE_PRESET_ORDER.map((preset) => (
                   <option
-                    key={preset.value}
-                    value={preset.value}
+                    key={preset}
+                    value={preset}
                     className="text-black"
                   >
-                    {preset.label}
+                    {LICENSE_PRESETS[preset].label}
                   </option>
                 ))}
               </select>

@@ -43,6 +43,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileDown, Film, PlusCircle, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createProjectState } from "@/app/store/slices/projectSlice";
 export default function Projects() {
   const { address } = useAccount();
   const searchParams = useSearchParams();
@@ -63,40 +64,9 @@ export default function Projects() {
       return;
     }
 
-    // TODO: use reducer not this to create new project
-    const newProject: ProjectState = {
-      id: crypto.randomUUID(),
+    const newProject: ProjectState = createProjectState({
       projectName: newProjectName,
-      createdAt: new Date().toISOString(),
-      lastModified: new Date().toISOString(),
-      mediaFiles: [],
-      textElements: [],
-      currentTime: 0,
-      isPlaying: false,
-      isMuted: false,
-      duration: 0,
-      activeSection: "media",
-      activeElement: "text",
-      activeElementIndex: 0,
-      filesID: [],
-      zoomLevel: 1,
-      timelineZoom: 100,
-      enableMarkerTracking: true,
-      resolution: { width: 1920, height: 1080 },
-      fps: 30,
-      aspectRatio: "16:9",
-      history: [],
-      future: [],
-      exportSettings: {
-        resolution: "1080p",
-        quality: "high",
-        speed: "fastest",
-        fps: 30,
-        format: "mp4",
-        includeSubtitles: false,
-        renderEngine: "ffmpeg",
-      },
-    };
+    });
 
     await storeProject(newProject);
     dispatch(addProject(newProject));

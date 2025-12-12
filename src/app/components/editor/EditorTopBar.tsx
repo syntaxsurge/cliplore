@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useAppDispatch } from "@/app/store";
+import { useRouter } from "next/navigation";
+import { useAppDispatch, useAppSelector } from "@/app/store";
 import {
   redoState,
   setActiveSection,
@@ -10,24 +11,15 @@ import {
 import { Button } from "@/components/ui/button";
 import ProjectName from "./player/ProjectName";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   ArrowLeft,
-  Coins,
   Download,
-  MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
   PanelRightClose,
   PanelRightOpen,
   Redo2,
-  ShieldCheck,
   Undo2,
+  Upload,
 } from "lucide-react";
 
 type Props = {
@@ -46,6 +38,10 @@ export default function EditorTopBar({
   onToggleProperties,
 }: Props) {
   const dispatch = useAppDispatch();
+  const router = useRouter();
+  const exports = useAppSelector((state) => state.projectState.exports);
+  const latestExport = exports[0];
+  const canPublish = exports.length > 0;
 
   return (
     <div className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-black/70 px-3 py-2 backdrop-blur">
@@ -105,39 +101,36 @@ export default function EditorTopBar({
           )}
         </Button>
         <div className="mx-1 h-5 w-px bg-white/10" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="secondary"
-              size="sm"
-              aria-label="Open publish menu"
-            >
-              <MoreVertical className="h-4 w-4" />
-              Publish
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[190px]">
-            <DropdownMenuItem
-              onSelect={() => dispatch(setActiveSection("export"))}
-            >
-              <Download className="h-4 w-4" />
-              Export
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href={`/projects/${projectId}/ip`}>
-                <ShieldCheck className="h-4 w-4" />
-                Register IP
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={`/projects/${projectId}/monetization`}>
-                <Coins className="h-4 w-4" />
-                Monetize
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          size="sm"
+          onClick={() => {
+            if (!showAssets) onToggleAssets();
+            dispatch(setActiveSection("export"));
+          }}
+        >
+          <Download className="h-4 w-4" />
+          Export
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!canPublish}
+          onClick={() => {
+            const exportQuery = latestExport?.id
+              ? `?exportId=${encodeURIComponent(latestExport.id)}`
+              : "";
+            router.push(`/projects/${projectId}/publish${exportQuery}`);
+          }}
+          aria-disabled={!canPublish}
+          aria-label={
+            canPublish
+              ? "Publish export to Story Protocol"
+              : "Export a video before publishing"
+          }
+        >
+          <Upload className="h-4 w-4" />
+          Publish
+        </Button>
       </div>
     </div>
   );

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { MintLicenseButton } from "../MintLicenseButton";
 import { getConvexClient } from "@/lib/db/convex/client";
 import { Badge } from "@/components/ui/badge";
+import { ipfsUriToGatewayUrl } from "@/lib/utils";
 import {
   Card,
   CardContent,
@@ -44,7 +45,11 @@ export default async function IpDetailPage({ params }: Props) {
       </div>
 
       <Card className="overflow-hidden">
-        <video src={asset.videoUrl} controls className="h-full w-full" />
+        <video
+          src={ipfsUriToGatewayUrl(asset.videoUrl)}
+          controls
+          className="h-full w-full"
+        />
       </Card>
 
       <div className="grid gap-6 md:grid-cols-3">

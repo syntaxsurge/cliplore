@@ -1,4 +1,4 @@
-import RegistrationClient from "./RegistrationClient";
+import { redirect } from "next/navigation";
 
 export default async function IpPage({
   params,
@@ -6,5 +6,5 @@ export default async function IpPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <RegistrationClient projectId={id} />;
+  redirect(`/projects/${id}/publish`);
 }

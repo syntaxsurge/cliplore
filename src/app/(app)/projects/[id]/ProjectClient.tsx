@@ -166,7 +166,7 @@ export default function ProjectClient({ projectId }: Props) {
             {activeSection === "export" && (
               <div>
                 <h2 className="text-lg font-semibold mb-4">Export</h2>
-                <ExportList />
+                <ExportList projectId={projectId} />
               </div>
             )}
           </div>
