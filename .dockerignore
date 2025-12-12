@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+Dockerfile
+.dockerignore
+*.md
+.next
+out
+build
+dist
+coverage
+.turbo
+.vercel
+.vscode
+.env*
+*.log
+tsconfig.tsbuildinfo
