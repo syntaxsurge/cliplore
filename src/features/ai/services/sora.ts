@@ -2,6 +2,13 @@ import { serverEnv } from "@/lib/env/server";
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 
+type SoraSeconds = 4 | 8 | 12;
+type SoraSecondsString = `${SoraSeconds}`;
+
+function toSoraSecondsString(seconds: SoraSeconds): SoraSecondsString {
+  return `${seconds}` as SoraSecondsString;
+}
+
 async function openaiFetch(path: string, init: RequestInit) {
   if (!serverEnv.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY is required to use the Sora Videos API.");
@@ -44,7 +51,7 @@ export type SoraJob = {
 export async function createSoraJob(params: {
   model?: "sora-2" | "sora-2-pro";
   prompt: string;
-  seconds?: 4 | 8 | 12;
+  seconds?: SoraSeconds;
   size?: "720x1280" | "1280x720" | "1024x1792" | "1792x1024";
 }) {
   const job = await openaiJson<{ id: string }>("/videos", {
@@ -52,7 +59,7 @@ export async function createSoraJob(params: {
     body: JSON.stringify({
       model: params.model ?? "sora-2",
       prompt: params.prompt,
-      seconds: params.seconds ?? 8,
+      seconds: toSoraSecondsString(params.seconds ?? 8),
       size: params.size ?? "1280x720",
     }),
   });
