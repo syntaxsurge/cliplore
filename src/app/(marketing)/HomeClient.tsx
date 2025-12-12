@@ -7,8 +7,11 @@ import {
   ArrowRight,
   Blocks,
   Coins,
+  Github,
+  Heart,
   Scissors,
   Sparkles,
+  Twitter,
   Wallet,
   Zap,
 } from "lucide-react";
@@ -17,6 +20,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -176,11 +180,11 @@ export default function HomeClient() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
-        <motion.div {...fadeUp(0)} className="text-center space-y-2">
-          <h2 className="text-3xl sm:text-4xl font-semibold text-foreground">
-            From prompt to licensed IP
-          </h2>
+	      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-8">
+	        <motion.div {...fadeUp(0)} className="text-center space-y-2">
+	          <h2 className="text-3xl sm:text-4xl font-semibold text-foreground">
+	            From prompt to licensed IP
+	          </h2>
           <p className="mx-auto max-w-2xl text-muted-foreground">
             A simple three‑step flow built for speed and clarity.
           </p>
@@ -220,13 +224,86 @@ export default function HomeClient() {
               </Card>
             </motion.div>
           ))}
-        </div>
-      </section>
+	        </div>
+	      </section>
 
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <motion.div
-          {...fadeUp(0)}
-          className="relative overflow-hidden rounded-3xl border border-border bg-card p-8 text-center space-y-4"
+	      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+	        <motion.div
+	          {...fadeUp(0)}
+	          className="relative overflow-hidden rounded-3xl border border-border bg-card"
+	        >
+	          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_55%)]" />
+	          <CardHeader className="relative space-y-3 text-center">
+	            <CardTitle className="text-3xl sm:text-4xl">
+	              Cliplore, explained
+	            </CardTitle>
+	            <CardDescription className="mx-auto max-w-3xl text-base leading-relaxed">
+	              Cliplore is an IP‑native studio for Sora‑powered video creation,
+	              editing, and licensing on Story Protocol.
+	            </CardDescription>
+	          </CardHeader>
+
+	          <CardContent className="relative mx-auto max-w-3xl space-y-4 text-muted-foreground leading-relaxed">
+	            <p>
+	              We combine a browser‑first editor with on‑chain IP registration so
+	              every prompt, script, and final cut can be monetized safely.
+	            </p>
+	            <p>
+	              Everything, including rendering, happens in the browser. No
+	              watermarks, no installs—just fast editing plus programmable IP
+	              licensing.
+	            </p>
+	          </CardContent>
+
+	          <CardFooter className="relative flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+	            <div className="flex items-center justify-center gap-2 sm:justify-start">
+	              <Button
+	                asChild
+	                variant="ghost"
+	                size="icon"
+	                aria-label="Story Protocol GitHub"
+	              >
+	                <a
+	                  href="https://github.com/storyprotocol"
+	                  target="_blank"
+	                  rel="noreferrer"
+	                >
+	                  <Github className="h-5 w-5" />
+	                </a>
+	              </Button>
+	              <Button
+	                asChild
+	                variant="ghost"
+	                size="icon"
+	                aria-label="Story Protocol Twitter"
+	              >
+	                <a
+	                  href="https://twitter.com/StoryProtocol"
+	                  target="_blank"
+	                  rel="noreferrer"
+	                >
+	                  <Twitter className="h-5 w-5" />
+	                </a>
+	              </Button>
+	            </div>
+	            <Button asChild size="lg" variant="secondary" className="gap-2">
+	              <a
+	                href="https://storyprotocol.xyz"
+	                target="_blank"
+	                rel="noreferrer"
+	              >
+	                <Heart className="h-4 w-4" />
+	                Learn about Story Protocol
+	              </a>
+	            </Button>
+	          </CardFooter>
+	        </motion.div>
+	      </section>
+
+	      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+	        <motion.div
+	          {...fadeUp(0)}
+	          className="relative overflow-hidden rounded-3xl border border-border bg-card p-8 text-center space-y-4"
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,119,198,0.16),transparent_60%)]" />
           <h3 className="text-2xl sm:text-3xl font-semibold text-foreground">

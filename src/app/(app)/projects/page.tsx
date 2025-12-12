@@ -175,7 +175,7 @@ export default function Projects() {
   );
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-12 space-y-8">
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Creator workspace</p>

@@ -30,7 +30,7 @@ export default function Error({
   console.error(error);
 
   return (
-    <div className="mx-auto flex min-h-[70vh] max-w-xl items-center px-6 py-16">
+    <div className="mx-auto flex min-h-[70vh] max-w-xl items-center px-4 py-16 sm:px-6 lg:px-8">
       <Card className="w-full text-center">
         <CardHeader className="space-y-2">
           <CardTitle className="text-2xl sm:text-3xl">

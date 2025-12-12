@@ -33,7 +33,7 @@ export default async function IpDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-12 space-y-8">
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">IP Asset ID: {asset.ipId}</Badge>

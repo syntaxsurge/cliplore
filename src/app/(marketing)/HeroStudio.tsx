@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   motion,
   useMotionValue,
@@ -11,6 +11,13 @@ import {
 
 export function HeroStudio() {
   const reduceMotion = useReducedMotion();
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  const shouldReduceMotion = hydrated ? reduceMotion : false;
   const mx = useMotionValue(0);
   const my = useMotionValue(0);
 
@@ -22,14 +29,14 @@ export function HeroStudio() {
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      if (reduceMotion) return;
+      if (shouldReduceMotion) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const x = e.clientX - rect.left - rect.width / 2;
       const y = e.clientY - rect.top - rect.height / 2;
       mx.set(x);
       my.set(y);
     },
-    [mx, my, reduceMotion],
+    [mx, my, shouldReduceMotion],
   );
 
   const onPointerLeave = useCallback(() => {
@@ -48,7 +55,7 @@ export function HeroStudio() {
       <motion.div
         className="absolute inset-0 opacity-60"
         animate={
-          reduceMotion
+          shouldReduceMotion
             ? undefined
             : { backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }
         }
@@ -66,7 +73,7 @@ export function HeroStudio() {
         <motion.div
           className="relative rounded-2xl border border-border/70 bg-background/70 shadow-xl backdrop-blur"
           style={
-            reduceMotion
+            shouldReduceMotion
               ? undefined
               : { rotateX, rotateY, transformStyle: "preserve-3d" }
           }
@@ -97,13 +104,15 @@ export function HeroStudio() {
             <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-muted/40">
               <motion.div
                 className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,119,198,0.25),transparent_55%)]"
-                animate={reduceMotion ? undefined : { opacity: [0.45, 0.7, 0.45] }}
+                animate={
+                  shouldReduceMotion ? undefined : { opacity: [0.45, 0.7, 0.45] }
+                }
                 transition={{ duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
               />
 
               <motion.div
                 className="absolute left-3 top-3 rounded-full border border-border bg-background/80 px-3 py-1 text-[11px] font-medium text-foreground shadow-sm backdrop-blur"
-                animate={reduceMotion ? undefined : { y: [0, -6, 0] }}
+                animate={shouldReduceMotion ? undefined : { y: [0, -6, 0] }}
                 transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
               >
                 Prompt → Clip → Timeline
@@ -111,7 +120,7 @@ export function HeroStudio() {
 
               <motion.div
                 className="absolute right-3 bottom-3 rounded-2xl border border-border bg-background/80 px-3 py-2 text-[11px] font-medium text-foreground shadow-sm backdrop-blur"
-                animate={reduceMotion ? undefined : { y: [0, -7, 0] }}
+                animate={shouldReduceMotion ? undefined : { y: [0, -7, 0] }}
                 transition={{ duration: 3.1, repeat: Infinity, ease: "easeInOut" }}
               >
                 ✅ Registered IP Asset
@@ -127,7 +136,7 @@ export function HeroStudio() {
                 <div className="h-3 w-full rounded bg-muted" />
                 <motion.div
                   className="h-3 w-[78%] rounded bg-muted"
-                  animate={reduceMotion ? undefined : { x: [0, 18, 0] }}
+                  animate={shouldReduceMotion ? undefined : { x: [0, 18, 0] }}
                   transition={{
                     duration: 2.4,
                     repeat: Infinity,
@@ -143,4 +152,3 @@ export function HeroStudio() {
     </div>
   );
 }
-

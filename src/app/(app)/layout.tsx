@@ -17,7 +17,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!isConnected) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-1 items-center px-6 py-20">
+      <div className="mx-auto flex max-w-3xl flex-1 items-center px-4 py-20 sm:px-6 lg:px-8">
         <Card className="w-full text-center">
           <CardHeader className="space-y-2">
             <CardTitle className="text-2xl">

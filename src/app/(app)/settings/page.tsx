@@ -103,7 +103,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-12 space-y-8">
+    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">Account</p>
         <h1 className="text-4xl font-semibold text-foreground">Settings</h1>

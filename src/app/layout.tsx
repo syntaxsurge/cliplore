@@ -48,13 +48,14 @@ window.litIssuedWarnings.add('dev-mode');`}
       >
         <Providers>
           <Header />
-          <main className="flex-grow">
+          <main id="main" className="flex-grow">
             <Toaster
               toastOptions={{
                 style: {
-                  borderRadius: "10px",
-                  background: "#333",
-                  color: "#fff",
+                  borderRadius: "12px",
+                  border: "1px solid hsl(var(--border))",
+                  background: "hsl(var(--background))",
+                  color: "hsl(var(--foreground))",
                 },
               }}
             />
