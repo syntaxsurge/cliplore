@@ -201,6 +201,52 @@ const projectStateSlice = createSlice({
         ...state.exportSettings,
         ...action.payload.exportSettings,
       };
+
+      next.exports = next.exports.map((exp) => {
+        const publish = exp.publish as any;
+        if (!publish || typeof publish !== "object") return exp;
+        if (typeof publish.videoUrl === "string") return exp;
+
+        const legacyVideo = publish.video as any;
+        if (
+          !legacyVideo ||
+          typeof legacyVideo !== "object" ||
+          (typeof legacyVideo.ipfsUri !== "string" &&
+            typeof legacyVideo.gatewayUrl !== "string")
+        ) {
+          return exp;
+        }
+
+        const legacyThumb = publish.thumbnail as any;
+        const migrated: ProjectPublishRecord = {
+          ipId: String(publish.ipId ?? ""),
+          licenseTermsId:
+            typeof publish.licenseTermsId === "string"
+              ? publish.licenseTermsId
+              : undefined,
+          txHash: typeof publish.txHash === "string" ? publish.txHash : undefined,
+          title: String(publish.title ?? ""),
+          summary: String(publish.summary ?? ""),
+          terms: String(publish.terms ?? ""),
+          videoUrl:
+            typeof legacyVideo.ipfsUri === "string"
+              ? legacyVideo.ipfsUri
+              : legacyVideo.gatewayUrl,
+          thumbnailUrl:
+            legacyThumb && typeof legacyThumb === "object"
+              ? typeof legacyThumb.ipfsUri === "string"
+                ? legacyThumb.ipfsUri
+                : typeof legacyThumb.gatewayUrl === "string"
+                  ? legacyThumb.gatewayUrl
+                  : undefined
+              : undefined,
+          ipMetadataUri: String(publish.ipMetadataUri ?? ""),
+          nftMetadataUri: String(publish.nftMetadataUri ?? ""),
+          createdAt: String(publish.createdAt ?? new Date().toISOString()),
+        };
+
+        return { ...exp, publish: migrated };
+      });
       return next;
     },
     createNewProject: (state) => {

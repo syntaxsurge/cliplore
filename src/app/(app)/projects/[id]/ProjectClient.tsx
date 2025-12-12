@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ImperativePanelHandle } from "react-resizable-panels";
 import {
   getFile,
   getProject,
@@ -34,6 +35,11 @@ import ExportList from "../../../components/editor/AssetsPanel/tools-section/Exp
 import { SoraPanel } from "../../../components/editor/AssetsPanel/tools-section/SoraPanel";
 import EditorTopBar from "@/app/components/editor/EditorTopBar";
 import { Image as ImageIcon, Music, Type, Video } from "lucide-react";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 
 type Props = {
   projectId: string;
@@ -48,6 +54,8 @@ export default function ProjectClient({ projectId }: Props) {
   const [showProperties, setShowProperties] = useState(true);
   const router = useRouter();
   const { activeSection, activeElement } = projectState;
+  const assetsPanelRef = useRef<ImperativePanelHandle>(null);
+  const propertiesPanelRef = useRef<ImperativePanelHandle>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -57,6 +65,20 @@ export default function ProjectClient({ projectId }: Props) {
       setShowProperties(false);
     }
   }, []);
+
+  useEffect(() => {
+    const panel = assetsPanelRef.current;
+    if (!panel) return;
+    if (showAssets) panel.expand();
+    else panel.collapse();
+  }, [showAssets]);
+
+  useEffect(() => {
+    const panel = propertiesPanelRef.current;
+    if (!panel) return;
+    if (showProperties) panel.expand();
+    else panel.collapse();
+  }, [showProperties]);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -111,7 +133,7 @@ export default function ProjectClient({ projectId }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-screen select-none">
+    <div className="flex h-screen flex-col select-none bg-black">
       <EditorTopBar
         projectId={projectId}
         showAssets={showAssets}
@@ -127,100 +149,142 @@ export default function ProjectClient({ projectId }: Props) {
           </div>
         </div>
       ) : null}
-      <div className="flex flex-1 overflow-hidden flex-col lg:flex-row">
-        <div className="w-full flex flex-row justify-center gap-3 border-b border-gray-800 lg:border-b-0 lg:flex-[0.1] lg:min-w-[60px] lg:max-w-[100px] lg:border-r lg:border-gray-700 lg:overflow-y-auto p-4">
-          <div className="flex flex-row space-x-2 lg:flex-col lg:space-x-0 lg:space-y-2">
-            <HomeButton />
-            <TextButton
-              active={activeSection === "text"}
-              onClick={() => handleFocus("text")}
-            />
-            <LibraryButton
-              active={activeSection === "media"}
-              onClick={() => handleFocus("media")}
-            />
-            <ExportButton
-              active={activeSection === "export"}
-              onClick={() => handleFocus("export")}
-            />
-          </div>
-        </div>
+      <ResizablePanelGroup direction="vertical" className="flex-1 overflow-hidden">
+        <ResizablePanel defaultSize={70} minSize={35}>
+          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+            <ResizablePanel
+              ref={assetsPanelRef}
+              defaultSize={26}
+              minSize={18}
+              collapsible
+              collapsedSize={0}
+              onCollapse={() => setShowAssets(false)}
+              onExpand={() => setShowAssets(true)}
+              className="min-w-[280px]"
+            >
+              <div className="flex h-full overflow-hidden border-r border-white/10 bg-black/40">
+                <div className="w-[72px] shrink-0 border-r border-white/10 bg-black/60 p-2">
+                  <div className="flex flex-col gap-2">
+                    <HomeButton />
+                    <TextButton
+                      active={activeSection === "text"}
+                      onClick={() => handleFocus("text")}
+                    />
+                    <LibraryButton
+                      active={activeSection === "media"}
+                      onClick={() => handleFocus("media")}
+                    />
+                    <ExportButton
+                      active={activeSection === "export"}
+                      onClick={() => handleFocus("export")}
+                    />
+                  </div>
+                </div>
 
-        {showAssets && (
-          <div className="w-full max-h-[40vh] overflow-y-auto border-b border-gray-800 lg:max-h-none lg:flex-[0.3] lg:min-w-[200px] lg:border-b-0 lg:border-r lg:border-gray-800 p-4">
-            {activeSection === "media" && (
-              <div>
-                <SoraPanel />
-                <div className="h-3" />
-                <h2 className="text-lg flex flex-row gap-2 items-center justify-center font-semibold mb-2">
-                  <AddMedia />
-                </h2>
-                <MediaList />
-              </div>
-            )}
-            {activeSection === "text" && (
-              <div>
-                <AddText />
-              </div>
-            )}
-            {activeSection === "export" && (
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Export</h2>
-                <ExportList projectId={projectId} />
-              </div>
-            )}
-          </div>
-        )}
+                <div className="flex-1 overflow-y-auto p-4">
+                  {activeSection === "media" ? (
+                    <div className="space-y-3">
+                      <SoraPanel />
+                      <div className="flex items-center justify-center">
+                        <AddMedia />
+                      </div>
+                      <MediaList />
+                    </div>
+                  ) : null}
 
-        <div className="flex items-center justify-center flex-col flex-[1] overflow-hidden min-h-[40vh] lg:min-h-0">
-          <PreviewPlayer />
-        </div>
+                  {activeSection === "text" ? (
+                    <div>
+                      <AddText />
+                    </div>
+                  ) : null}
 
-        {showProperties && (
-          <div className="w-full max-h-[40vh] overflow-y-auto border-t border-gray-800 lg:max-h-none lg:flex-[0.4] lg:min-w-[200px] lg:border-t-0 lg:border-l lg:border-gray-800 p-4">
-            {activeElement === "media" && (
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Media Properties</h2>
-                <MediaProperties />
+                  {activeSection === "export" ? (
+                    <div className="space-y-4">
+                      <h2 className="text-lg font-semibold text-foreground">
+                        Export
+                      </h2>
+                      <ExportList projectId={projectId} />
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            )}
-            {activeElement === "text" && (
-              <div>
-                <h2 className="text-lg font-semibold mb-4">Text Properties</h2>
-                <TextProperties />
+            </ResizablePanel>
+
+            <ResizableHandle withHandle />
+
+            <ResizablePanel defaultSize={52} minSize={30}>
+              <div className="h-full w-full overflow-hidden bg-black">
+                <PreviewPlayer />
               </div>
-            )}
-          </div>
-        )}
-      </div>
-      <div className="flex flex-row border-t border-gray-500">
-        <div className=" bg-darkSurfacePrimary flex flex-col items-center justify-center mt-2 lg:mt-20">
-          <div className="relative h-16">
-            <div className="flex items-center gap-2 p-4">
-              <Video className="h-6 w-6 text-white/70" aria-hidden="true" />
+            </ResizablePanel>
+
+            <ResizableHandle withHandle />
+
+            <ResizablePanel
+              ref={propertiesPanelRef}
+              defaultSize={22}
+              minSize={16}
+              collapsible
+              collapsedSize={0}
+              onCollapse={() => setShowProperties(false)}
+              onExpand={() => setShowProperties(true)}
+              className="min-w-[280px]"
+            >
+              <div className="h-full overflow-y-auto border-l border-white/10 bg-black/40 p-4">
+                {activeElement === "media" ? (
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-foreground">
+                      Media Properties
+                    </h2>
+                    <MediaProperties />
+                  </div>
+                ) : null}
+
+                {activeElement === "text" ? (
+                  <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-foreground">
+                      Text Properties
+                    </h2>
+                    <TextProperties />
+                  </div>
+                ) : null}
+
+                {!activeElement ? (
+                  <p className="text-sm text-muted-foreground">
+                    Select an element on the timeline to edit its properties.
+                  </p>
+                ) : null}
+              </div>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel defaultSize={30} minSize={18}>
+          <div className="flex h-full overflow-hidden border-t border-white/10 bg-black">
+            <div className="w-[72px] shrink-0 border-r border-white/10 bg-black/60">
+              <div className="flex flex-col items-center py-2">
+                <div className="flex h-12 w-full items-center justify-center">
+                  <Video className="h-5 w-5 text-white/70" aria-hidden="true" />
+                </div>
+                <div className="flex h-12 w-full items-center justify-center">
+                  <Music className="h-5 w-5 text-white/70" aria-hidden="true" />
+                </div>
+                <div className="flex h-12 w-full items-center justify-center">
+                  <ImageIcon className="h-5 w-5 text-white/70" aria-hidden="true" />
+                </div>
+                <div className="flex h-12 w-full items-center justify-center">
+                  <Type className="h-5 w-5 text-white/70" aria-hidden="true" />
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <Timeline />
             </div>
           </div>
-
-          <div className="relative h-16">
-            <div className="flex items-center gap-2 p-4">
-              <Music className="h-6 w-6 text-white/70" aria-hidden="true" />
-            </div>
-          </div>
-
-          <div className="relative h-16">
-            <div className="flex items-center gap-2 p-4">
-              <ImageIcon className="h-6 w-6 text-white/70" aria-hidden="true" />
-            </div>
-          </div>
-
-          <div className="relative h-16">
-            <div className="flex items-center gap-2 p-4">
-              <Type className="h-6 w-6 text-white/70" aria-hidden="true" />
-            </div>
-          </div>
-        </div>
-        <Timeline />
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }

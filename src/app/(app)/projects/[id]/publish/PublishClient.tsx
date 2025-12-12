@@ -16,7 +16,8 @@ import { createConvexIpAsset, fetchConvexUser } from "@/lib/api/convex";
 import { getFile, getProject, storeProject, useAppDispatch, useAppSelector } from "@/app/store";
 import { rehydrate } from "@/app/store/slices/projectSlice";
 import { setCurrentProject, updateProject } from "@/app/store/slices/projectsSlice";
-import { ipfsUriToGatewayUrl } from "@/lib/utils";
+import { uploadFileToB2 } from "@/lib/storage/upload-client";
+import { formatBytes, ipfsUriToGatewayUrl } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,31 +27,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Copy, ExternalLink, Loader2, Upload } from "lucide-react";
 import { RoyaltiesPanel } from "./RoyaltiesPanel";
 
-type PinnedFile = {
-  ipfsUri: string;
-  gatewayUrl: string;
-};
-
-async function pinFileToIpfs(file: File, name?: string): Promise<PinnedFile> {
-  const body = new FormData();
-  body.append("file", file);
-  if (name) body.append("name", name);
-
-  const res = await fetch("/api/ipfs/pin-file", { method: "POST", body });
-  const data = (await res.json()) as
-    | { ipfsUri: string; gatewayUrl: string }
-    | { error: string };
-  if (!res.ok || "error" in data) {
-    throw new Error("error" in data ? data.error : "Failed to pin file to IPFS");
-  }
-  return data;
-}
-
 const LICENSE_PRESET_ORDER: LicensePreset[] = [
   "commercial-5",
   "commercial-10",
   "noncommercial",
 ];
+
+type UploadProgressState = {
+  stage: "video" | "thumbnail";
+  uploadedBytes: number;
+  totalBytes: number;
+  partNumber: number;
+  totalParts: number;
+};
 
 export default function PublishClient({
   projectId,
@@ -103,6 +92,9 @@ export default function PublishClient({
   >("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [uploadProgress, setUploadProgress] =
+    useState<UploadProgressState | null>(null);
+  const [thumbnailTimestamp, setThumbnailTimestamp] = useState(0.1);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -166,6 +158,13 @@ export default function PublishClient({
     const loadExportFile = async () => {
       setExportFile(null);
       setExportPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setUploadProgress(null);
+      setThumbnailTimestamp(0.1);
+      setThumbnailFile(null);
+      setThumbnailPreviewUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
@@ -243,7 +242,11 @@ export default function PublishClient({
         video.addEventListener("error", onError, { once: true });
       });
 
-      const t = Math.min(0.1, Number.isFinite(video.duration) ? video.duration : 0.1);
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const desired = Number.isFinite(thumbnailTimestamp)
+        ? thumbnailTimestamp
+        : 0.1;
+      const t = Math.max(0, Math.min(desired, duration || desired));
       video.currentTime = t;
       await new Promise<void>((resolve) => {
         video.addEventListener("seeked", () => resolve(), { once: true });
@@ -289,6 +292,105 @@ export default function PublishClient({
     });
   };
 
+  const uploadAssetsToB2 = async () => {
+    setStatus("uploading");
+    setMessage("Uploading export to Backblaze…");
+
+    const wallet = address as `0x${string}`;
+    const existingUpload = selectedExport?.upload ?? null;
+    let baseProject = projectState;
+
+    const videoUpload =
+      existingUpload?.videoUrl && existingUpload.videoKey
+        ? { url: existingUpload.videoUrl, key: existingUpload.videoKey }
+        : await uploadFileToB2({
+            wallet,
+            projectId,
+            exportId: selectedExportId as string,
+            kind: "video",
+            file: exportFile as File,
+            onProgress: (progress) => {
+              setUploadProgress({ stage: "video", ...progress });
+            },
+          });
+
+    const thumbnailUpload = thumbnailFile
+      ? await uploadFileToB2({
+          wallet,
+          projectId,
+          exportId: selectedExportId as string,
+          kind: "thumbnail",
+          file: thumbnailFile,
+          onProgress: (progress) => {
+            setUploadProgress({ stage: "thumbnail", ...progress });
+          },
+        })
+      : existingUpload?.thumbnailUrl && existingUpload.thumbnailKey
+        ? { url: existingUpload.thumbnailUrl, key: existingUpload.thumbnailKey }
+        : null;
+
+    const nextUploadRecord = {
+      videoUrl: videoUpload.url,
+      videoKey: videoUpload.key,
+      thumbnailUrl: thumbnailUpload?.url,
+      thumbnailKey: thumbnailUpload?.key,
+      uploadedAt: existingUpload?.uploadedAt ?? new Date().toISOString(),
+    };
+
+    if (
+      !existingUpload ||
+      existingUpload.videoUrl !== nextUploadRecord.videoUrl ||
+      existingUpload.videoKey !== nextUploadRecord.videoKey ||
+      existingUpload.thumbnailUrl !== nextUploadRecord.thumbnailUrl ||
+      existingUpload.thumbnailKey !== nextUploadRecord.thumbnailKey
+    ) {
+      const nextProject = {
+        ...projectState,
+        lastModified: new Date().toISOString(),
+        exports: projectState.exports.map((exp) =>
+          exp.id === selectedExportId ? { ...exp, upload: nextUploadRecord } : exp,
+        ),
+      };
+
+      await storeProject(nextProject);
+      dispatch(rehydrate(nextProject));
+      dispatch(updateProject(nextProject));
+      baseProject = nextProject;
+    }
+
+    return { baseProject, videoUpload, thumbnailUpload };
+  };
+
+  const handleUploadOnly = async () => {
+    setMessage(null);
+
+    if (!selectedExport || !selectedExportId) {
+      setStatus("error");
+      setMessage("Select an export to upload.");
+      return;
+    }
+    if (!exportFile) {
+      setStatus("error");
+      setMessage("Export file missing. Re-export from the editor.");
+      return;
+    }
+    if (!isConnected || !address) {
+      setStatus("error");
+      setMessage("Connect your wallet to upload.");
+      return;
+    }
+
+    try {
+      await uploadAssetsToB2();
+      setStatus("idle");
+      setMessage("Upload complete. Ready to register on Story.");
+    } catch (err: any) {
+      console.error(err);
+      setStatus("error");
+      setMessage(err?.message ?? "Upload failed.");
+    }
+  };
+
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
@@ -330,20 +432,22 @@ export default function PublishClient({
     }
 
     try {
-      setStatus("uploading");
-      setMessage("Uploading export to IPFS…");
-
-      const [videoPin, thumbPin] = await Promise.all([
-        pinFileToIpfs(exportFile, exportFile.name),
-        thumbnailFile ? pinFileToIpfs(thumbnailFile, thumbnailFile.name) : null,
-      ]);
+      const { baseProject, videoUpload, thumbnailUpload } =
+        await uploadAssetsToB2();
 
       setMessage("Uploading Story metadata to IPFS…");
       const meta = await uploadIpMetadataAction({
         title: title.trim(),
         description: summary.trim(),
-        videoUri: videoPin.ipfsUri,
-        thumbnailUri: thumbPin?.ipfsUri,
+        videoUri: videoUpload.url,
+        thumbnailUri: thumbnailUpload?.url,
+        videoMimeType: exportFile.type || "video/mp4",
+        videoSizeBytes: exportFile.size,
+        videoDurationSeconds: selectedExport.durationSeconds,
+        videoFps: selectedExport.config.fps,
+        videoResolution: selectedExport.config.resolution,
+        thumbnailMimeType: thumbnailFile?.type,
+        thumbnailSizeBytes: thumbnailFile?.size,
       });
 
       setStatus("registering");
@@ -395,17 +499,19 @@ export default function PublishClient({
         title: title.trim(),
         summary: summary.trim(),
         terms: preset.label,
-        video: videoPin,
-        thumbnail: thumbPin ?? undefined,
+        videoUrl: videoUpload.url,
+        thumbnailUrl: thumbnailUpload?.url,
+        videoKey: videoUpload.key,
+        thumbnailKey: thumbnailUpload?.key,
         ipMetadataUri: meta.ipMetadataUri,
         nftMetadataUri: meta.nftMetadataUri,
         createdAt: new Date().toISOString(),
       };
 
       const nextProject = {
-        ...projectState,
+        ...baseProject,
         lastModified: new Date().toISOString(),
-        exports: projectState.exports.map((exp) =>
+        exports: baseProject.exports.map((exp) =>
           exp.id === selectedExportId ? { ...exp, publish: publishRecord } : exp,
         ),
       };
@@ -422,8 +528,8 @@ export default function PublishClient({
           title: publishRecord.title,
           summary: publishRecord.summary,
           terms: publishRecord.terms,
-          videoUrl: publishRecord.video.gatewayUrl,
-          thumbnailUrl: publishRecord.thumbnail?.gatewayUrl,
+          videoUrl: publishRecord.videoUrl,
+          thumbnailUrl: publishRecord.thumbnailUrl,
           licenseTermsId,
           txHash,
         });
@@ -611,7 +717,8 @@ export default function PublishClient({
                 <CardHeader>
                   <CardTitle>Publish details</CardTitle>
                   <CardDescription>
-                    Upload to IPFS, attach license terms, and register on Story.
+                    Upload to Backblaze B2, pin metadata to IPFS, attach license terms, and
+                    register on Story.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-5">
@@ -667,6 +774,19 @@ export default function PublishClient({
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step={0.1}
+                          value={thumbnailTimestamp}
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            setThumbnailTimestamp(Number.isFinite(next) ? next : 0);
+                          }}
+                          className="h-9 w-24"
+                          aria-label="Thumbnail timestamp in seconds"
+                        />
                         <Button
                           type="button"
                           size="sm"
@@ -720,6 +840,87 @@ export default function PublishClient({
                   </div>
 
                   <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">Storage</p>
+                      <Badge variant="outline">Backblaze B2</Badge>
+                    </div>
+                    {selectedExport?.upload ? (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm text-muted-foreground">Video URL</p>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleCopy(selectedExport.upload!.videoUrl)}
+                              >
+                                <Copy className="h-4 w-4" />
+                                Copy
+                              </Button>
+                              <Button size="sm" asChild>
+                                <a
+                                  href={selectedExport.upload.videoUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                  Open
+                                </a>
+                              </Button>
+                            </div>
+                          </div>
+                          <p className="break-all text-xs text-foreground/80">
+                            {selectedExport.upload.videoUrl}
+                          </p>
+                        </div>
+
+                        {selectedExport.upload.thumbnailUrl ? (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-sm text-muted-foreground">
+                                Thumbnail URL
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    void handleCopy(selectedExport.upload!.thumbnailUrl!)
+                                  }
+                                >
+                                  <Copy className="h-4 w-4" />
+                                  Copy
+                                </Button>
+                                <Button size="sm" variant="secondary" asChild>
+                                  <a
+                                    href={selectedExport.upload.thumbnailUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                    Open
+                                  </a>
+                                </Button>
+                              </div>
+                            </div>
+                            <p className="break-all text-xs text-foreground/80">
+                              {selectedExport.upload.thumbnailUrl}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        URLs are generated when you publish. Large exports upload via resumable
+                        multipart to avoid timeouts.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
                     <p className="text-sm font-medium text-foreground">
                       Readiness checks
                     </p>
@@ -768,12 +969,46 @@ export default function PublishClient({
                           {message}
                         </p>
                       ) : null}
+                      {status === "uploading" && uploadProgress ? (
+                        <div className="space-y-2 pt-1">
+                          <p className="text-xs text-muted-foreground">
+                            Uploading {uploadProgress.stage} ·{" "}
+                            {formatBytes(uploadProgress.uploadedBytes)} /{" "}
+                            {formatBytes(uploadProgress.totalBytes)} · Part{" "}
+                            {uploadProgress.partNumber} / {uploadProgress.totalParts}
+                          </p>
+                          <div
+                            className="h-2 w-full rounded-full bg-muted"
+                            aria-label="Upload progress"
+                            role="progressbar"
+                            aria-valuenow={Math.round(
+                              (uploadProgress.uploadedBytes /
+                                Math.max(1, uploadProgress.totalBytes)) *
+                                100,
+                            )}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                          >
+                            <div
+                              className="h-2 rounded-full bg-emerald-500"
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  (uploadProgress.uploadedBytes /
+                                    Math.max(1, uploadProgress.totalBytes)) *
+                                    100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
                       {published?.ipId ? (
                         <p className="text-xs text-muted-foreground">
-                          Video gateway URL:{" "}
+                          Video URL:{" "}
                           <a
                             className="underline"
-                            href={ipfsUriToGatewayUrl(published.video.ipfsUri)}
+                            href={ipfsUriToGatewayUrl(published.videoUrl)}
                             target="_blank"
                             rel="noreferrer"
                           >
@@ -783,27 +1018,46 @@ export default function PublishClient({
                       ) : null}
                     </div>
 
-                    <Button
-                      type="submit"
-                      className="min-w-[220px]"
-                      disabled={
-                        isPending ||
-                        status === "uploading" ||
-                        status === "registering" ||
-                        !selectedExport ||
-                        !exportFile ||
-                        !!published?.ipId
-                      }
-                    >
-                      <Upload className="h-4 w-4" />
-                      {status === "uploading"
-                        ? "Uploading…"
-                        : status === "registering"
-                          ? "Registering…"
-                          : published?.ipId
-                            ? "Published"
-                            : "Upload & Register"}
-                    </Button>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={
+                          isPending ||
+                          status === "uploading" ||
+                          status === "registering" ||
+                          !selectedExport ||
+                          !exportFile ||
+                          !!published?.ipId
+                        }
+                        onClick={() => startTransition(() => handleUploadOnly())}
+                      >
+                        Upload only
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="min-w-[220px]"
+                        disabled={
+                          isPending ||
+                          status === "uploading" ||
+                          status === "registering" ||
+                          !selectedExport ||
+                          !exportFile ||
+                          !!published?.ipId
+                        }
+                      >
+                        <Upload className="h-4 w-4" />
+                        {status === "uploading"
+                          ? "Uploading…"
+                          : status === "registering"
+                            ? "Registering…"
+                            : published?.ipId
+                              ? "Published"
+                              : selectedExport?.upload?.videoUrl
+                                ? "Register on Story"
+                                : "Upload & Register"}
+                      </Button>
+                    </div>
                   </div>
 
                   {published?.ipId ? (
@@ -848,15 +1102,4 @@ export default function PublishClient({
       )}
     </div>
   );
-}
-
-function formatBytes(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1,
-  );
-  const value = bytes / Math.pow(1024, index);
-  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 }

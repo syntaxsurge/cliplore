@@ -86,11 +86,6 @@ export interface ExportConfig {
 
 export type ActiveElement = "media" | "text" | "export";
 
-export type IpfsPinnedAsset = {
-  ipfsUri: string;
-  gatewayUrl: string;
-};
-
 export type ProjectPublishRecord = {
   ipId: string;
   licenseTermsId?: string;
@@ -98,11 +93,21 @@ export type ProjectPublishRecord = {
   title: string;
   summary: string;
   terms: string;
-  video: IpfsPinnedAsset;
-  thumbnail?: IpfsPinnedAsset;
+  videoUrl: string;
+  thumbnailUrl?: string;
+  videoKey?: string;
+  thumbnailKey?: string;
   ipMetadataUri: string;
   nftMetadataUri: string;
   createdAt: string;
+};
+
+export type ProjectUploadRecord = {
+  videoUrl: string;
+  thumbnailUrl?: string;
+  videoKey: string;
+  thumbnailKey?: string;
+  uploadedAt: string;
 };
 
 export interface ProjectExport {
@@ -113,6 +118,7 @@ export interface ProjectExport {
   durationSeconds: number;
   fileSizeBytes: number;
   config: ExportConfig;
+  upload?: ProjectUploadRecord;
   publish?: ProjectPublishRecord;
 }
 
