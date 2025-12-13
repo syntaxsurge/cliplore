@@ -137,6 +137,19 @@ export default function ExportList({ projectId }: { projectId: string }) {
                         {exp.publish?.ipId ? "View publish" : "Publish"}
                       </Button>
 
+                      {exp.publish?.ipId ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const exportQuery = `?exportId=${encodeURIComponent(exp.id)}`;
+                            router.push(`/projects/${projectId}/ipfi${exportQuery}`);
+                          }}
+                        >
+                          IPFi
+                        </Button>
+                      ) : null}
+
                       {url ? (
                         <Button size="sm" variant="outline" asChild>
                           <a href={url} download={exp.name}>

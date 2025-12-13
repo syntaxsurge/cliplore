@@ -12,7 +12,7 @@ type Props = {
 
 export function MintLicenseButton({ licensorIpId, licenseTermsId }: Props) {
   const { address, isConnected } = useAccount();
-  const { getClient } = useStoryClient();
+  const client = useStoryClient();
   const [status, setStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -24,10 +24,14 @@ export function MintLicenseButton({ licensorIpId, licenseTermsId }: Props) {
       setMessage("Connect a wallet on Story testnet to mint.");
       return;
     }
+    if (!client) {
+      setStatus("error");
+      setMessage("Wallet client not ready yet. Try again in a moment.");
+      return;
+    }
     try {
       setStatus("loading");
       setMessage(null);
-      const client = await getClient();
       const res = await client.license.mintLicenseTokens({
         licensorIpId: licensorIpId as `0x${string}`,
         licenseTermsId: BigInt(licenseTermsId),

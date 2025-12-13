@@ -1,8 +1,11 @@
+"use client";
+
+import { useMemo } from "react";
 import { custom } from "viem";
 import { useWalletClient } from "wagmi";
 import {
   StoryClient,
-  StoryConfig,
+  type StoryConfig,
   type SupportedChainIds,
 } from "@story-protocol/core-sdk";
 import { storyAeneid } from "@/lib/web3/chains";
@@ -10,11 +13,8 @@ import { storyAeneid } from "@/lib/web3/chains";
 export function useStoryClient() {
   const { data: wallet } = useWalletClient();
 
-  const getClient = async () => {
-    if (!wallet) {
-      throw new Error("Wallet not connected");
-    }
-
+  return useMemo(() => {
+    if (!wallet) return null;
     const config: StoryConfig = {
       wallet,
       transport: custom(wallet.transport),
@@ -22,7 +22,5 @@ export function useStoryClient() {
     };
 
     return StoryClient.newClient(config);
-  };
-
-  return { getClient };
+  }, [wallet]);
 }

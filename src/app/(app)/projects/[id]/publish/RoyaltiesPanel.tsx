@@ -29,7 +29,7 @@ type ClaimForm = {
 
 export function RoyaltiesPanel({ ipId }: { ipId: string }) {
   const { address, isConnected } = useAccount();
-  const { getClient } = useStoryClient();
+  const client = useStoryClient();
 
   const defaultToken = clientEnv.NEXT_PUBLIC_WIP_TOKEN_ADDRESS;
 
@@ -75,11 +75,15 @@ export function RoyaltiesPanel({ ipId }: { ipId: string }) {
       setTipMessage("Connect a wallet to send royalty tips.");
       return;
     }
+    if (!client) {
+      setTipStatus("error");
+      setTipMessage("Wallet client not ready yet. Try again in a moment.");
+      return;
+    }
 
     setTipStatus("loading");
     setTipMessage(null);
     try {
-      const client = await getClient();
       const res = await client.royalty.payRoyaltyOnBehalf({
         receiverIpId: tipForm.receiverIpId as `0x${string}`,
         payerIpId: (tipForm.payerIpId || zeroAddress) as `0x${string}`,
@@ -102,6 +106,11 @@ export function RoyaltiesPanel({ ipId }: { ipId: string }) {
       setClaimMessage("Connect a wallet to query claimable revenue.");
       return;
     }
+    if (!client) {
+      setClaimStatus("error");
+      setClaimMessage("Wallet client not ready yet. Try again in a moment.");
+      return;
+    }
     if (!effectiveClaimer) {
       setClaimStatus("error");
       setClaimMessage("Claimer address is required.");
@@ -111,7 +120,6 @@ export function RoyaltiesPanel({ ipId }: { ipId: string }) {
     setClaimStatus("loading");
     setClaimMessage(null);
     try {
-      const client = await getClient();
       const amount = await client.royalty.claimableRevenue({
         ipId: claimForm.ancestorIpId as `0x${string}`,
         claimer: effectiveClaimer as `0x${string}`,
@@ -134,6 +142,11 @@ export function RoyaltiesPanel({ ipId }: { ipId: string }) {
       setClaimAllMessage("Connect a wallet to claim revenue.");
       return;
     }
+    if (!client) {
+      setClaimAllStatus("error");
+      setClaimAllMessage("Wallet client not ready yet. Try again in a moment.");
+      return;
+    }
     if (!effectiveClaimer) {
       setClaimAllStatus("error");
       setClaimAllMessage("Claimer address is required.");
@@ -143,7 +156,6 @@ export function RoyaltiesPanel({ ipId }: { ipId: string }) {
     setClaimAllStatus("loading");
     setClaimAllMessage(null);
     try {
-      const client = await getClient();
       const childIpIds = claimForm.childIpIds
         .split(",")
         .map((s) => s.trim())
@@ -407,4 +419,3 @@ export function RoyaltiesPanel({ ipId }: { ipId: string }) {
     </Card>
   );
 }
-

@@ -54,7 +54,7 @@ export default function PublishClient({
   const projectState = useAppSelector((state) => state.projectState);
   const exports = projectState.exports;
   const { address, isConnected } = useAccount();
-  const { getClient } = useStoryClient();
+  const client = useStoryClient();
 
   const [isLoadingProject, setIsLoadingProject] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -600,7 +600,9 @@ export default function PublishClient({
       setStatus("registering");
       setMessage("Registering IP Asset on Story…");
 
-      const client = await getClient();
+      if (!client) {
+        throw new Error("Wallet client not ready yet. Try again in a moment.");
+      }
       const preset = LICENSE_PRESETS[licensePreset];
       const terms =
         preset.share && preset.share > 0
@@ -1422,6 +1424,19 @@ export default function PublishClient({
 	                        <Button size="sm" variant="secondary" asChild>
 	                          <Link href={`/ip/${published.ipId}`}>
 	                            View marketplace page
+	                          </Link>
+	                        </Button>
+	                        <Button size="sm" asChild>
+	                          <Link
+	                            href={
+	                              selectedExportId
+	                                ? `/projects/${projectId}/ipfi?exportId=${encodeURIComponent(
+	                                    selectedExportId,
+	                                  )}`
+	                                : `/projects/${projectId}/ipfi`
+	                            }
+	                          >
+	                            Open IPFi
 	                          </Link>
 	                        </Button>
 	                        <Button
