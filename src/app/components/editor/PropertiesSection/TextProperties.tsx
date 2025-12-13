@@ -7,32 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useMemo, type ReactNode } from "react";
-
-function PropertySection(props: {
-  title: string;
-  description?: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const { title, description, defaultOpen = true, children } = props;
-  return (
-    <details
-      open={defaultOpen}
-      className="rounded-xl border border-white/10 bg-black/20"
-    >
-      <summary className="cursor-pointer select-none px-4 py-3">
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold text-white">{title}</div>
-          {description ? (
-            <div className="text-xs text-white/50">{description}</div>
-          ) : null}
-        </div>
-      </summary>
-      <div className="border-t border-white/10 p-4">{children}</div>
-    </details>
-  );
-}
+import { useMemo } from "react";
+import { InspectorSection } from "./InspectorSection";
 
 function NumberField(props: {
   id: string;
@@ -85,6 +61,8 @@ export default function TextProperties() {
       y: `text-${base}-y`,
       width: `text-${base}-w`,
       height: `text-${base}-h`,
+      rotation: `text-${base}-rotation`,
+      zIndex: `text-${base}-z`,
       fontSize: `text-${base}-font-size`,
       font: `text-${base}-font`,
       align: `text-${base}-align`,
@@ -115,9 +93,25 @@ export default function TextProperties() {
     textElement.positionEnd - textElement.positionStart,
   );
 
+  const title = (() => {
+    const raw = textElement.text.trim();
+    if (raw.length === 0) return "Shape";
+    return raw.length > 56 ? `${raw.slice(0, 56)}…` : raw;
+  })();
+
   return (
     <div className="space-y-3">
-      <PropertySection
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="space-y-1">
+          <div className="text-sm font-semibold text-white">{title}</div>
+          <div className="text-xs text-white/50">
+            {timelineDuration.toFixed(2)}s on timeline · Double-click the canvas to
+            edit inline.
+          </div>
+        </div>
+      </div>
+
+      <InspectorSection
         title="Content"
         description="Edit the text shown on screen."
       >
@@ -134,9 +128,9 @@ export default function TextProperties() {
             placeholder="Type your title…"
           />
         </div>
-      </PropertySection>
+      </InspectorSection>
 
-      <PropertySection
+      <InspectorSection
         title="Timing"
         description="Controlled primarily by dragging/resizing on the timeline."
       >
@@ -157,9 +151,9 @@ export default function TextProperties() {
             Duration: {timelineDuration.toFixed(2)}s
           </div>
         </div>
-      </PropertySection>
+      </InspectorSection>
 
-      <PropertySection title="Transform" description="Position and size.">
+      <InspectorSection title="Transform" description="Position, size, and rotation.">
         <div className="grid grid-cols-2 gap-4">
           <NumberField
             id={ids.x}
@@ -190,6 +184,20 @@ export default function TextProperties() {
             onChange={(next) => onUpdateText(textElement.id, { height: next })}
           />
           <NumberField
+            id={ids.rotation}
+            label="Rotation (°)"
+            value={textElement.rotation ?? 0}
+            step={1}
+            onChange={(next) => onUpdateText(textElement.id, { rotation: next })}
+          />
+          <NumberField
+            id={ids.zIndex}
+            label="Layer (z-index)"
+            value={textElement.zIndex ?? 0}
+            step={1}
+            onChange={(next) => onUpdateText(textElement.id, { zIndex: next })}
+          />
+          <NumberField
             id={ids.fontSize}
             label="Font size"
             value={textElement.fontSize ?? 64}
@@ -197,9 +205,9 @@ export default function TextProperties() {
             onChange={(next) => onUpdateText(textElement.id, { fontSize: next })}
           />
         </div>
-      </PropertySection>
+      </InspectorSection>
 
-      <PropertySection title="Style" description="Typography and colors.">
+      <InspectorSection title="Style" description="Typography and colors.">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label htmlFor={ids.font} className="text-xs text-white/70">
@@ -309,9 +317,9 @@ export default function TextProperties() {
             />
           </div>
         </div>
-      </PropertySection>
+      </InspectorSection>
 
-      <PropertySection title="Animation" description="Entrance/exit behavior.">
+      <InspectorSection title="Animation" description="Entrance/exit behavior.">
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label htmlFor={ids.animation} className="text-xs text-white/70">
@@ -353,7 +361,7 @@ export default function TextProperties() {
             onChange={(next) => onUpdateText(textElement.id, { fadeOutDuration: next })}
           />
         </div>
-      </PropertySection>
+      </InspectorSection>
     </div>
   );
 }

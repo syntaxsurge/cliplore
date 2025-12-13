@@ -1,12 +1,18 @@
 import * as core from "@diffusionstudio/core";
 
 import { getFile } from "@/app/store";
-import type { ExportConfig, MediaFile, TextElement } from "@/app/types";
+import type {
+  ExportConfig,
+  MediaFile,
+  TextElement,
+  TimelineTrack,
+} from "@/app/types";
 import { clientEnv } from "@/lib/env/client";
 
 type CoreRenderInput = {
   mediaFiles: MediaFile[];
   textElements: TextElement[];
+  tracks: TimelineTrack[];
   exportSettings: ExportConfig;
   onProgress?: NonNullable<InstanceType<typeof core.Encoder>["onProgress"]>;
 };
@@ -51,16 +57,32 @@ const normalizeVolume = (volume?: number) =>
 
 const toHexColor = (input?: string) => {
   if (!input) return "#ffffff";
-  if (input.startsWith("#")) return input;
+  if (input.startsWith("#")) return input.slice(0, 7);
   const lowered = input.toLowerCase();
   if (lowered === "white") return "#ffffff";
   if (lowered === "black") return "#000000";
   return "#ffffff";
 };
 
+const parseHexWithAlpha = (input?: string) => {
+  if (!input) return { hex: "#000000" as core.hex, alpha: 0 };
+  const raw = input.trim();
+  if (raw.length === 0 || raw === "transparent") {
+    return { hex: "#000000" as core.hex, alpha: 0 };
+  }
+  const match = raw.match(/^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/);
+  if (!match) {
+    return { hex: toHexColor(raw) as core.hex, alpha: 1 };
+  }
+  const hex = `#${match[1]}` as core.hex;
+  const alpha = match[2] ? parseInt(match[2], 16) / 255 : 1;
+  return { hex, alpha: Math.min(Math.max(alpha, 0), 1) };
+};
+
 export async function renderWithDiffusionCore({
   mediaFiles,
   textElements,
+  tracks,
   exportSettings,
   onProgress,
 }: CoreRenderInput): Promise<Blob> {
@@ -90,49 +112,215 @@ export async function renderWithDiffusionCore({
   composition.mount(mountEl);
 
   try {
-    const visualFiles = mediaFiles.filter(
+    const clampNumber = (value: number, min: number, max: number) =>
+      Math.min(Math.max(value, min), max);
+
+    const safeNumber = (value: unknown, fallback: number) =>
+      typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+    const safeDuration = (start: number, end: number) => Math.max(0, end - start);
+
+    const trackIndexById = new Map(
+      (tracks ?? []).map((t, idx) => [t.id, idx] as const),
+    );
+    const trackIndex = (trackId?: string) =>
+      trackId ? trackIndexById.get(trackId) ?? 0 : 0;
+    const effectiveZ = (trackId?: string, zIndex?: number) =>
+      trackIndex(trackId) * 1000 + (zIndex ?? 0);
+
+    const visualMediaFiles = mediaFiles.filter(
       (m) => m.type === "video" || m.type === "image",
     );
     const audioFiles = mediaFiles.filter((m) => m.type === "audio");
 
-    const zIndices = Array.from(
-      new Set(visualFiles.map((m) => m.zIndex ?? 0)),
-    ).sort((a, b) => b - a);
+    type VisualGroup = {
+      media: MediaFile[];
+      text: TextElement[];
+    };
 
-    for (const z of zIndices) {
+    const groups = new Map<number, VisualGroup>();
+    const ensureGroup = (z: number) => {
+      const existing = groups.get(z);
+      if (existing) return existing;
+      const next: VisualGroup = { media: [], text: [] };
+      groups.set(z, next);
+      return next;
+    };
+
+    for (const clip of visualMediaFiles) {
+      ensureGroup(effectiveZ(clip.trackId, clip.zIndex)).media.push(clip);
+    }
+    for (const clip of textElements) {
+      ensureGroup(effectiveZ(clip.trackId, clip.zIndex)).text.push(clip);
+    }
+
+    const zOrder = Array.from(groups.keys()).sort((a, b) => b - a);
+    const layersByZ = new Map<number, core.Layer>();
+    for (const z of zOrder) {
       const layer = new core.Layer();
       await composition.add(layer, composition.layers.length);
+      layersByZ.set(z, layer);
+    }
 
-      const filesForZ = visualFiles.filter((m) => (m.zIndex ?? 0) === z);
-      for (const file of filesForZ) {
+    const uniqueFonts = Array.from(
+      new Set(textElements.map((t) => (t.font || "Inter").trim()).filter(Boolean)),
+    );
+    const fontsByFamily = new Map<string, core.Font>();
+    for (const family of uniqueFonts) {
+      try {
+        const font = await core.loadFont({
+          family,
+          source: `url(/fonts/${family}.ttf)`,
+        });
+        fontsByFamily.set(family, font);
+      } catch {
+        // Fallback to system fonts if custom font fails to load.
+      }
+    }
+
+    const buildFadeAnimation = (options: {
+      start: number;
+      end: number;
+      fadeIn: number;
+      fadeOut: number;
+      finalOpacity: number;
+    }) => {
+      const duration = Math.max(0, options.end - options.start);
+      const fadeIn = clampNumber(options.fadeIn, 0, duration);
+      const fadeOut = clampNumber(options.fadeOut, 0, duration);
+      const fadeInEnd = options.start + fadeIn;
+      const fadeOutStart = Math.max(fadeInEnd, options.end - fadeOut);
+      const finalOpacity = clampNumber(options.finalOpacity, 0, 1);
+
+      return {
+        key: "opacity" as const,
+        extrapolate: "clamp" as const,
+        frames: [
+          { time: options.start, value: 0 },
+          { time: fadeInEnd, value: finalOpacity, easing: "ease-out" as const },
+          { time: fadeOutStart, value: finalOpacity },
+          { time: options.end, value: 0, easing: "ease-in" as const },
+        ],
+      };
+    };
+
+    const buildTransformAnimations = (options: {
+      start: number;
+      fadeIn: number;
+      animation?: TextElement["animation"];
+    }) => {
+      const fadeIn = Math.max(0, options.fadeIn);
+      const fadeInEnd = options.start + fadeIn;
+      const animation = options.animation || "none";
+
+      const animations: any[] = [];
+
+      if ((animation === "slide-in" || animation === "slide-up") && fadeIn > 0) {
+        animations.push({
+          key: "translateY",
+          extrapolate: "clamp" as const,
+          frames: [
+            { time: options.start, value: 30 },
+            { time: fadeInEnd, value: 0, easing: "ease-out" as const },
+          ],
+        });
+      }
+
+      if ((animation === "zoom" || animation === "bounce") && fadeIn > 0) {
+        const startScale = animation === "zoom" ? 0.9 : 0.8;
+        const frames =
+          animation === "bounce"
+            ? [
+                { time: options.start, value: startScale },
+                {
+                  time: options.start + fadeIn * 0.7,
+                  value: 1.05,
+                  easing: "ease-out" as const,
+                },
+                { time: fadeInEnd, value: 1, easing: "ease-in-out" as const },
+              ]
+            : [
+                { time: options.start, value: startScale },
+                { time: fadeInEnd, value: 1, easing: "ease-out" as const },
+              ];
+
+        animations.push({
+          key: "scale",
+          extrapolate: "clamp" as const,
+          frames,
+        });
+      }
+
+      return animations;
+    };
+
+    for (const z of zOrder) {
+      const layer = layersByZ.get(z);
+      const group = groups.get(z);
+      if (!layer || !group) continue;
+
+      for (const file of group.media) {
         const fileData = await getFile(file.fileId);
-        const duration = file.positionEnd - file.positionStart;
+        if (!fileData) continue;
+
+        const duration = safeDuration(file.positionStart, file.positionEnd);
+        if (duration <= 0) continue;
 
         const effects: core.Effect[] | undefined =
-          file.blur && file.blur > 0
-            ? [{ type: "blur", value: file.blur }]
-            : undefined;
+          file.blur && file.blur > 0 ? [{ type: "blur", value: file.blur }] : undefined;
+
+        const widthPx = safeNumber(file.width, composition.width);
+        const heightPx = safeNumber(file.height, composition.height);
+        const crop = file.crop ?? {
+          x: 0,
+          y: 0,
+          width: widthPx,
+          height: heightPx,
+        };
+
+        const cropWidth = clampNumber(safeNumber(crop.width, widthPx), 1, widthPx);
+        const cropHeight = clampNumber(
+          safeNumber(crop.height, heightPx),
+          1,
+          heightPx,
+        );
+        const cropX = clampNumber(
+          safeNumber(crop.x, 0),
+          0,
+          Math.max(0, widthPx - cropWidth),
+        );
+        const cropY = clampNumber(
+          safeNumber(crop.y, 0),
+          0,
+          Math.max(0, heightPx - cropHeight),
+        );
+
+        const mask = new core.RectangleMask({
+          x: cropX,
+          y: cropY,
+          width: cropWidth,
+          height: cropHeight,
+        });
 
         const commonProps = {
           delay: file.positionStart,
           duration,
-          x: file.x ?? 0,
-          y: file.y ?? 0,
-          width: file.width,
-          height: file.height,
+          x: (file.x ?? 0) - cropX,
+          y: (file.y ?? 0) - cropY,
+          width: widthPx,
+          height: heightPx,
           rotation: file.rotation ?? 0,
           opacity: normalizeOpacity(file.opacity),
           effects,
+          mask,
         };
 
         if (file.type === "video") {
           const source = await core.Source.from<core.VideoSource>(fileData);
+          const rangeEnd = safeNumber(file.endTime, file.startTime + duration);
           const clip = new core.VideoClip(source, {
             ...commonProps,
-            range: [file.startTime, file.startTime + duration] as [
-              number,
-              number,
-            ],
+            range: [file.startTime, rangeEnd] as [number, number],
             volume: normalizeVolume(file.volume),
           });
           await layer.add(clip);
@@ -142,52 +330,59 @@ export async function renderWithDiffusionCore({
           await layer.add(clip);
         }
       }
-    }
 
-    if (audioFiles.length > 0) {
-      const audioLayer = new core.Layer();
-      await composition.add(audioLayer, composition.layers.length);
+      for (const text of group.text) {
+        const duration = safeDuration(text.positionStart, text.positionEnd);
+        if (duration <= 0) continue;
 
-      for (const file of audioFiles) {
-        const fileData = await getFile(file.fileId);
-        const duration = file.positionEnd - file.positionStart;
-        const source = await core.Source.from<core.AudioSource>(fileData);
-        const clip = new core.AudioClip(source, {
-          delay: file.positionStart,
-          duration,
-          range: [file.startTime, file.startTime + duration] as [
-            number,
-            number,
-          ],
-          volume: normalizeVolume(file.volume),
+        const fadeIn = clampNumber(safeNumber(text.fadeInDuration, 0.4), 0, duration);
+        const fadeOut = clampNumber(safeNumber(text.fadeOutDuration, 0.4), 0, duration);
+        const baseOpacity = normalizeOpacity(text.opacity);
+        const rotation = text.rotation ?? 0;
+        const effects: core.Effect[] | undefined =
+          text.blur && text.blur > 0 ? [{ type: "blur", value: text.blur }] : undefined;
+
+        const boxWidth = safeNumber(text.width, 800);
+        const boxHeight = safeNumber(text.height, 200);
+
+        const transformAnimations = buildTransformAnimations({
+          start: text.positionStart,
+          fadeIn,
+          animation: text.animation,
         });
-        await audioLayer.add(clip);
-      }
-    }
 
-    if (textElements.length > 0) {
-      const textLayer = new core.Layer();
-      await composition.add(textLayer, 0);
-
-      const uniqueFonts = Array.from(
-        new Set(textElements.map((t) => t.font).filter(Boolean)),
-      ) as string[];
-      const fontsByFamily = new Map<string, core.Font>();
-      for (const family of uniqueFonts) {
-        try {
-          const font = await core.loadFont({
-            family,
-            source: `url(/fonts/${family}.ttf)`,
+        const bg = parseHexWithAlpha(text.backgroundColor);
+        const bgOpacity = clampNumber(baseOpacity * bg.alpha, 0, 1);
+        if (bgOpacity > 0 && boxWidth > 0 && boxHeight > 0) {
+          const rect = new core.RectangleClip({
+            fill: bg.hex,
+            delay: text.positionStart,
+            duration,
+            x: text.x,
+            y: text.y,
+            width: boxWidth,
+            height: boxHeight,
+            rotation,
+            opacity: bgOpacity,
+            effects,
+            animations: [
+              buildFadeAnimation({
+                start: text.positionStart,
+                end: text.positionEnd,
+                fadeIn,
+                fadeOut,
+                finalOpacity: bgOpacity,
+              }),
+              ...transformAnimations,
+            ],
           });
-          fontsByFamily.set(family, font);
-        } catch {
-          // Fallback to system fonts if custom font fails to load.
+          await layer.add(rect);
         }
-      }
 
-      for (const text of textElements) {
-        const duration = text.positionEnd - text.positionStart;
-        const family = text.font || "Arial";
+        const content = (text.text ?? "").trim();
+        if (content.length === 0) continue;
+
+        const family = (text.font || "Inter").trim();
         const loadedFont = fontsByFamily.get(family);
         const fontSize = text.fontSize || loadedFont?.size || 24;
 
@@ -197,9 +392,8 @@ export async function renderWithDiffusionCore({
           duration,
           x: text.x,
           y: text.y,
-          width: text.width,
-          rotation: text.rotation ?? 0,
-          opacity: normalizeOpacity(text.opacity),
+          rotation,
+          opacity: baseOpacity,
           color: toHexColor(text.color) as core.hex,
           font: {
             family,
@@ -207,10 +401,44 @@ export async function renderWithDiffusionCore({
             weight: loadedFont?.weight,
             style: loadedFont?.style,
           },
+          maxWidth: boxWidth > 0 ? boxWidth : undefined,
           align: text.align,
+          effects,
+          animations: [
+            buildFadeAnimation({
+              start: text.positionStart,
+              end: text.positionEnd,
+              fadeIn,
+              fadeOut,
+              finalOpacity: baseOpacity,
+            }),
+            ...transformAnimations,
+          ],
         });
 
-        await textLayer.add(clip);
+        await layer.add(clip);
+      }
+    }
+
+    if (audioFiles.length > 0) {
+      const audioLayer = new core.Layer();
+      await composition.add(audioLayer, composition.layers.length);
+
+      for (const file of audioFiles) {
+        const fileData = await getFile(file.fileId);
+        if (!fileData) continue;
+        const duration = safeDuration(file.positionStart, file.positionEnd);
+        if (duration <= 0) continue;
+
+        const source = await core.Source.from<core.AudioSource>(fileData);
+        const rangeEnd = safeNumber(file.endTime, file.startTime + duration);
+        const clip = new core.AudioClip(source, {
+          delay: file.positionStart,
+          duration,
+          range: [file.startTime, rangeEnd] as [number, number],
+          volume: normalizeVolume(file.volume),
+        });
+        await audioLayer.add(clip);
       }
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import Moveable, { OnDrag, OnResize } from "react-moveable";
+import Moveable, { OnDrag, OnResize, OnRotate } from "react-moveable";
 import { useAppDispatch, useAppSelector } from "@/app/store";
 import {
   setMediaFiles,
@@ -10,9 +10,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { throttle } from "lodash";
 import type { MediaFile, TextElement } from "@/app/types";
 import { createPortal } from "react-dom";
+import { useEditorPlayer } from "./EditorPlayerContext";
 
 export default function MoveableOverlay() {
   const dispatch = useAppDispatch();
+  const { editingTextId } = useEditorPlayer();
   const { activeElement, activeElementIndex, mediaFiles, textElements } =
     useAppSelector((state) => state.projectState);
 
@@ -98,7 +100,7 @@ export default function MoveableOverlay() {
     ],
   );
 
-  if (!selected || !target || !portalContainer) return null;
+  if (!selected || !target || !portalContainer || editingTextId) return null;
 
   const isFiniteNumber = (value: unknown): value is number =>
     typeof value === "number" && Number.isFinite(value);
@@ -107,6 +109,15 @@ export default function MoveableOverlay() {
     activeElement === "media" &&
     (selected as MediaFile).type !== undefined &&
     ((selected as MediaFile).type === "image" || (selected as MediaFile).type === "video");
+
+  const patchTransformRotation = (value: string, rotation: number) => {
+    const nextRotation = `rotate(${rotation}deg)`;
+    if (!value || value === "none") return nextRotation;
+    if (/\brotate\([^)]+\)/.test(value)) {
+      return value.replace(/\brotate\([^)]+\)/, nextRotation);
+    }
+    return `${value} ${nextRotation}`;
+  };
 
   return createPortal(
     <Moveable
@@ -117,6 +128,8 @@ export default function MoveableOverlay() {
       throttleDrag={0}
       resizable
       throttleResize={0}
+      rotatable
+      throttleRotate={0}
       keepRatio={keepRatio}
       renderDirections={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
       linePadding={6}
@@ -127,7 +140,6 @@ export default function MoveableOverlay() {
         if (!target) return;
         target.style.left = `${left}px`;
         target.style.top = `${top}px`;
-        target.style.transform = "none";
         updateSelected({ x: left, y: top } as any);
       }}
       onResize={({ target, width, height, drag, delta }: OnResize) => {
@@ -140,7 +152,6 @@ export default function MoveableOverlay() {
           if (isFiniteNumber(drag.left)) target.style.left = `${drag.left}px`;
           if (isFiniteNumber(drag.top)) target.style.top = `${drag.top}px`;
         }
-        target.style.transform = "none";
 
         if (activeElement === "media") {
           const media = selected as MediaFile;
@@ -185,6 +196,18 @@ export default function MoveableOverlay() {
           ...(isFiniteNumber(drag?.left) ? { x: drag.left } : {}),
           ...(isFiniteNumber(drag?.top) ? { y: drag.top } : {}),
         } as any);
+      }}
+      onRotate={({ target, beforeRotate }: OnRotate) => {
+        if (!target) return;
+        const nextRotation =
+          typeof beforeRotate === "number" && Number.isFinite(beforeRotate)
+            ? beforeRotate
+            : 0;
+        target.style.transform = patchTransformRotation(
+          target.style.transform,
+          nextRotation,
+        );
+        updateSelected({ rotation: nextRotation } as any);
       }}
     />,
     portalContainer,

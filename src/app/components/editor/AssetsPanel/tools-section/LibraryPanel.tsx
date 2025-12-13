@@ -41,38 +41,45 @@ export default function LibraryPanel() {
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-white">Library</h2>
+        <div className="min-w-0 space-y-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-white">Library</h2>
+            <div className="text-xs text-white/50 tabular-nums">
+              {totalFiles} item{totalFiles === 1 ? "" : "s"}
+            </div>
+          </div>
           <p className="text-xs text-white/50">
-            Import media, then add clips to your timeline.
+            Upload or generate media. Drag items to the timeline.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <UploadMedia variant="button" label="Import" />
-          <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-            <DialogTrigger asChild>
-              <Button type="button" size="sm" variant="outline">
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                Generate
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-xl border-white/10 bg-black/90 text-white">
-              <DialogHeader>
-                <DialogTitle>Generate with Sora</DialogTitle>
-                <DialogDescription>
-                  Create a clip and send it straight to your timeline.
-                </DialogDescription>
-              </DialogHeader>
-              <SoraPanel hideHeader onGenerated={() => setAiOpen(false)} />
-            </DialogContent>
-          </Dialog>
-        </div>
+        <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+          <DialogTrigger asChild>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-white/10 bg-black/30 text-white hover:bg-black/40 hover:text-white"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              Generate
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-xl border-white/10 bg-black/90 text-white">
+            <DialogHeader>
+              <DialogTitle>Generate with Sora</DialogTitle>
+              <DialogDescription>
+                Create a clip and send it straight to your timeline.
+              </DialogDescription>
+            </DialogHeader>
+            <SoraPanel hideHeader onGenerated={() => setAiOpen(false)} />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <UploadMedia variant="dropzone" />
+      <UploadMedia variant="dropzone" className="py-3" />
 
-      <div className="space-y-2">
+      <div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
         <div className="relative">
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40"
@@ -103,9 +110,6 @@ export default function LibraryPanel() {
               {f.label}
             </Button>
           ))}
-          <div className="ml-auto text-xs text-white/50">
-            {totalFiles} item{totalFiles === 1 ? "" : "s"}
-          </div>
         </div>
       </div>
 

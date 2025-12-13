@@ -9,33 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createLoadedFfmpeg } from "@/lib/media/ffmpeg";
 import { cn } from "@/lib/utils";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
-
-function PropertySection(props: {
-  title: string;
-  description?: string;
-  defaultOpen?: boolean;
-  children: ReactNode;
-}) {
-  const { title, description, defaultOpen = true, children } = props;
-  return (
-    <details
-      open={defaultOpen}
-      className="rounded-xl border border-white/10 bg-black/20"
-    >
-      <summary className="cursor-pointer select-none px-4 py-3">
-        <div className="space-y-0.5">
-          <div className="text-sm font-semibold text-white">{title}</div>
-          {description ? (
-            <div className="text-xs text-white/50">{description}</div>
-          ) : null}
-        </div>
-      </summary>
-      <div className="border-t border-white/10 p-4">{children}</div>
-    </details>
-  );
-}
+import { InspectorSection } from "./InspectorSection";
 
 function NumberField(props: {
   id: string;
@@ -94,6 +70,7 @@ export default function MediaProperties() {
       y: `media-${base}-y`,
       width: `media-${base}-w`,
       height: `media-${base}-h`,
+      rotation: `media-${base}-rotation`,
       zIndex: `media-${base}-z`,
       opacity: `media-${base}-opacity`,
       blur: `media-${base}-blur`,
@@ -227,7 +204,7 @@ export default function MediaProperties() {
         </div>
       </div>
 
-      <PropertySection
+      <InspectorSection
         title="Timing"
         description="Timeline placement and source trim."
       >
@@ -264,10 +241,10 @@ export default function MediaProperties() {
             readOnly
           />
         </div>
-      </PropertySection>
+      </InspectorSection>
 
       {isVisual ? (
-        <PropertySection title="Transform" description="Position and size.">
+        <InspectorSection title="Transform" description="Position, size, and rotation.">
           <div className="grid grid-cols-2 gap-4">
             <NumberField
               id={ids.x}
@@ -298,6 +275,13 @@ export default function MediaProperties() {
               onChange={(next) => onUpdateMedia(mediaFile.id, { height: next })}
             />
             <NumberField
+              id={ids.rotation}
+              label="Rotation (°)"
+              value={mediaFile.rotation ?? 0}
+              step={1}
+              onChange={(next) => onUpdateMedia(mediaFile.id, { rotation: next })}
+            />
+            <NumberField
               id={ids.zIndex}
               label="Layer (z-index)"
               value={mediaFile.zIndex ?? 0}
@@ -305,11 +289,11 @@ export default function MediaProperties() {
               onChange={(next) => onUpdateMedia(mediaFile.id, { zIndex: next })}
             />
           </div>
-        </PropertySection>
+        </InspectorSection>
       ) : null}
 
       {isVisual ? (
-        <PropertySection title="Crop" description="Visible bounds of the frame.">
+        <InspectorSection title="Crop" description="Visible bounds of the frame.">
           <div className="grid grid-cols-2 gap-4">
             <NumberField
               id={ids.cropX}
@@ -348,11 +332,11 @@ export default function MediaProperties() {
               }
             />
           </div>
-        </PropertySection>
+        </InspectorSection>
       ) : null}
 
       {isVisual ? (
-        <PropertySection title="Effects" description="Opacity and blur.">
+        <InspectorSection title="Effects" description="Opacity and blur.">
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -400,11 +384,11 @@ export default function MediaProperties() {
               />
             </div>
           </div>
-        </PropertySection>
+        </InspectorSection>
       ) : null}
 
       {isAudio ? (
-        <PropertySection title="Audio" description="Volume and speed.">
+        <InspectorSection title="Audio" description="Volume and speed.">
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -466,7 +450,7 @@ export default function MediaProperties() {
               </Button>
             ) : null}
           </div>
-        </PropertySection>
+        </InspectorSection>
       ) : null}
     </div>
   );

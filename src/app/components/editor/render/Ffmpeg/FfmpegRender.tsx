@@ -21,10 +21,10 @@ export default function FfmpegRender({
   loadFfmpeg,
   ffmpeg,
   logMessages,
-}: FileUploaderProps) {
-  const dispatch = useAppDispatch();
-  const { mediaFiles, projectName, exportSettings, duration, textElements } =
-    useAppSelector((state) => state.projectState);
+  }: FileUploaderProps) {
+    const dispatch = useAppDispatch();
+    const { mediaFiles, projectName, exportSettings, duration, textElements, tracks } =
+      useAppSelector((state) => state.projectState);
   const totalDuration = duration;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
@@ -69,69 +69,105 @@ export default function FfmpegRender({
     const renderFunction = async (): Promise<Blob> => {
       const params = extractConfigs(exportSettings);
 
-      if (engine === "gpu") {
-        const blob = await renderWithDiffusionCore({
-          mediaFiles,
-          textElements,
-          exportSettings,
-          onProgress: (p) => {
-            const percent = p.total > 0 ? (p.progress / p.total) * 100 : 0;
-            setGpuProgress(percent);
-          },
-        });
-        return blob;
-      }
+	      if (engine === "gpu") {
+	        const blob = await renderWithDiffusionCore({
+	          mediaFiles,
+	          textElements,
+	          tracks,
+	          exportSettings,
+	          onProgress: (p) => {
+	            const percent = p.total > 0 ? (p.progress / p.total) * 100 : 0;
+	            setGpuProgress(percent);
+	          },
+	        });
+	        return blob;
+	      }
 
       try {
-        const filters = [];
-        const overlays = [];
-        const inputs = [];
-        const audioDelays = [];
+        const filters: string[] = [];
+        const inputs: string[] = [];
+        const audioDelays: string[] = [];
+
+        type OverlayEntry = {
+          label: string;
+          x: number;
+          y: number;
+          baseWidth: number;
+          baseHeight: number;
+          start: number;
+          end: number;
+          effectiveZ: number;
+          kind: "media" | "text";
+          order: number;
+          animation?: string;
+          fadeIn: number;
+        };
+
+        const overlays: OverlayEntry[] = [];
+
+        const clampNumber = (value: number, min: number, max: number) =>
+          Math.min(Math.max(value, min), max);
+
+        const safeNumber = (value: unknown, fallback: number) =>
+          typeof value === "number" && Number.isFinite(value) ? value : fallback;
+
+        const safeInt = (value: unknown, fallback: number) =>
+          Math.max(1, Math.round(safeNumber(value, fallback)));
+
+        const parseHexColor = (value: unknown, fallbackHex: string) => {
+          if (typeof value !== "string") return { hex: fallbackHex, alpha: 1 };
+          const raw = value.trim();
+          if (raw.length === 0 || raw === "transparent") {
+            return { hex: "#000000", alpha: 0 };
+          }
+          const match = raw.match(/^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/);
+          if (!match) return { hex: fallbackHex, alpha: 1 };
+          const hex = `#${match[1]}`;
+          const alpha = match[2] ? parseInt(match[2], 16) / 255 : 1;
+          return { hex, alpha: clampNumber(alpha, 0, 1) };
+        };
+
+        const escapeDrawtext = (value: string) =>
+          value
+            .replace(/\\/g, "\\\\")
+            .replace(/\n/g, "\\n")
+            .replace(/:/g, "\\:")
+            .replace(/'/g, "\\\\'");
+
+        const trackIndexById = new Map(
+          (tracks ?? []).map((t, idx) => [t.id, idx] as const),
+        );
+        const trackIndex = (trackId?: string) =>
+          trackId ? trackIndexById.get(trackId) ?? 0 : 0;
+        const effectiveZ = (trackId?: string, zIndex?: number) =>
+          trackIndex(trackId) * 1000 + (zIndex ?? 0);
 
         // Create base black background
         filters.push(
           `color=c=black:size=1920x1080:d=${totalDuration.toFixed(3)}[base]`,
         );
-        // Sort videos by zIndex ascending (lowest drawn first)
-        const sortedMediaFiles = [...mediaFiles].sort(
-          (a, b) => (a.zIndex || 0) - (b.zIndex || 0),
-        );
+        for (let i = 0; i < mediaFiles.length; i++) {
+          const clip = mediaFiles[i];
+          const { startTime, positionStart, positionEnd } = clip;
+          const clipDuration = Math.max(0, positionEnd - positionStart);
+          if (clipDuration <= 0) continue;
 
-        for (let i = 0; i < sortedMediaFiles.length; i++) {
-          // timing
-          const { startTime, positionStart, positionEnd } = sortedMediaFiles[i];
-          const duration = positionEnd - positionStart;
-
-          // get the file data and write to ffmpeg
-          const fileData = await getFile(sortedMediaFiles[i].fileId);
+          const fileData = await getFile(clip.fileId);
+          if (!fileData) {
+            throw new Error(`Missing file for clip ${clip.fileName}`);
+          }
           const buffer = await fileData.arrayBuffer();
           const ext =
             mimeToExt[fileData.type as keyof typeof mimeToExt] ||
             fileData.type.split("/")[1];
           await ffmpeg.writeFile(`input${i}.${ext}`, new Uint8Array(buffer));
 
-          // TODO: currently we have to write same file if it's used more than once in different clips the below approach is a good start to change this
-          // let wroteFiles = new Map<string, string>();
-          // const { fileId, type } = sortedMediaFiles[i];
-          // let inputFilename: string;
-
-          // if (wroteFiles.has(fileId)) {
-          //     inputFilename = wroteFiles.get(fileId)!;
-          // } else {
-          //     const fileData = await getFile(fileId);
-          //     const buffer = await fileData.arrayBuffer();
-          //     const ext = mimeToExt[fileData.type as keyof typeof mimeToExt] || fileData.type.split('/')[1];
-          //     inputFilename = `input_${fileId}.${ext}`;
-          //     await ffmpeg.writeFile(inputFilename, new Uint8Array(buffer));
-          //     wroteFiles.set(fileId, inputFilename);
-          // }
-
-          if (sortedMediaFiles[i].type === "image") {
+          if (clip.type === "image") {
             inputs.push(
               "-loop",
               "1",
               "-t",
-              duration.toFixed(3),
+              clipDuration.toFixed(3),
               "-i",
               `input${i}.${ext}`,
             );
@@ -139,104 +175,263 @@ export default function FfmpegRender({
             inputs.push("-i", `input${i}.${ext}`);
           }
 
-          const visualLabel = `visual${i}`;
           const audioLabel = `audio${i}`;
-
-          // Shift clip to correct place on timeline (video)
-          if (sortedMediaFiles[i].type === "video") {
-            filters.push(
-              `[${i}:v]trim=start=${startTime.toFixed(3)}:duration=${duration.toFixed(3)},scale=${sortedMediaFiles[i].width}:${sortedMediaFiles[i].height},setpts=PTS-STARTPTS+${positionStart.toFixed(3)}/TB[${visualLabel}]`,
-            );
-          }
-          if (sortedMediaFiles[i].type === "image") {
-            filters.push(
-              `[${i}:v]scale=${sortedMediaFiles[i].width}:${sortedMediaFiles[i].height},setpts=PTS+${positionStart.toFixed(3)}/TB[${visualLabel}]`,
-            );
-          }
-
-          // Apply opacity
-          if (
-            sortedMediaFiles[i].type === "video" ||
-            sortedMediaFiles[i].type === "image"
-          ) {
-            const alpha = Math.min(
-              Math.max((sortedMediaFiles[i].opacity || 100) / 100, 0),
+          const isVisual = clip.type === "video" || clip.type === "image";
+          if (isVisual) {
+            const visualLabel = `visual${i}`;
+            const sourceWidth = safeInt(clip.width, 1920);
+            const sourceHeight = safeInt(clip.height, 1080);
+            const crop = clip.crop ?? {
+              x: 0,
+              y: 0,
+              width: sourceWidth,
+              height: sourceHeight,
+            };
+            const cropWidth = clampNumber(
+              safeInt(crop.width, sourceWidth),
               1,
+              sourceWidth,
             );
-            filters.push(
-              `[${visualLabel}]format=yuva420p,colorchannelmixer=aa=${alpha}[${visualLabel}]`,
+            const cropHeight = clampNumber(
+              safeInt(crop.height, sourceHeight),
+              1,
+              sourceHeight,
             );
-          }
+            const cropX = clampNumber(
+              Math.round(safeNumber(crop.x, 0)),
+              0,
+              sourceWidth - cropWidth,
+            );
+            const cropY = clampNumber(
+              Math.round(safeNumber(crop.y, 0)),
+              0,
+              sourceHeight - cropHeight,
+            );
 
-          // Store overlay range that matches shifted time
-          if (
-            sortedMediaFiles[i].type === "video" ||
-            sortedMediaFiles[i].type === "image"
-          ) {
+            const alpha = clampNumber((clip.opacity ?? 100) / 100, 0, 1);
+            const blur = clampNumber(safeNumber(clip.blur, 0), 0, 60);
+            const rotationDeg = safeNumber(clip.rotation, 0);
+            const rotationRad =
+              rotationDeg !== 0 ? (rotationDeg * Math.PI) / 180 : 0;
+
+            const blurFilter = blur > 0 ? `,gblur=sigma=${blur}:steps=2` : "";
+            const rotateFilter =
+              rotationRad !== 0
+                ? `,rotate=${rotationRad}:ow=rotw(${rotationRad}):oh=roth(${rotationRad}):c=black@0`
+                : "";
+
+            if (clip.type === "video") {
+              filters.push(
+                `[${i}:v]trim=start=${startTime.toFixed(3)}:duration=${clipDuration.toFixed(3)},setpts=PTS-STARTPTS+${positionStart.toFixed(3)}/TB,scale=${sourceWidth}:${sourceHeight}${blurFilter},crop=${cropWidth}:${cropHeight}:${cropX}:${cropY}${rotateFilter},format=yuva420p,colorchannelmixer=aa=${alpha}[${visualLabel}]`,
+              );
+            } else {
+              filters.push(
+                `[${i}:v]scale=${sourceWidth}:${sourceHeight}${blurFilter},crop=${cropWidth}:${cropHeight}:${cropX}:${cropY}${rotateFilter},format=yuva420p,colorchannelmixer=aa=${alpha},setpts=PTS+${positionStart.toFixed(3)}/TB[${visualLabel}]`,
+              );
+            }
+
             overlays.push({
               label: visualLabel,
-              x: sortedMediaFiles[i].x,
-              y: sortedMediaFiles[i].y,
-              start: positionStart.toFixed(3),
-              end: positionEnd.toFixed(3),
+              x: Math.round(safeNumber(clip.x, 0)),
+              y: Math.round(safeNumber(clip.y, 0)),
+              baseWidth: cropWidth,
+              baseHeight: cropHeight,
+              start: positionStart,
+              end: positionEnd,
+              effectiveZ: effectiveZ(clip.trackId, clip.zIndex),
+              kind: "media",
+              order: i,
+              fadeIn: 0,
             });
           }
 
-          // Audio: trim, then delay (in ms)
-          if (
-            sortedMediaFiles[i].type === "audio" ||
-            sortedMediaFiles[i].type === "video"
-          ) {
+          if (clip.type === "audio" || clip.type === "video") {
             const delayMs = Math.round(positionStart * 1000);
             const volume =
-              sortedMediaFiles[i].volume !== undefined
-                ? sortedMediaFiles[i].volume / 100
-                : 1;
+              clip.volume !== undefined ? clip.volume / 100 : 1;
             filters.push(
-              `[${i}:a]atrim=start=${startTime.toFixed(3)}:duration=${duration.toFixed(3)},asetpts=PTS-STARTPTS,adelay=${delayMs}|${delayMs},volume=${volume}[${audioLabel}]`,
+              `[${i}:a]atrim=start=${startTime.toFixed(3)}:duration=${clipDuration.toFixed(3)},asetpts=PTS-STARTPTS,adelay=${delayMs}|${delayMs},volume=${volume}[${audioLabel}]`,
             );
             audioDelays.push(`[${audioLabel}]`);
           }
         }
 
-        // Apply overlays in z-index order
-        let lastLabel = "base";
-        if (overlays.length > 0) {
-          for (let i = 0; i < overlays.length; i++) {
-            const { label, start, end, x, y } = overlays[i];
-            const nextLabel = i === overlays.length - 1 ? "outv" : `tmp${i}`;
-            filters.push(
-              `[${lastLabel}][${label}]overlay=${x}:${y}:enable='between(t\\,${start}\\,${end})'[${nextLabel}]`,
-            );
-            lastLabel = nextLabel;
-          }
-        }
-
-        // Apply text
         if (textElements.length > 0) {
-          // load fonts
-          let fonts = ["Arial", "Inter", "Lato"];
-          for (let i = 0; i < fonts.length; i++) {
-            const font = fonts[i];
+          const supportedFonts = new Set(["Arial", "Inter", "Lato"]);
+          const resolveFont = (value: unknown) => {
+            const raw = typeof value === "string" ? value.trim() : "";
+            return supportedFonts.has(raw) ? raw : "Inter";
+          };
+
+          const fontsToLoad = Array.from(
+            new Set(textElements.map((t) => resolveFont(t.font))),
+          );
+
+          for (const font of fontsToLoad) {
             const res = await fetch(`/fonts/${font}.ttf`);
+            if (!res.ok) {
+              throw new Error(`Missing font file: /fonts/${font}.ttf`);
+            }
             const fontBuf = await res.arrayBuffer();
             await ffmpeg.writeFile(`font${font}.ttf`, new Uint8Array(fontBuf));
           }
-          // Apply text
+
           for (let i = 0; i < textElements.length; i++) {
             const text = textElements[i];
-            const label = i === textElements.length - 1 ? "outv" : `text${i}`;
-            const escapedText = text.text
-              .replace(/:/g, "\\:")
-              .replace(/'/g, "\\\\'");
-            const alpha = Math.min(Math.max((text.opacity ?? 100) / 100, 0), 1);
-            const color = text.color?.includes("@")
-              ? text.color
-              : `${text.color || "white"}@${alpha}`;
+            const baseWidth = safeInt(text.width, 800);
+            const baseHeight = safeInt(text.height, 200);
+            const x = Math.round(safeNumber(text.x, 0));
+            const y = Math.round(safeNumber(text.y, 0));
+
+            const opacity = clampNumber((text.opacity ?? 100) / 100, 0, 1);
+            const blur = clampNumber(safeNumber(text.blur, 0), 0, 60);
+            const rotationDeg = safeNumber(text.rotation, 0);
+            const rotationRad =
+              rotationDeg !== 0 ? (rotationDeg * Math.PI) / 180 : 0;
+
+            const fadeIn = clampNumber(safeNumber(text.fadeInDuration, 0.4), 0, 60);
+            const fadeOut = clampNumber(safeNumber(text.fadeOutDuration, 0.4), 0, 60);
+
+            const { hex: textHex } = parseHexColor(text.color, "#ffffff");
+            const bg = parseHexColor(text.backgroundColor, "#000000");
+            const bgColor =
+              bg.alpha > 0 ? `${bg.hex}@${bg.alpha.toFixed(3)}` : "black@0";
+
+            const srcLabel = `textsrc${i}`;
+            const drawLabel = `textdraw${i}`;
+            const fxLabel = `textfx${i}`;
+            const outLabel = `textvis${i}`;
+
             filters.push(
-              `[${lastLabel}]drawtext=fontfile=font${text.font}.ttf:text='${escapedText}':x=${text.x}:y=${text.y}:fontsize=${text.fontSize || 24}:fontcolor=${color}:enable='between(t\\,${text.positionStart}\\,${text.positionEnd})'[${label}]`,
+              `color=c=${bgColor}:size=${baseWidth}x${baseHeight}:d=${totalDuration.toFixed(3)},format=rgba[${srcLabel}]`,
             );
-            lastLabel = label;
+
+            const font = (() => {
+              const raw = typeof text.font === "string" ? text.font.trim() : "";
+              return raw === "Arial" || raw === "Inter" || raw === "Lato" ? raw : "Inter";
+            })();
+
+            const align = text.align || "left";
+            const xExpr =
+              align === "center"
+                ? "(w-text_w)/2"
+                : align === "right"
+                  ? "(w-text_w)"
+                  : "0";
+
+            const escapedText = escapeDrawtext(text.text ?? "");
+            if (escapedText.trim().length > 0) {
+              filters.push(
+                `[${srcLabel}]drawtext=fontfile=font${font}.ttf:text='${escapedText}':x=${xExpr}:y=0:fontsize=${Math.max(
+                  1,
+                  Math.round(safeNumber(text.fontSize, 24)),
+                )}:fontcolor=${textHex}[${drawLabel}]`,
+              );
+            } else {
+              filters.push(`[${srcLabel}]null[${drawLabel}]`);
+            }
+
+            let current = drawLabel;
+
+            if (blur > 0) {
+              filters.push(`[${current}]gblur=sigma=${blur}:steps=2[${fxLabel}]`);
+              current = fxLabel;
+            }
+
+            const animation = text.animation || "none";
+            if (fadeIn > 0 && (animation === "zoom" || animation === "bounce")) {
+              const progress = `min(max((t-${text.positionStart.toFixed(3)})/${fadeIn.toFixed(3)}\\,0)\\,1)`;
+              const scaleExpr =
+                animation === "zoom"
+                  ? `0.9+0.1*${progress}`
+                  : `1-0.2*cos(${progress}*PI/2)`;
+              const scaled = `textscale${i}`;
+              filters.push(
+                `[${current}]scale=w='iw*(${scaleExpr})':h='ih*(${scaleExpr})':eval=frame[${scaled}]`,
+              );
+              current = scaled;
+            }
+
+            if (rotationRad !== 0) {
+              const rotated = `textrot${i}`;
+              filters.push(
+                `[${current}]rotate=${rotationRad}:ow=rotw(${rotationRad}):oh=roth(${rotationRad}):c=black@0[${rotated}]`,
+              );
+              current = rotated;
+            }
+
+            const withAlpha = `textalpha${i}`;
+            filters.push(
+              `[${current}]format=yuva420p,colorchannelmixer=aa=${opacity}[${withAlpha}]`,
+            );
+            current = withAlpha;
+
+            if (fadeIn > 0) {
+              const fadedIn = `textfadein${i}`;
+              filters.push(
+                `[${current}]fade=t=in:st=${text.positionStart.toFixed(3)}:d=${fadeIn.toFixed(3)}:alpha=1[${fadedIn}]`,
+              );
+              current = fadedIn;
+            }
+            if (fadeOut > 0) {
+              const fadeOutStart = Math.max(
+                text.positionStart,
+                text.positionEnd - fadeOut,
+              );
+              const fadedOut = `textfadeout${i}`;
+              filters.push(
+                `[${current}]fade=t=out:st=${fadeOutStart.toFixed(3)}:d=${fadeOut.toFixed(3)}:alpha=1[${fadedOut}]`,
+              );
+              current = fadedOut;
+            }
+
+            filters.push(`[${current}]null[${outLabel}]`);
+
+            overlays.push({
+              label: outLabel,
+              x,
+              y,
+              baseWidth,
+              baseHeight,
+              start: text.positionStart,
+              end: text.positionEnd,
+              effectiveZ: effectiveZ(text.trackId, text.zIndex),
+              kind: "text",
+              order: i,
+              animation: text.animation || "none",
+              fadeIn,
+            });
+          }
+        }
+
+        overlays.sort((a, b) => {
+          if (a.effectiveZ !== b.effectiveZ) return a.effectiveZ - b.effectiveZ;
+          if (a.kind !== b.kind) return a.kind === "media" ? -1 : 1;
+          return a.order - b.order;
+        });
+
+        let lastLabel = "base";
+        if (overlays.length === 0) {
+          filters.push("[base]null[outv]");
+        } else {
+          for (let i = 0; i < overlays.length; i++) {
+            const ov = overlays[i];
+            const nextLabel = i === overlays.length - 1 ? "outv" : `tmp${i}`;
+            const baseX = `${ov.x} + (${ov.baseWidth} - w)/2`;
+            const baseY = `${ov.y} + (${ov.baseHeight} - h)/2`;
+
+            const slide =
+              ov.kind === "text" &&
+              (ov.animation === "slide-in" || ov.animation === "slide-up") &&
+              ov.fadeIn > 0;
+            const yExpr = slide
+              ? `${baseY} + (30*(1-min(max((t-${ov.start.toFixed(3)})/${ov.fadeIn.toFixed(3)}\\,0)\\,1)))`
+              : baseY;
+
+            filters.push(
+              `[${lastLabel}][${ov.label}]overlay=x='${baseX}':y='${yExpr}':enable='between(t\\,${ov.start.toFixed(3)}\\,${ov.end.toFixed(3)})'[${nextLabel}]`,
+            );
+            lastLabel = nextLabel;
           }
         }
 

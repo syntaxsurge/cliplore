@@ -93,10 +93,13 @@ export const VideoSequenceItem: React.FC<VideoSequenceItemProps> = ({
           left: item.x,
           width: crop.width || item.width || "100%",
           height: crop.height || item.height || "auto",
-          transform: "none",
+          transform:
+            typeof item.rotation === "number" && Number.isFinite(item.rotation) && item.rotation !== 0
+              ? `rotate(${item.rotation}deg)`
+              : "none",
+          transformOrigin: "center center",
           zIndex: effectiveZIndex,
           opacity: item?.opacity !== undefined ? item.opacity / 100 : 1,
-          borderRadius: `10px`, // Default border radius
           overflow: "hidden",
         }}
       >

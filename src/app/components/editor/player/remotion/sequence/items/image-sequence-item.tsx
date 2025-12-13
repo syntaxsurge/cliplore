@@ -87,7 +87,11 @@ export const ImageSequenceItem: React.FC<ImageSequenceItemProps> = ({
           left: item.x,
           width: crop.width || item.width || "100%",
           height: crop.height || item.height || "auto",
-          // transform: item?.transform || "none",
+          transform:
+            typeof item.rotation === "number" && Number.isFinite(item.rotation) && item.rotation !== 0
+              ? `rotate(${item.rotation}deg)`
+              : "none",
+          transformOrigin: "center center",
           opacity: item?.opacity !== undefined ? item.opacity / 100 : 1,
           zIndex: effectiveZIndex,
           overflow: "hidden",

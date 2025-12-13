@@ -12,8 +12,10 @@ import AddMedia from "../AddButtons/AddMedia";
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import Image from "next/image";
-import { Image as ImageIcon, Music, Trash2 } from "lucide-react";
+import { Film, Image as ImageIcon, Music, Trash2 } from "lucide-react";
 import { categorizeFile } from "@/app/utils/utils";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type Props = {
   query?: string;
@@ -99,70 +101,95 @@ export default function MediaList({ query = "", typeFilter }: Props) {
             </div>
           ) : null}
 
-          {filteredFiles.map((mediaFile) => {
+          <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2">
+            {filteredFiles.map((mediaFile) => {
             const kind = categorizeFile(mediaFile.file.type);
 
             return (
               <div
                 key={mediaFile.id}
-                className="rounded-lg border border-white/10 bg-black/20 p-3 transition-colors hover:bg-black/30"
+                className="group overflow-hidden rounded-xl border border-white/10 bg-black/20 transition-colors hover:bg-black/30"
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    <AddMedia fileId={mediaFile.id} />
-                    {mediaFile.previewUrl ? (
-                      <div className="relative h-10 w-14 overflow-hidden rounded border border-white/10 flex-shrink-0">
-                        {kind === "video" ? (
-                          <video
-                            className="h-full w-full object-cover"
-                            src={mediaFile.previewUrl}
-                            muted
-                            playsInline
-                          />
-                        ) : kind === "image" ? (
-                          <Image
-                            unoptimized
-                            src={mediaFile.previewUrl}
-                            alt={mediaFile.file.name}
-                            fill
-                            sizes="56px"
-                            className="object-cover"
-                          />
-                        ) : kind === "audio" ? (
-                          <div className="flex h-full w-full items-center justify-center bg-black/40">
-                            <Music
-                              className="h-4 w-4 text-white/60"
-                              aria-hidden="true"
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-black/40">
-                            <ImageIcon
-                              className="h-4 w-4 text-white/50"
-                              aria-hidden="true"
-                            />
-                          </div>
-                        )}
+                <div className="relative aspect-video bg-black/30">
+                  {mediaFile.previewUrl ? (
+                    kind === "video" ? (
+                      <video
+                        className="h-full w-full object-cover"
+                        src={mediaFile.previewUrl}
+                        muted
+                        playsInline
+                      />
+                    ) : kind === "image" ? (
+                      <Image
+                        unoptimized
+                        src={mediaFile.previewUrl}
+                        alt={mediaFile.file.name}
+                        fill
+                        sizes="(max-width: 420px) 100vw, 200px"
+                        className="object-cover"
+                      />
+                    ) : kind === "audio" ? (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Music className="h-6 w-6 text-white/60" aria-hidden="true" />
                       </div>
-                    ) : null}
-                    <span
-                      className="py-1 px-1 text-sm flex-1 truncate"
-                      title={mediaFile.file.name}
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <ImageIcon
+                          className="h-6 w-6 text-white/50"
+                          aria-hidden="true"
+                        />
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageIcon className="h-6 w-6 text-white/50" aria-hidden="true" />
+                    </div>
+                  )}
+
+                  <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                    <AddMedia fileId={mediaFile.id} variant="icon" />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 rounded-full bg-black/40 text-red-200 hover:bg-black/60 hover:text-red-100"
+                      onClick={() => onDeleteMedia(mediaFile.id)}
+                      aria-label={`Delete ${mediaFile.file.name}`}
                     >
-                      {mediaFile.file.name}
-                    </span>
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
                   </div>
-                  <button
-                    onClick={() => onDeleteMedia(mediaFile.id)}
-                    className="text-red-400 hover:text-red-300 flex-shrink-0 ml-2"
-                    aria-label="Delete file"
+
+                  <div className="absolute left-2 top-2">
+                    <div
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full border border-white/10 bg-black/50 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-white/70",
+                      )}
+                    >
+                      {kind === "video" ? (
+                        <Film className="h-3 w-3" aria-hidden="true" />
+                      ) : kind === "image" ? (
+                        <ImageIcon className="h-3 w-3" aria-hidden="true" />
+                      ) : (
+                        <Music className="h-3 w-3" aria-hidden="true" />
+                      )}
+                      {kind}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1 p-3">
+                  <div
+                    className="truncate text-sm font-medium text-white"
+                    title={mediaFile.file.name}
                   >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
+                    {mediaFile.file.name}
+                  </div>
                 </div>
               </div>
             );
           })}
+          </div>
         </div>
       ) : (
         <div className="rounded-lg border border-white/10 bg-black/20 p-4">

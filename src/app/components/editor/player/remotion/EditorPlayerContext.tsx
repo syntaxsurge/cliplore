@@ -14,6 +14,9 @@ type EditorPlayerContextValue = {
   playerRef: React.RefObject<PlayerRef | null>;
   player: PlayerRef | null;
   registerPlayer: (player: PlayerRef | null) => void;
+  editingTextId: string | null;
+  startInlineTextEdit: (textId: string) => void;
+  stopInlineTextEdit: () => void;
 };
 
 const EditorPlayerContext = createContext<EditorPlayerContextValue | null>(null);
@@ -21,15 +24,31 @@ const EditorPlayerContext = createContext<EditorPlayerContextValue | null>(null)
 export function EditorPlayerProvider(props: { children: React.ReactNode }) {
   const playerRef = useRef<PlayerRef | null>(null);
   const [player, setPlayer] = useState<PlayerRef | null>(null);
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
 
   const registerPlayer = useCallback((next: PlayerRef | null) => {
     playerRef.current = next;
     setPlayer(next);
   }, []);
 
+  const startInlineTextEdit = useCallback((textId: string) => {
+    setEditingTextId(textId);
+  }, []);
+
+  const stopInlineTextEdit = useCallback(() => {
+    setEditingTextId(null);
+  }, []);
+
   const value = useMemo(
-    () => ({ playerRef, player, registerPlayer }),
-    [player, registerPlayer],
+    () => ({
+      playerRef,
+      player,
+      registerPlayer,
+      editingTextId,
+      startInlineTextEdit,
+      stopInlineTextEdit,
+    }),
+    [editingTextId, player, registerPlayer, startInlineTextEdit, stopInlineTextEdit],
   );
 
   return (
@@ -46,4 +65,3 @@ export function useEditorPlayer() {
   }
   return value;
 }
-

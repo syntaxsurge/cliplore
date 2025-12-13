@@ -1,6 +1,11 @@
 import { TextElement } from "@/app/types";
 import { useAppDispatch, useAppSelector } from "@/app/store";
-import { setActiveElement, setActiveElementIndex } from "@/app/store/slices/projectSlice";
+import {
+  setActiveElement,
+  setActiveElementIndex,
+  setIsPlaying,
+  setTextElements,
+} from "@/app/store/slices/projectSlice";
 import {
   Sequence,
   useCurrentFrame,
@@ -8,6 +13,8 @@ import {
   interpolate,
   Easing,
 } from "remotion";
+import { useEffect, useMemo, useRef } from "react";
+import { useEditorPlayer } from "@/app/components/editor/player/remotion/EditorPlayerContext";
 
 const REMOTION_SAFE_FRAME = 0;
 
@@ -34,11 +41,15 @@ export const TextSequenceItem: React.FC<{
 }> = ({ item, options }) => {
   const { fps } = options;
   const dispatch = useAppDispatch();
+  const { editingTextId, startInlineTextEdit, stopInlineTextEdit } =
+    useEditorPlayer();
   const { textElements, tracks, activeElement, activeElementIndex } = useAppSelector(
     (state) => state.projectState,
   );
   const frame = useCurrentFrame();
   const videoConfig = useVideoConfig();
+  const textRef = useRef<HTMLDivElement | null>(null);
+  const originalTextRef = useRef<string | null>(null);
 
   const trackIndex = (() => {
     if (!item.trackId) return 0;
@@ -58,6 +69,49 @@ export const TextSequenceItem: React.FC<{
 
   const isSelected =
     activeElement === "text" && textElements[activeElementIndex]?.id === item.id;
+
+  const isEditing = editingTextId === item.id;
+
+  const commitInlineEdit = useMemo(() => {
+    return () => {
+      const el = textRef.current;
+      if (!el) {
+        stopInlineTextEdit();
+        originalTextRef.current = null;
+        return;
+      }
+
+      const nextText = (el.innerText ?? "").replace(/\r\n/g, "\n");
+      const current = item.text ?? "";
+
+      if (nextText !== current) {
+        dispatch(
+          setTextElements(
+            textElements.map((t) => (t.id === item.id ? { ...t, text: nextText } : t)),
+          ),
+        );
+      }
+
+      stopInlineTextEdit();
+      originalTextRef.current = null;
+    };
+  }, [dispatch, item.id, item.text, stopInlineTextEdit, textElements]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    originalTextRef.current = item.text ?? "";
+    const el = textRef.current;
+    if (!el) return;
+
+    el.focus();
+    const selection = window.getSelection?.();
+    if (!selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }, [isEditing, item.text]);
 
   const localFrame = frame - from;
   const totalFrames = durationInFrames + REMOTION_SAFE_FRAME;
@@ -85,7 +139,7 @@ export const TextSequenceItem: React.FC<{
     return Math.min(fadeIn, fadeOut);
   })();
 
-  const transform = (() => {
+  const animationTransform = (() => {
     switch (item.animation) {
       case "slide-in":
       case "slide-up":
@@ -113,6 +167,16 @@ export const TextSequenceItem: React.FC<{
     }
   })();
 
+  const combinedTransform = (() => {
+    const parts: string[] = [];
+    if (animationTransform !== "none") parts.push(animationTransform);
+    const rotation = item.rotation ?? 0;
+    if (typeof rotation === "number" && Number.isFinite(rotation) && rotation !== 0) {
+      parts.push(`rotate(${rotation}deg)`);
+    }
+    return parts.length > 0 ? parts.join(" ") : "none";
+  })();
+
   return (
     <Sequence
       className={`designcombo-scene-item id-${item.id} designcombo-scene-item-type-text `}
@@ -132,34 +196,73 @@ export const TextSequenceItem: React.FC<{
         // backgroundColor: item.backgroundColor || "transparent",
         opacity: ((item.opacity ?? 100) / 100) * opacity,
         fontFamily: item.font || "Arial",
-        transform,
+        transform: combinedTransform,
+        transformOrigin: "center center",
         transition: "transform 0.2s ease",
         filter: item.blur ? `blur(${item.blur}px)` : "none",
       }}
     >
       <div
         data-text-id={item.id}
+        ref={textRef}
+        contentEditable={isEditing}
+        suppressContentEditableWarning
+        spellCheck={false}
         style={{
           height: "100%",
           boxShadow: "none",
           outline: "none",
-          whiteSpace: "normal",
+          whiteSpace: "pre-wrap",
           backgroundColor: item.backgroundColor || "transparent",
           textAlign: item.align ?? "left",
           position: "relative",
           width: "100%",
-          cursor: "pointer",
+          cursor: isEditing ? "text" : "pointer",
+          userSelect: isEditing ? "text" : "none",
         }}
         onPointerDown={(e) => {
           e.stopPropagation();
+          if (isEditing) return;
           if (isSelected) return;
           dispatch(setActiveElement("text"));
           const index = textElements.findIndex((clip) => clip.id === item.id);
           if (index >= 0) dispatch(setActiveElementIndex(index));
         }}
-        dangerouslySetInnerHTML={{ __html: item.text }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          dispatch(setIsPlaying(false));
+          if (!isSelected) {
+            dispatch(setActiveElement("text"));
+            const index = textElements.findIndex((clip) => clip.id === item.id);
+            if (index >= 0) dispatch(setActiveElementIndex(index));
+          }
+          startInlineTextEdit(item.id);
+        }}
+        onKeyDown={(e) => {
+          if (!isEditing) return;
+
+          if (e.key === "Escape") {
+            e.preventDefault();
+            const original = originalTextRef.current ?? item.text ?? "";
+            if (textRef.current) textRef.current.innerText = original;
+            stopInlineTextEdit();
+            originalTextRef.current = null;
+            return;
+          }
+
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            commitInlineEdit();
+          }
+        }}
+        onBlur={() => {
+          if (!isEditing) return;
+          commitInlineEdit();
+        }}
         className="designcombo_textLayer"
-      />
+      >
+        {item.text}
+      </div>
     </Sequence>
   );
 };

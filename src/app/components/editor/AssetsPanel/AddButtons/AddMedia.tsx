@@ -7,8 +7,22 @@ import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { createMediaFileFromFile } from "@/lib/media/ingest";
 import type { TimelineTrack } from "@/app/types";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-export default function AddMedia({ fileId }: { fileId: string }) {
+type Props = {
+  fileId: string;
+  variant?: "icon" | "button";
+  label?: string;
+  className?: string;
+};
+
+export default function AddMedia({
+  fileId,
+  variant = "icon",
+  label = "Add",
+  className,
+}: Props) {
   const { mediaFiles, resolution, tracks } = useAppSelector(
     (state) => state.projectState,
   );
@@ -84,13 +98,21 @@ export default function AddMedia({ fileId }: { fileId: string }) {
   };
 
   return (
-    <button
+    <Button
       type="button"
+      size={variant === "icon" ? "icon" : "sm"}
+      variant={variant === "icon" ? "ghost" : "secondary"}
       onClick={handleFileChange}
-      className="inline-flex items-center justify-center rounded-full bg-white px-2 py-2 text-gray-900 transition-colors hover:bg-[#ccc]"
+      className={cn(
+        variant === "icon"
+          ? "h-9 w-9 rounded-full bg-black/40 text-white hover:bg-black/60"
+          : null,
+        className,
+      )}
       aria-label="Add media to timeline"
     >
-      <Plus className="h-4 w-4" />
-    </button>
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      {variant === "button" ? label : null}
+    </Button>
   );
 }
