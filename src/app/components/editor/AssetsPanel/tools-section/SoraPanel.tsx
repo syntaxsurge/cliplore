@@ -37,8 +37,7 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
   const addMediaFromFile = useCallback(
     async (file: File, fileId: string) => {
       const updatedMedia = [...mediaFiles];
-      const videoTracks = tracks.filter((t) => t.kind === "video");
-      const mainVideoTrackId = videoTracks[0]?.id ?? null;
+      const mainVideoTrackId = tracks[0]?.id ?? null;
 
       const relevantClips = mediaFiles.filter(
         (clip) => (clip.trackId ?? null) === mainVideoTrackId,

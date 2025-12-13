@@ -1,17 +1,18 @@
-import { Player, PlayerRef } from "@remotion/player";
+import { Player } from "@remotion/player";
 import Composition from "./sequence/composition";
 import { useAppSelector, useAppDispatch } from "@/app/store";
-import { useRef, useEffect } from "react";
-import { setIsPlaying } from "@/app/store/slices/projectSlice";
+import { useEffect } from "react";
+import { setCurrentTime, setIsPlaying } from "@/app/store/slices/projectSlice";
 import MoveableOverlay from "./MoveableOverlay";
-
-const fps = 30;
+import { useEditorPlayer } from "./EditorPlayerContext";
 
 export const PreviewPlayer = () => {
   const projectState = useAppSelector((state) => state.projectState);
-  const { duration, currentTime, isPlaying, isMuted } = projectState;
-  const playerRef = useRef<PlayerRef>(null);
+  const { duration, currentTime, isPlaying, isMuted, fps } = projectState;
+  const { playerRef, registerPlayer } = useEditorPlayer();
   const dispatch = useAppDispatch();
+  const safeFps =
+    typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : 30;
 
   // update frame when current time with marker
   useEffect(() => {
@@ -19,19 +20,26 @@ export const PreviewPlayer = () => {
       typeof currentTime === "number" && Number.isFinite(currentTime)
         ? currentTime
         : 0;
-    const frame = Math.round(safeTime * fps);
-    if (playerRef.current && !isPlaying) {
-      playerRef.current.pause();
-      playerRef.current.seekTo(frame);
+    const desiredFrame = Math.round(safeTime * safeFps);
+    const player = playerRef.current;
+    if (!player || isPlaying) return;
+    player.pause();
+    const currentFrame = player.getCurrentFrame();
+    if (currentFrame !== desiredFrame) {
+      player.seekTo(desiredFrame);
     }
-  }, [currentTime, isPlaying]);
+  }, [currentTime, isPlaying, playerRef, safeFps]);
 
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
 
     const handlePlay = () => dispatch(setIsPlaying(true));
-    const handlePause = () => dispatch(setIsPlaying(false));
+    const handlePause = () => {
+      dispatch(setIsPlaying(false));
+      const frame = playerRef.current?.getCurrentFrame() ?? 0;
+      dispatch(setCurrentTime(frame / safeFps));
+    };
 
     player.addEventListener("play", handlePlay);
     player.addEventListener("pause", handlePause);
@@ -39,7 +47,7 @@ export const PreviewPlayer = () => {
       player.removeEventListener("play", handlePlay);
       player.removeEventListener("pause", handlePause);
     };
-  }, [dispatch]);
+  }, [dispatch, playerRef, safeFps]);
 
   // to control with keyboard
   useEffect(() => {
@@ -49,7 +57,7 @@ export const PreviewPlayer = () => {
     } else {
       playerRef.current.pause();
     }
-  }, [isPlaying]);
+  }, [isPlaying, playerRef]);
 
   useEffect(() => {
     if (!playerRef.current) return;
@@ -58,12 +66,12 @@ export const PreviewPlayer = () => {
     } else {
       playerRef.current.unmute();
     }
-  }, [isMuted]);
+  }, [isMuted, playerRef]);
 
   return (
     <div className="relative w-full h-full">
       <Player
-        ref={playerRef}
+        ref={registerPlayer}
         component={Composition}
         inputProps={{}}
         durationInFrames={
@@ -72,12 +80,12 @@ export const PreviewPlayer = () => {
             Number.isFinite(duration) &&
             duration > 0
               ? duration
-              : 1) * fps,
+              : 1) * safeFps,
           ) + 1
         }
         compositionWidth={1920}
         compositionHeight={1080}
-        fps={fps}
+        fps={safeFps}
         style={{ width: "100%", height: "100%" }}
         controls
         clickToPlay={false}

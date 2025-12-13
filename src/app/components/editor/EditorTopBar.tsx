@@ -46,15 +46,25 @@ export default function EditorTopBar({
   return (
     <div className="sticky top-0 z-40 flex items-center justify-between border-b border-white/10 bg-black/70 px-3 py-2 backdrop-blur">
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleAssets}
+          aria-label={showAssets ? "Hide assets panel" : "Show assets panel"}
+        >
+          {showAssets ? (
+            <PanelLeftClose className="h-4 w-4" />
+          ) : (
+            <PanelLeftOpen className="h-4 w-4" />
+          )}
+        </Button>
         <Button variant="ghost" size="icon" asChild>
           <Link href="/projects" aria-label="Back to projects">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>
         <ProjectName compact className="max-w-[260px]" />
-      </div>
-
-      <div className="flex items-center gap-1">
+        <div className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
         <Button
           variant="ghost"
           size="icon"
@@ -74,33 +84,6 @@ export default function EditorTopBar({
       </div>
 
       <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggleAssets}
-          aria-label={showAssets ? "Hide assets panel" : "Show assets panel"}
-        >
-          {showAssets ? (
-            <PanelLeftClose className="h-4 w-4" />
-          ) : (
-            <PanelLeftOpen className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggleProperties}
-          aria-label={
-            showProperties ? "Hide properties panel" : "Show properties panel"
-          }
-        >
-          {showProperties ? (
-            <PanelRightClose className="h-4 w-4" />
-          ) : (
-            <PanelRightOpen className="h-4 w-4" />
-          )}
-        </Button>
-        <div className="mx-1 h-5 w-px bg-white/10" />
         <Button
           size="sm"
           onClick={() => {
@@ -130,6 +113,21 @@ export default function EditorTopBar({
         >
           <Upload className="h-4 w-4" />
           Publish
+        </Button>
+        <div className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleProperties}
+          aria-label={
+            showProperties ? "Hide properties panel" : "Show properties panel"
+          }
+        >
+          {showProperties ? (
+            <PanelRightClose className="h-4 w-4" />
+          ) : (
+            <PanelRightOpen className="h-4 w-4" />
+          )}
         </Button>
       </div>
     </div>

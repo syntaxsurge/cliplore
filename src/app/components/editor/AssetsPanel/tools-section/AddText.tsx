@@ -32,10 +32,7 @@ export default function AddTextPanel() {
   const frameWidth = resolution?.width ?? 1920;
   const frameHeight = resolution?.height ?? 1080;
   const insetX = Math.round(frameWidth * 0.08);
-  const overlayVideoTrackId =
-    tracks.filter((t) => t.kind === "video")[1]?.id ??
-    tracks.find((t) => t.kind === "video")?.id ??
-    undefined;
+  const overlayVideoTrackId = tracks[1]?.id ?? tracks[0]?.id ?? undefined;
 
   const addPreset = (preset: Preset) => {
     const start = baseStart;

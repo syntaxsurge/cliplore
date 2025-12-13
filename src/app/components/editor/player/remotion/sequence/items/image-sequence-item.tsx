@@ -1,7 +1,8 @@
 import React from "react";
 import { AbsoluteFill, Img, Sequence } from "remotion";
 import { MediaFile } from "@/app/types";
-import { useAppSelector } from "@/app/store";
+import { useAppDispatch, useAppSelector } from "@/app/store";
+import { setActiveElement, setActiveElementIndex } from "@/app/store/slices/projectSlice";
 
 const REMOTION_SAFE_FRAME = 0;
 
@@ -32,16 +33,21 @@ export const ImageSequenceItem: React.FC<ImageSequenceItemProps> = ({
   options,
 }) => {
   const { fps } = options;
-  const tracks = useAppSelector((state) => state.projectState.tracks);
+  const dispatch = useAppDispatch();
+  const { tracks, mediaFiles, activeElement, activeElementIndex } = useAppSelector(
+    (state) => state.projectState,
+  );
 
-  const videoTrackIndex = (() => {
+  const isSelected =
+    activeElement === "media" && mediaFiles[activeElementIndex]?.id === item.id;
+
+  const trackIndex = (() => {
     if (!item.trackId) return 0;
-    const videoTracks = tracks.filter((t) => t.kind === "video");
-    const idx = videoTracks.findIndex((t) => t.id === item.trackId);
+    const idx = tracks.findIndex((t) => t.id === item.trackId);
     return idx >= 0 ? idx : 0;
   })();
 
-  const effectiveZIndex = videoTrackIndex * 100 + (item.zIndex ?? 0);
+  const effectiveZIndex = trackIndex * 1000 + (item.zIndex ?? 0);
 
   const { from, durationInFrames } = calculateFrames(
     {
@@ -68,6 +74,13 @@ export const ImageSequenceItem: React.FC<ImageSequenceItemProps> = ({
       <AbsoluteFill
         data-track-item="transition-element"
         className={`designcombo-scene-item id-${item.id} designcombo-scene-item-type-${item.type}`}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          if (isSelected) return;
+          dispatch(setActiveElement("media"));
+          const index = mediaFiles.findIndex((clip) => clip.id === item.id);
+          if (index >= 0) dispatch(setActiveElementIndex(index));
+        }}
         style={{
           pointerEvents: "auto",
           top: item.y,

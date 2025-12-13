@@ -2,6 +2,7 @@
 import { useAppSelector } from "@/app/store";
 import { useEffect, useRef, useState } from "react";
 import {
+  addMarker,
   setIsPlaying,
   setIsMuted,
   setCurrentTime,
@@ -10,6 +11,7 @@ import {
   redoState,
 } from "@/app/store/slices/projectSlice";
 import { useDispatch } from "react-redux";
+import { useEditorPlayer } from "@/app/components/editor/player/remotion/EditorPlayerContext";
 
 interface GlobalKeyHandlerProps {
   handleDuplicate: () => void;
@@ -24,8 +26,11 @@ const GlobalKeyHandler = ({
 }: GlobalKeyHandlerProps) => {
   const projectState = useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
+  const { player } = useEditorPlayer();
 
-  const { duration } = projectState;
+  const { duration, fps } = projectState;
+  const safeFps =
+    typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : 30;
 
   // Store latest state values in refs
   const isPlayingRef = useRef(projectState.isPlaying);
@@ -94,6 +99,15 @@ const GlobalKeyHandler = ({
           break;
         case "KeyT":
           e.preventDefault();
+          {
+            const frame =
+              player?.getCurrentFrame() ??
+              Math.round(currentTimeRef.current * safeFps);
+            dispatch(addMarker({ time: frame / safeFps }));
+          }
+          break;
+        case "KeyF":
+          e.preventDefault();
           dispatch(setMarkerTrack(!enableMarkerTrackingRef.current));
           break;
         case "ArrowRight":
@@ -127,6 +141,8 @@ const GlobalKeyHandler = ({
     handleSplit,
     duration,
     dispatch,
+    player,
+    safeFps,
   ]);
 
   return null;

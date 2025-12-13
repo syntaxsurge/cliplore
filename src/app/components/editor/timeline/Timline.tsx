@@ -1,7 +1,8 @@
 import { useAppSelector } from "@/app/store";
 import type { MediaType } from "@/app/types";
 import {
-  addTrack,
+  addMarker,
+  applyTimelineEdit,
   setActiveElement,
   setCurrentTime,
   setIsPlaying,
@@ -9,16 +10,16 @@ import {
   setMediaFiles,
   setTextElements,
   setTimelineZoom,
+  updateMarker,
 } from "@/app/store/slices/projectSlice";
 import { throttle } from "lodash";
 import {
   Check,
   Copy,
-  Music,
-  Plus,
+  Flag,
+  Layers,
   Scissors,
   Trash2,
-  Video,
   X,
 } from "lucide-react";
 import {
@@ -32,10 +33,13 @@ import {
 } from "react";
 import toast from "react-hot-toast";
 import { useDispatch } from "react-redux";
+import { useEditorPlayer } from "@/app/components/editor/player/remotion/EditorPlayerContext";
+import { useCurrentPlayerFrame } from "@/app/components/editor/player/remotion/useCurrentPlayerFrame";
 import GlobalKeyHandlerProps from "../../../components/editor/keys/GlobalKeyHandlerProps";
 import Header from "./Header";
 import MediaTimelineTrack from "./elements-timeline/MediaTimelineTrack";
 import TextTimeline from "./elements-timeline/TextTimeline";
+import { computeRipplePlacement } from "./ops";
 
 const TRACK_LABEL_WIDTH_PX = 144;
 
@@ -44,7 +48,6 @@ const isFiniteNumber = (value: unknown): value is number =>
 
 export const Timeline = () => {
   const {
-    currentTime,
     timelineZoom,
     enableMarkerTracking,
     activeElement,
@@ -54,50 +57,75 @@ export const Timeline = () => {
     duration,
     isPlaying,
     tracks,
+    markers,
+    fps,
   } = useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
+  const { player } = useEditorPlayer();
+  const safeFps =
+    typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : 30;
+  const playerFrame = useCurrentPlayerFrame(player);
+  const playheadTime = playerFrame / safeFps;
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDraggingMarker, setIsDraggingMarker] = useState(false);
+  const [draggingTimelineMarkerId, setDraggingTimelineMarkerId] = useState<
+    string | null
+  >(null);
 
   const zoom = isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
   const safeDuration = isFiniteNumber(duration) && duration > 0 ? duration : 0;
 
-  const totalSeconds = Math.max(safeDuration + 2, 61);
+  const maxMarkerTime =
+    markers.length > 0 ? Math.max(...markers.map((m) => m.time)) : 0;
+  const totalSeconds = Math.max(safeDuration + 2, maxMarkerTime + 2, 61);
   const laneWidthPx = totalSeconds * zoom;
   const timelineCanvasWidthPx = TRACK_LABEL_WIDTH_PX + laneWidthPx;
 
-  const videoTracks = tracks.filter((t) => t.kind === "video");
-  const audioTracks = tracks.filter((t) => t.kind === "audio");
-
-  const mainVideoTrackId = videoTracks[0]?.id ?? null;
-  const overlayVideoTrackId = videoTracks[1]?.id ?? mainVideoTrackId;
-  const mainAudioTrackId = audioTracks[0]?.id ?? null;
+  const baseTrackId = tracks[0]?.id ?? null;
+  const overlayTrackId = tracks[1]?.id ?? baseTrackId;
+  const audioTrackId = tracks[2]?.id ?? baseTrackId;
 
   const fallbackTrackIdForType = useMemo<Record<MediaType, string | null>>(
     () => ({
-      video: mainVideoTrackId,
-      image: overlayVideoTrackId ?? mainVideoTrackId,
-      audio: mainAudioTrackId ?? mainVideoTrackId,
-      unknown: mainVideoTrackId,
+      video: baseTrackId,
+      image: overlayTrackId ?? baseTrackId,
+      audio: audioTrackId ?? baseTrackId,
+      unknown: baseTrackId,
     }),
-    [mainAudioTrackId, mainVideoTrackId, overlayVideoTrackId],
+    [audioTrackId, baseTrackId, overlayTrackId],
   );
 
-  const fallbackTextTrackId = overlayVideoTrackId ?? mainVideoTrackId;
+  const fallbackTextTrackId = overlayTrackId ?? baseTrackId;
 
-  const displayVideoTracks = useMemo(
-    () => [...videoTracks].reverse(),
-    [videoTracks],
-  );
-  const displayAudioTracks = useMemo(
-    () => [...audioTracks].reverse(),
-    [audioTracks],
-  );
+  const displayTracks = useMemo(() => [...tracks].reverse(), [tracks]);
 
-  const formatTrackLabel = (kind: "video" | "audio", name: string) => {
-    const suffix = name.replace(/^[VA]/, "");
-    return kind === "audio" ? `Audio ${suffix || name}` : `Video ${suffix || name}`;
-  };
+  const getTrackBounds = useCallback(
+    (targetTrackId: string) => {
+      const bounds = [
+        ...mediaFiles
+          .filter(
+            (clip) =>
+              (clip.trackId ?? fallbackTrackIdForType[clip.type]) === targetTrackId,
+          )
+          .map((clip) => ({
+            id: clip.id,
+            start: clip.positionStart,
+            end: clip.positionEnd,
+          })),
+        ...textElements
+          .filter(
+            (clip) => (clip.trackId ?? fallbackTextTrackId) === targetTrackId,
+          )
+          .map((clip) => ({
+            id: clip.id,
+            start: clip.positionStart,
+            end: clip.positionEnd,
+          })),
+      ];
+      return bounds;
+    },
+    [fallbackTextTrackId, fallbackTrackIdForType, mediaFiles, textElements],
+  );
 
   const throttledZoom = useMemo(
     () =>
@@ -129,7 +157,7 @@ export const Timeline = () => {
 
       const { positionStart, positionEnd } = element;
 
-      if (currentTime <= positionStart || currentTime >= positionEnd) {
+      if (playheadTime <= positionStart || playheadTime >= positionEnd) {
         toast.error("Marker is outside the selected element bounds.");
         return;
       }
@@ -139,14 +167,14 @@ export const Timeline = () => {
       // Media logic (uses startTime/endTime for trimming)
       const { startTime, endTime } = element;
       const sourceDuration = endTime - startTime;
-      const ratio = (currentTime - positionStart) / positionDuration;
+      const ratio = (playheadTime - positionStart) / positionDuration;
       const splitSourceOffset = startTime + ratio * sourceDuration;
 
       const firstPart = {
         ...element,
         id: crypto.randomUUID(),
         positionStart,
-        positionEnd: currentTime,
+        positionEnd: playheadTime,
         startTime,
         endTime: splitSourceOffset,
       };
@@ -154,7 +182,7 @@ export const Timeline = () => {
       const secondPart = {
         ...element,
         id: crypto.randomUUID(),
-        positionStart: currentTime,
+        positionStart: playheadTime,
         positionEnd,
         startTime: splitSourceOffset,
         endTime,
@@ -173,7 +201,7 @@ export const Timeline = () => {
 
       const { positionStart, positionEnd } = element;
 
-      if (currentTime <= positionStart || currentTime >= positionEnd) {
+      if (playheadTime <= positionStart || playheadTime >= positionEnd) {
         toast.error("Marker is outside the selected element.");
         return;
       }
@@ -182,13 +210,13 @@ export const Timeline = () => {
         ...element,
         id: crypto.randomUUID(),
         positionStart,
-        positionEnd: currentTime,
+        positionEnd: playheadTime,
       };
 
       const secondPart = {
         ...element,
         id: crypto.randomUUID(),
-        positionStart: currentTime,
+        positionStart: playheadTime,
         positionEnd,
       };
 
@@ -203,39 +231,142 @@ export const Timeline = () => {
   };
 
   const handleDuplicate = () => {
-    let element = null;
-    let elements = null;
-    let setElements = null;
-
-    if (activeElement === "media") {
-      elements = [...mediaFiles];
-      element = elements[activeElementIndex];
-      setElements = setMediaFiles;
-    } else if (activeElement === "text") {
-      elements = [...textElements];
-      element = elements[activeElementIndex];
-      setElements = setTextElements;
+    if (!activeElement) {
+      toast.error("No element selected.");
+      return;
     }
 
+    const nextId = crypto.randomUUID();
+
+    if (activeElement === "media") {
+      const element = mediaFiles[activeElementIndex];
+      if (!element) {
+        toast.error("No element selected.");
+        return;
+      }
+
+      const resolvedTrackId =
+        element.trackId ?? fallbackTrackIdForType[element.type] ?? null;
+      if (!resolvedTrackId) {
+        toast.error("Select a valid track before duplicating.");
+        return;
+      }
+
+      const duration = Math.max(0, element.positionEnd - element.positionStart);
+      const placement = computeRipplePlacement({
+        clips: getTrackBounds(resolvedTrackId),
+        movingId: nextId,
+        desiredStart: element.positionEnd,
+        duration,
+      });
+
+      const shiftedMediaFiles = mediaFiles.map((clip) => {
+        const delta = placement.shifts[clip.id];
+        if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+          return clip;
+        }
+        return {
+          ...clip,
+          positionStart: clip.positionStart + delta,
+          positionEnd: clip.positionEnd + delta,
+        };
+      });
+
+      const duplicated = {
+        ...element,
+        id: nextId,
+        trackId: resolvedTrackId,
+        positionStart: placement.start,
+        positionEnd: placement.end,
+      };
+
+      shiftedMediaFiles.splice(activeElementIndex + 1, 0, duplicated as any);
+
+      const shiftedTextElements = textElements.map((clip) => {
+        const delta = placement.shifts[clip.id];
+        if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+          return clip;
+        }
+        return {
+          ...clip,
+          positionStart: clip.positionStart + delta,
+          positionEnd: clip.positionEnd + delta,
+        };
+      });
+
+      dispatch(
+        applyTimelineEdit({
+          mediaFiles: shiftedMediaFiles as any,
+          textElements: shiftedTextElements as any,
+        }),
+      );
+      dispatch(setActiveElement(null));
+      toast.success("Element duplicated successfully.");
+      return;
+    }
+
+    const element = textElements[activeElementIndex];
     if (!element) {
       toast.error("No element selected.");
       return;
     }
 
-    const duplicatedElement = {
+    const resolvedTrackId = element.trackId ?? fallbackTextTrackId ?? null;
+    if (!resolvedTrackId) {
+      toast.error("Select a valid track before duplicating.");
+      return;
+    }
+
+    const duration = Math.max(0, element.positionEnd - element.positionStart);
+    const placement = computeRipplePlacement({
+      clips: getTrackBounds(resolvedTrackId),
+      movingId: nextId,
+      desiredStart: element.positionEnd,
+      duration,
+    });
+
+    const shiftedTextElements = textElements.map((clip) => {
+      const delta = placement.shifts[clip.id];
+      if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+        return clip;
+      }
+      return {
+        ...clip,
+        positionStart: clip.positionStart + delta,
+        positionEnd: clip.positionEnd + delta,
+      };
+    });
+
+    const duplicated = {
       ...element,
-      id: crypto.randomUUID(),
+      id: nextId,
+      trackId: resolvedTrackId,
+      positionStart: placement.start,
+      positionEnd: placement.end,
     };
 
-    if (elements) {
-      elements.splice(activeElementIndex + 1, 0, duplicatedElement as any);
-    }
+    shiftedTextElements.splice(activeElementIndex + 1, 0, duplicated as any);
 
-    if (elements && setElements) {
-      dispatch(setElements(elements as any));
-      dispatch(setActiveElement(null));
-      toast.success("Element duplicated successfully.");
-    }
+    const shiftedMediaFiles = mediaFiles.map((clip) => {
+      const delta = placement.shifts[clip.id];
+      if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+        return clip;
+      }
+      return {
+        ...clip,
+        positionStart: clip.positionStart + delta,
+        positionEnd: clip.positionEnd + delta,
+      };
+    });
+
+    dispatch(
+      applyTimelineEdit({
+        mediaFiles: shiftedMediaFiles as any,
+        textElements: shiftedTextElements as any,
+      }),
+    );
+    dispatch(setActiveElement(null));
+    toast.success("Element duplicated successfully.");
   };
 
   const handleDelete = () => {
@@ -271,19 +402,28 @@ export const Timeline = () => {
     }
   };
 
-  const setTimeFromClientX = useCallback(
+  const getTimeFromClientX = useCallback(
     (clientX: number) => {
       if (!timelineRef.current) return;
-      dispatch(setIsPlaying(false));
       const rect = timelineRef.current.getBoundingClientRect();
       const scrollOffset = timelineRef.current.scrollLeft;
       const offsetX = clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
       const seconds = Math.max(0, offsetX) / zoom;
-      const clampedTime = Math.max(0, Math.min(safeDuration, seconds));
+      return Math.max(0, Math.min(safeDuration, seconds));
+    },
+    [safeDuration, zoom],
+  );
+
+  const setTimeFromClientX = useCallback(
+    (clientX: number) => {
+      const clampedTime = getTimeFromClientX(clientX);
+      if (typeof clampedTime !== "number") return;
+      dispatch(setIsPlaying(false));
       dispatch(setCurrentTime(clampedTime));
+      player?.seekTo(Math.round(clampedTime * safeFps));
       return clampedTime;
     },
-    [dispatch, safeDuration, zoom],
+    [dispatch, getTimeFromClientX, player, safeFps],
   );
 
   const handleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -294,10 +434,15 @@ export const Timeline = () => {
   const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
     const time = setTimeFromClientX(e.clientX) ?? 0;
+    const resolvedTrackId = fallbackTextTrackId ?? null;
+    if (!resolvedTrackId) {
+      toast.error("Unable to place text without a layer.");
+      return;
+    }
     const newText = {
       id: crypto.randomUUID(),
       text: "New text",
-      trackId: fallbackTextTrackId ?? undefined,
+      trackId: resolvedTrackId,
       positionStart: time,
       positionEnd: time + 5,
       x: 600,
@@ -317,15 +462,58 @@ export const Timeline = () => {
       animation: "fade" as const,
       blur: 0,
     };
-    dispatch(setTextElements([...textElements, newText]));
+
+    const duration = Math.max(0, newText.positionEnd - newText.positionStart);
+    const placement = computeRipplePlacement({
+      clips: getTrackBounds(resolvedTrackId),
+      movingId: newText.id,
+      desiredStart: time,
+      duration,
+    });
+
+    const shiftedMediaFiles = mediaFiles.map((clip) => {
+      const delta = placement.shifts[clip.id];
+      if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+        return clip;
+      }
+      return {
+        ...clip,
+        positionStart: clip.positionStart + delta,
+        positionEnd: clip.positionEnd + delta,
+      };
+    });
+
+    const shiftedTextElements = textElements
+      .map((clip) => {
+        const delta = placement.shifts[clip.id];
+        if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+          return clip;
+        }
+        return {
+          ...clip,
+          positionStart: clip.positionStart + delta,
+          positionEnd: clip.positionEnd + delta,
+        };
+      })
+      .concat({
+        ...newText,
+        positionStart: placement.start,
+        positionEnd: placement.end,
+      });
+
+    dispatch(
+      applyTimelineEdit({
+        mediaFiles: shiftedMediaFiles as any,
+        textElements: shiftedTextElements as any,
+      }),
+    );
   };
 
   useEffect(() => {
     if (!enableMarkerTracking) return;
     const el = timelineRef.current;
     if (!el) return;
-    const safeCurrentTime = isFiniteNumber(currentTime) ? currentTime : 0;
-    const playheadX = TRACK_LABEL_WIDTH_PX + safeCurrentTime * zoom;
+    const playheadX = TRACK_LABEL_WIDTH_PX + playheadTime * zoom;
 
     const margin = 160;
     const left = el.scrollLeft;
@@ -337,7 +525,7 @@ export const Timeline = () => {
         behavior: isPlaying ? "auto" : "smooth",
       });
     }
-  }, [currentTime, enableMarkerTracking, isPlaying, zoom]);
+  }, [enableMarkerTracking, isPlaying, playheadTime, zoom]);
 
   useEffect(() => {
     if (!isDraggingMarker) return;
@@ -355,13 +543,64 @@ export const Timeline = () => {
     };
   }, [isDraggingMarker, setTimeFromClientX]);
 
+  const throttledMarkerUpdate = useMemo(
+    () =>
+      throttle((id: string, time: number) => {
+        dispatch(updateMarker({ id, time }));
+      }, 50),
+    [dispatch],
+  );
+
+  useEffect(() => {
+    return () => throttledMarkerUpdate.cancel();
+  }, [throttledMarkerUpdate]);
+
+  useEffect(() => {
+    if (!draggingTimelineMarkerId) return;
+    const handleMove = (event: MouseEvent) => {
+      const time = getTimeFromClientX(event.clientX);
+      if (typeof time !== "number") return;
+      throttledMarkerUpdate(draggingTimelineMarkerId, time);
+      dispatch(setCurrentTime(time));
+      player?.seekTo(Math.round(time * safeFps));
+    };
+    const handleUp = () => setDraggingTimelineMarkerId(null);
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+    };
+  }, [
+    dispatch,
+    draggingTimelineMarkerId,
+    getTimeFromClientX,
+    player,
+    safeFps,
+    throttledMarkerUpdate,
+  ]);
+
+  const handleAddMarker = useCallback(() => {
+    dispatch(addMarker({ time: playheadTime }));
+  }, [dispatch, playheadTime]);
+
   return (
     <div className="flex h-full w-full flex-col gap-2">
       <div className="flex w-full flex-row items-center justify-between gap-6">
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => dispatch(setMarkerTrack(!enableMarkerTracking))}
+            onClick={handleAddMarker}
             className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
+          >
+            <Flag className="h-4 w-4" aria-hidden="true" />
+            <span className="ml-2">
+              Marker <span className="text-xs">(T)</span>
+            </span>
+          </button>
+
+          <button
+            onClick={() => dispatch(setMarkerTrack(!enableMarkerTracking))}
+            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 sm:text-base"
           >
             <span className="inline-flex h-5 w-5 items-center justify-center">
               {enableMarkerTracking ? (
@@ -371,7 +610,7 @@ export const Timeline = () => {
               )}
             </span>
             <span className="ml-2">
-              Track Marker <span className="text-xs">(T)</span>
+              Follow <span className="text-xs">(F)</span>
             </span>
           </button>
 
@@ -405,26 +644,6 @@ export const Timeline = () => {
             </span>
           </button>
 
-          <div className="ml-2 mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => dispatch(addTrack({ kind: "video" }))}
-              className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-white/80 hover:bg-white/10"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              <Video className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-medium">Video track</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => dispatch(addTrack({ kind: "audio" }))}
-              className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-white/80 hover:bg-white/10"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              <Music className="h-4 w-4" aria-hidden="true" />
-              <span className="text-xs font-medium">Audio track</span>
-            </button>
-          </div>
         </div>
 
         <div className="mt-2 flex items-center gap-2">
@@ -456,10 +675,44 @@ export const Timeline = () => {
             zoom={zoom}
           />
 
+          {markers.map((marker) => (
+            <div
+              key={marker.id}
+              className="absolute top-0 bottom-0 z-40"
+              style={{
+                left: `${TRACK_LABEL_WIDTH_PX + marker.time * zoom}px`,
+              }}
+            >
+              <div className="absolute top-0 bottom-0 w-px bg-amber-400/25" />
+              <button
+                type="button"
+                title={
+                  typeof marker.label === "string" && marker.label.trim().length > 0
+                    ? marker.label
+                    : `${marker.time.toFixed(2)}s`
+                }
+                className="absolute top-0 -translate-x-1/2 h-12 w-6 cursor-ew-resize"
+                style={{ left: 0 }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  dispatch(setIsPlaying(false));
+                  setDraggingTimelineMarkerId(marker.id);
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch(setCurrentTime(marker.time));
+                  player?.seekTo(Math.round(marker.time * safeFps));
+                }}
+              >
+                <div className="mx-auto mt-1 h-0 w-0 border-x-[6px] border-x-transparent border-t-[10px] border-t-amber-400/90" />
+              </button>
+            </div>
+          ))}
+
           <div
             className="absolute top-0 bottom-0 z-50 w-[2px] cursor-ew-resize bg-red-500"
             style={{
-              left: `${TRACK_LABEL_WIDTH_PX + (isFiniteNumber(currentTime) ? currentTime : 0) * zoom}px`,
+              left: `${TRACK_LABEL_WIDTH_PX + playheadTime * zoom}px`,
             }}
             onMouseDown={(e) => {
               e.stopPropagation();
@@ -468,7 +721,28 @@ export const Timeline = () => {
           />
 
           <div className="divide-y divide-white/10">
-            {displayVideoTracks.map((track) => (
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+              }}
+            >
+              <div
+                className="sticky left-0 z-20 h-8 border-r border-white/10 bg-[#1E1D21]"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              />
+              <div
+                className="relative h-8 bg-[#16151A]"
+                data-timeline-track-id="__new-layer-top"
+              >
+                <div className="flex h-full items-center justify-center border-b border-dashed border-white/10 text-[10px] text-white/35">
+                  Drop to create a new layer
+                </div>
+              </div>
+            </div>
+
+            {displayTracks.map((track) => (
               <div
                 key={track.id}
                 className="grid"
@@ -481,9 +755,9 @@ export const Timeline = () => {
                   onClick={(e) => e.stopPropagation()}
                   onDoubleClick={(e) => e.stopPropagation()}
                 >
-                  <Video className="h-4 w-4 text-white/60" aria-hidden="true" />
+                  <Layers className="h-4 w-4 text-white/60" aria-hidden="true" />
                   <span className="text-xs font-medium tracking-wide uppercase">
-                    {formatTrackLabel("video", track.name)}
+                    {track.name}
                   </span>
                 </div>
 
@@ -493,8 +767,9 @@ export const Timeline = () => {
                 >
                   <MediaTimelineTrack
                     trackId={track.id}
-                    mediaTypes={["video", "image"]}
+                    mediaTypes={["video", "image", "audio"]}
                     fallbackTrackIdForType={fallbackTrackIdForType}
+                    fallbackTextTrackId={fallbackTextTrackId}
                   />
                   <TextTimeline
                     trackId={track.id}
@@ -504,53 +779,26 @@ export const Timeline = () => {
               </div>
             ))}
 
-            {displayVideoTracks.length > 0 && displayAudioTracks.length > 0 ? (
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+              }}
+            >
               <div
-                className="grid bg-black/40"
-                style={{
-                  gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
-                }}
-              >
-                <div
-                  className="sticky left-0 z-20 h-2 border-r border-white/10 bg-black/40"
-                  onClick={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                />
-                <div className="h-2 bg-black/40" />
-              </div>
-            ) : null}
-
-            {displayAudioTracks.map((track) => (
+                className="sticky left-0 z-20 h-8 border-r border-white/10 bg-[#1E1D21]"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              />
               <div
-                key={track.id}
-                className="grid"
-                style={{
-                  gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
-                }}
+                className="relative h-8 bg-[#16151A]"
+                data-timeline-track-id="__new-layer-bottom"
               >
-                <div
-                  className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
-                  onClick={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                >
-                  <Music className="h-4 w-4 text-white/60" aria-hidden="true" />
-                  <span className="text-xs font-medium tracking-wide uppercase">
-                    {formatTrackLabel("audio", track.name)}
-                  </span>
-                </div>
-
-                <div
-                  className="relative h-16 overflow-visible bg-[#1E1D21]"
-                  data-timeline-track-id={track.id}
-                >
-                  <MediaTimelineTrack
-                    trackId={track.id}
-                    mediaTypes={["audio"]}
-                    fallbackTrackIdForType={fallbackTrackIdForType}
-                  />
+                <div className="flex h-full items-center justify-center border-t border-dashed border-white/10 text-[10px] text-white/35">
+                  Drop to create a new layer
                 </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </div>

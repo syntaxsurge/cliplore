@@ -1,11 +1,12 @@
 "use client";
 
 import { getFile, useAppDispatch, useAppSelector } from "../../../../store";
-import { setMediaFiles } from "../../../../store/slices/projectSlice";
+import { setMediaFiles, setTracks } from "../../../../store/slices/projectSlice";
 import { categorizeFile } from "../../../../utils/utils";
 import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import { createMediaFileFromFile } from "@/lib/media/ingest";
+import type { TimelineTrack } from "@/app/types";
 
 export default function AddMedia({ fileId }: { fileId: string }) {
   const { mediaFiles, resolution, tracks } = useAppSelector(
@@ -24,18 +25,34 @@ export default function AddMedia({ fileId }: { fileId: string }) {
 
     if (fileId) {
       const type = categorizeFile(file.type);
-      const videoTracks = tracks.filter((t) => t.kind === "video");
-      const audioTracks = tracks.filter((t) => t.kind === "audio");
-      const mainVideoTrackId = videoTracks[0]?.id ?? null;
-      const overlayVideoTrackId = videoTracks[1]?.id ?? mainVideoTrackId;
-      const mainAudioTrackId = audioTracks[0]?.id ?? mainVideoTrackId;
+      const baseTrackId = tracks[0]?.id ?? null;
+      const overlayTrackId = tracks[1]?.id ?? baseTrackId;
+
+      const ensureAudioTrackId = () => {
+        const existing = mediaFiles.find(
+          (clip) => clip.type === "audio" && typeof clip.trackId === "string",
+        )?.trackId;
+        if (existing) return existing;
+        const third = tracks[2]?.id;
+        if (third) return third;
+        const nextId = crypto.randomUUID();
+        const nextTrack: TimelineTrack = {
+          id: nextId,
+          kind: "layer",
+          name: `Layer ${tracks.length + 1}`,
+        };
+        dispatch(
+          setTracks([...tracks, nextTrack]),
+        );
+        return nextId;
+      };
 
       const targetTrackId =
         type === "audio"
-          ? mainAudioTrackId
+          ? ensureAudioTrackId()
           : type === "image"
-            ? overlayVideoTrackId
-            : mainVideoTrackId;
+            ? overlayTrackId
+            : baseTrackId;
 
       const relevantClips = mediaFiles.filter(
         (clip) => (clip.trackId ?? null) === targetTrackId,

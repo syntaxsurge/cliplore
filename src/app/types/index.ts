@@ -1,14 +1,21 @@
 export type MediaType = "video" | "audio" | "image" | "unknown";
 
-export type TrackKind = "video" | "audio";
+export type TrackKind = "layer";
 
 export interface TimelineTrack {
   id: string;
   kind: TrackKind;
-  name: string; // e.g. "V1", "A1"
+  name: string; // e.g. "Layer 1"
   muted?: boolean;
   locked?: boolean;
   hidden?: boolean;
+}
+
+export interface TimelineMarker {
+  id: string;
+  time: number; // seconds on timeline
+  label?: string;
+  color?: string;
 }
 
 export interface UploadedFile {
@@ -140,6 +147,7 @@ export interface ProjectState {
   mediaFiles: MediaFile[];
   textElements: TextElement[];
   tracks: TimelineTrack[];
+  markers: TimelineMarker[];
   filesID?: string[];
   exports: ProjectExport[];
   currentTime: number;

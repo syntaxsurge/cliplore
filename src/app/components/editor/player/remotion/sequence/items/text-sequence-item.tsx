@@ -1,6 +1,6 @@
 import { TextElement } from "@/app/types";
 import { useAppDispatch, useAppSelector } from "@/app/store";
-import { setTextElements } from "@/app/store/slices/projectSlice";
+import { setActiveElement, setActiveElementIndex } from "@/app/store/slices/projectSlice";
 import {
   Sequence,
   useCurrentFrame,
@@ -32,22 +32,21 @@ export const TextSequenceItem: React.FC<{
   item: TextElement;
   options: SequenceItemOptions;
 }> = ({ item, options }) => {
-  const { handleTextChange, fps, editableTextId } = options;
+  const { fps } = options;
   const dispatch = useAppDispatch();
-  const { textElements, resolution, tracks } = useAppSelector(
+  const { textElements, tracks, activeElement, activeElementIndex } = useAppSelector(
     (state) => state.projectState,
   );
   const frame = useCurrentFrame();
   const videoConfig = useVideoConfig();
 
-  const videoTrackIndex = (() => {
+  const trackIndex = (() => {
     if (!item.trackId) return 0;
-    const videoTracks = tracks.filter((t) => t.kind === "video");
-    const idx = videoTracks.findIndex((t) => t.id === item.trackId);
+    const idx = tracks.findIndex((t) => t.id === item.trackId);
     return idx >= 0 ? idx : 0;
   })();
 
-  const effectiveZIndex = 1000 + videoTrackIndex * 10 + (item.zIndex ?? 0);
+  const effectiveZIndex = trackIndex * 1000 + (item.zIndex ?? 0);
 
   const { from, durationInFrames } = calculateFrames(
     {
@@ -57,56 +56,8 @@ export const TextSequenceItem: React.FC<{
     fps,
   );
 
-  const onUpdateText = (id: string, updates: Partial<TextElement>) => {
-    dispatch(
-      setTextElements(
-        textElements.map((text) =>
-          text.id === id ? { ...text, ...updates } : text,
-        ),
-      ),
-    );
-  };
-
-  // TODO: Extract this logic to be reusable for other draggable items
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-
-    // TODO: This needs a more reliable way to get the scaled container
-    const container = document.querySelector(
-      ".__remotion-player",
-    ) as HTMLElement;
-    if (!container) return;
-    const rect = container.getBoundingClientRect();
-    const rawScaleX = rect.width / container.offsetWidth;
-    const rawScaleY = rect.height / container.offsetHeight;
-    const scaleX = Number.isFinite(rawScaleX) && rawScaleX > 0 ? rawScaleX : 1;
-    const scaleY = Number.isFinite(rawScaleY) && rawScaleY > 0 ? rawScaleY : 1;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const diffX = e.clientX - startX;
-      const diffY = e.clientY - startY;
-      onUpdateText(item.id, {
-        x: item.x + diffX / scaleX,
-        y: item.y + diffY / scaleY,
-      });
-
-      // handleTextChange fonksiyonu varsa pozisyon güncellemesini bildir
-      if (handleTextChange) {
-        // Burada pozisyon değişikliğini parent component'e bildirebiliriz
-        // handleTextChange(item.id, `position:${newX},${newY}`);
-      }
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
+  const isSelected =
+    activeElement === "text" && textElements[activeElementIndex]?.id === item.id;
 
   const localFrame = frame - from;
   const totalFrames = durationInFrames + REMOTION_SAFE_FRAME;
@@ -197,11 +148,15 @@ export const TextSequenceItem: React.FC<{
           textAlign: item.align ?? "left",
           position: "relative",
           width: "100%",
-          cursor: "move",
+          cursor: "pointer",
         }}
-        onMouseDown={handleMouseDown}
-        // onMouseMove={handleMouseMove}
-        // onMouseUp={handleMouseUp}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          if (isSelected) return;
+          dispatch(setActiveElement("text"));
+          const index = textElements.findIndex((clip) => clip.id === item.id);
+          if (index >= 0) dispatch(setActiveElementIndex(index));
+        }}
         dangerouslySetInnerHTML={{ __html: item.text }}
         className="designcombo_textLayer"
       />

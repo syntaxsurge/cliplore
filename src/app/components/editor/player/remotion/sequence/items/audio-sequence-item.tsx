@@ -29,15 +29,15 @@ export const AudioSequenceItem: React.FC<{
   const playbackRate = item.playbackSpeed || 1;
   const { from, durationInFrames } = calculateFrames(
     {
-      from: item.positionStart / playbackRate,
-      to: item.positionEnd / playbackRate,
+      from: item.positionStart,
+      to: item.positionEnd,
     },
     fps,
   );
 
   const trim = {
-    from: item.startTime / playbackRate,
-    to: item.endTime / playbackRate,
+    from: item.startTime,
+    to: item.endTime,
   };
   return (
     <Sequence

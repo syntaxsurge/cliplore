@@ -2,21 +2,27 @@
 
 import { useAppSelector } from "@/app/store";
 import {
+  applyTimelineEdit,
   setActiveElement,
   setActiveElementIndex,
   setMediaFiles,
 } from "@/app/store/slices/projectSlice";
-import { MediaFile, MediaType } from "@/app/types";
+import { MediaFile, MediaType, TimelineTrack } from "@/app/types";
 import Moveable, { OnDrag, OnResize } from "react-moveable";
 import { throttle } from "lodash";
 import { useDispatch } from "react-redux";
 import React, { useEffect, useMemo, useRef } from "react";
 import { Image as ImageIcon, Music, Video } from "lucide-react";
+import {
+  computeRipplePlacement,
+  findNeighborLimits,
+} from "@/app/components/editor/timeline/ops";
 
 type Props = {
   trackId: string;
   mediaTypes: Array<Exclude<MediaType, "unknown">>;
   fallbackTrackIdForType: Record<MediaType, string | null>;
+  fallbackTextTrackId: string | null;
 };
 
 const isFiniteNumber = (value: unknown): value is number =>
@@ -26,10 +32,11 @@ export function MediaTimelineTrack({
   trackId,
   mediaTypes,
   fallbackTrackIdForType,
+  fallbackTextTrackId,
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const moveableRef = useRef<Record<string, Moveable | null>>({});
-  const { mediaFiles, activeElement, activeElementIndex, timelineZoom } =
+  const { mediaFiles, textElements, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
   const zoom =
@@ -39,6 +46,11 @@ export function MediaTimelineTrack({
   useEffect(() => {
     mediaFilesRef.current = mediaFiles;
   }, [mediaFiles]);
+
+  const textElementsRef = useRef(textElements);
+  useEffect(() => {
+    textElementsRef.current = textElements;
+  }, [textElements]);
 
   const onUpdateMedia = useMemo(
     () =>
@@ -66,21 +78,11 @@ export function MediaTimelineTrack({
   ) => {
     const constrainedLeft = Math.max(left, 0);
     const newPositionStart = constrainedLeft / zoom;
-    const deltaSeconds = newPositionStart - clip.positionStart;
-
-    if (clip.type === "image") {
-      onUpdateMedia(clip.id, {
-        positionStart: newPositionStart,
-        positionEnd: deltaSeconds + clip.positionEnd,
-        endTime: deltaSeconds + clip.endTime,
-      });
-    } else {
-      onUpdateMedia(clip.id, {
-        positionStart: newPositionStart,
-        positionEnd: deltaSeconds + clip.positionEnd,
-        endTime: Math.max(deltaSeconds + clip.endTime, clip.endTime),
-      });
-    }
+    const duration = Math.max(0, clip.positionEnd - clip.positionStart);
+    onUpdateMedia(clip.id, {
+      positionStart: newPositionStart,
+      positionEnd: newPositionStart + duration,
+    });
 
     target.style.left = `${constrainedLeft}px`;
     if (isFiniteNumber(top)) {
@@ -99,29 +101,66 @@ export function MediaTimelineTrack({
     return trackEl?.dataset?.timelineTrackId ?? null;
   };
 
+  const getTrackBounds = (targetTrackId: string) => {
+    const bounds = [
+      ...mediaFilesRef.current
+        .filter(
+          (clip) =>
+            (clip.trackId ?? fallbackTrackIdForType[clip.type]) === targetTrackId,
+        )
+        .map((clip) => ({
+          id: clip.id,
+          start: clip.positionStart,
+          end: clip.positionEnd,
+        })),
+      ...textElementsRef.current
+        .filter(
+          (clip) =>
+            (clip.trackId ?? fallbackTextTrackId) === targetTrackId,
+        )
+        .map((clip) => ({
+          id: clip.id,
+          start: clip.positionStart,
+          end: clip.positionEnd,
+        })),
+    ];
+    return bounds;
+  };
+
   const handleRightResize = (
     clip: MediaFile,
     target: HTMLElement,
     width: number,
   ) => {
-    if (clip.type === "image") {
-      const newTimelineDuration = width / zoom;
-      onUpdateMedia(clip.id, {
-        positionEnd: clip.positionStart + newTimelineDuration,
-        endTime: clip.positionStart + newTimelineDuration,
-      });
-      return;
+    const currentTrackId =
+      clip.trackId ?? fallbackTrackIdForType[clip.type] ?? trackId;
+    const bounds = getTrackBounds(currentTrackId);
+    const { maxEnd } = findNeighborLimits({
+      clips: bounds,
+      movingId: clip.id,
+      desiredStart: clip.positionEnd,
+    });
+
+    const desiredDuration = Math.max(0, width / zoom);
+    const unclampedEnd = clip.positionStart + desiredDuration;
+    const clampedEnd = Math.min(unclampedEnd, maxEnd);
+    const nextDuration = Math.max(0, clampedEnd - clip.positionStart);
+
+    const playbackSpeed =
+      isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
+        ? clip.playbackSpeed
+        : 1;
+
+    const updates: Partial<MediaFile> = {
+      positionEnd: clampedEnd,
+    };
+
+    if (clip.type === "video" || clip.type === "audio") {
+      updates.endTime = clip.startTime + nextDuration * playbackSpeed;
     }
 
-    const playbackSpeed = clip.playbackSpeed || 1;
-    const newTimelineDuration = width / zoom;
-    const durationWithSpeed = newTimelineDuration * playbackSpeed;
-    const nextPositionEnd = clip.positionStart + durationWithSpeed;
-
-    onUpdateMedia(clip.id, {
-      positionEnd: nextPositionEnd,
-      endTime: clip.startTime + durationWithSpeed,
-    });
+    onUpdateMedia(clip.id, updates);
+    target.style.width = `${Math.max(2, nextDuration * zoom)}px`;
   };
 
   const handleLeftResize = (
@@ -129,28 +168,36 @@ export function MediaTimelineTrack({
     target: HTMLElement,
     width: number,
   ) => {
-    if (clip.type === "image") {
-      const newDuration = width / zoom;
-      const nextPositionStart = Math.max(clip.positionEnd - newDuration, 0);
-      onUpdateMedia(clip.id, {
-        positionStart: nextPositionStart,
-      });
-      target.style.left = `${nextPositionStart * zoom}px`;
-      return;
-    }
-
-    const playbackSpeed = clip.playbackSpeed || 1;
-    const newTimelineDuration = width / zoom;
-    const durationWithSpeed = newTimelineDuration * playbackSpeed;
-    const nextPositionStart = Math.max(clip.positionEnd - durationWithSpeed, 0);
-    const nextStartTime = Math.max(clip.endTime - durationWithSpeed, 0);
-
-    onUpdateMedia(clip.id, {
-      positionStart: nextPositionStart,
-      startTime: nextStartTime,
+    const currentTrackId =
+      clip.trackId ?? fallbackTrackIdForType[clip.type] ?? trackId;
+    const bounds = getTrackBounds(currentTrackId);
+    const { minStart } = findNeighborLimits({
+      clips: bounds,
+      movingId: clip.id,
+      desiredStart: clip.positionStart,
     });
 
-    target.style.left = `${nextPositionStart * zoom}px`;
+    const desiredDuration = Math.max(0, width / zoom);
+    const unclampedStart = Math.max(0, clip.positionEnd - desiredDuration);
+    const clampedStart = Math.max(unclampedStart, minStart);
+    const nextDuration = Math.max(0, clip.positionEnd - clampedStart);
+
+    const playbackSpeed =
+      isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
+        ? clip.playbackSpeed
+        : 1;
+
+    const updates: Partial<MediaFile> = {
+      positionStart: clampedStart,
+    };
+
+    if (clip.type === "video" || clip.type === "audio") {
+      updates.startTime = Math.max(0, clip.endTime - nextDuration * playbackSpeed);
+    }
+
+    onUpdateMedia(clip.id, updates);
+    target.style.left = `${clampedStart * zoom}px`;
+    target.style.width = `${Math.max(2, nextDuration * zoom)}px`;
   };
 
   useEffect(() => {
@@ -183,10 +230,6 @@ export function MediaTimelineTrack({
         .map((clip) => (
           <div key={clip.id}>
             {(() => {
-              const playbackSpeed =
-                isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
-                  ? clip.playbackSpeed
-                  : 1;
               const positionStart = isFiniteNumber(clip.positionStart)
                 ? clip.positionStart
                 : 0;
@@ -195,8 +238,7 @@ export function MediaTimelineTrack({
                 : positionStart;
               const widthPx = Math.max(
                 2,
-                (positionEnd / playbackSpeed - positionStart / playbackSpeed) *
-                  zoom,
+                (positionEnd - positionStart) * zoom,
               );
               const leftPx = Math.max(0, positionStart * zoom);
 
@@ -208,11 +250,19 @@ export function MediaTimelineTrack({
                     }
                   }}
                   onClick={() => handleClick(clip.id)}
-                  className={`absolute border border-gray-500 border-opacity-50 rounded-md top-2 h-12 rounded bg-[#27272A] text-white text-sm flex items-center justify-center cursor-pointer ${
+                  className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border px-2 text-sm text-white/90 shadow-sm ${
+                    clip.type === "video"
+                      ? "border-indigo-400/40 bg-indigo-500/15"
+                      : clip.type === "image"
+                        ? "border-sky-400/40 bg-sky-500/15"
+                        : clip.type === "audio"
+                          ? "border-emerald-400/40 bg-emerald-500/15"
+                          : "border-white/10 bg-white/5"
+                  } ${
                     activeElement === "media" &&
                     mediaFiles[activeElementIndex]?.id === clip.id
-                      ? "bg-[#3F3F46] border-blue-500"
-                      : ""
+                      ? "ring-2 ring-blue-500/70"
+                      : "hover:bg-white/10"
                   }`}
                   style={{
                     left: `${leftPx}px`,
@@ -220,7 +270,7 @@ export function MediaTimelineTrack({
                     zIndex: clip.zIndex,
                   }}
                 >
-                  <span className="mr-2 inline-flex h-7 w-7 min-w-6 items-center justify-center text-white/80">
+                  <span className="inline-flex h-7 w-7 min-w-6 items-center justify-center text-white/80">
                     {getClipIcon(clip.type)}
                   </span>
                   <span className="truncate text-x">{clip.fileName}</span>
@@ -255,14 +305,104 @@ export function MediaTimelineTrack({
               }}
               onDragEnd={({ target, clientX, clientY }) => {
                 if (!target) return;
-                target.style.top = "";
+                onUpdateMedia.cancel();
+                (target as HTMLElement).style.top = "";
                 if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
-                const nextTrackId = findTrackIdAtPoint(clientX, clientY);
-                if (!nextTrackId) return;
+
+                const dropTarget = findTrackIdAtPoint(clientX, clientY);
+                const current = mediaFilesRef.current.find((m) => m.id === clip.id);
+                if (!current) return;
+
                 const currentTrackId =
-                  clip.trackId ?? fallbackTrackIdForType[clip.type];
-                if (nextTrackId === currentTrackId) return;
-                onUpdateMedia(clip.id, { trackId: nextTrackId });
+                  current.trackId ?? fallbackTrackIdForType[current.type] ?? trackId;
+
+                let targetTrackId = dropTarget ?? currentTrackId;
+                let nextTracks: TimelineTrack[] | undefined;
+
+                if (
+                  dropTarget === "__new-layer-top" ||
+                  dropTarget === "__new-layer-bottom"
+                ) {
+                  const insertAt =
+                    dropTarget === "__new-layer-bottom"
+                      ? Math.min(2, tracks.length)
+                      : tracks.length;
+                  const nextId = crypto.randomUUID();
+                  const newTrack: TimelineTrack = {
+                    id: nextId,
+                    kind: "layer",
+                    name: `Layer ${insertAt + 1}`,
+                  };
+                  nextTracks = [
+                    ...tracks.slice(0, insertAt),
+                    newTrack,
+                    ...tracks.slice(insertAt),
+                  ];
+                  targetTrackId = nextId;
+                }
+
+                if (!targetTrackId) return;
+
+                const rawLeft = Number.parseFloat(
+                  (target as HTMLElement).style.left || "0",
+                );
+                const leftPx = Number.isFinite(rawLeft) ? Math.max(0, rawLeft) : 0;
+                const desiredStart = leftPx / zoom;
+
+                const duration = Math.max(
+                  0,
+                  current.positionEnd - current.positionStart,
+                );
+
+                const bounds = getTrackBounds(targetTrackId);
+                const placement = computeRipplePlacement({
+                  clips: bounds,
+                  movingId: current.id,
+                  desiredStart,
+                  duration,
+                });
+
+                const nextMediaFiles = mediaFilesRef.current.map((m) => {
+                  if (m.id === current.id) {
+                    return {
+                      ...m,
+                      trackId: targetTrackId,
+                      positionStart: placement.start,
+                      positionEnd: placement.end,
+                    };
+                  }
+
+                  const delta = placement.shifts[m.id];
+                  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+                    return m;
+                  }
+
+                  return {
+                    ...m,
+                    positionStart: m.positionStart + delta,
+                    positionEnd: m.positionEnd + delta,
+                  };
+                });
+
+                const nextTextElements = textElementsRef.current.map((t) => {
+                  const delta = placement.shifts[t.id];
+                  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+                    return t;
+                  }
+                  return {
+                    ...t,
+                    positionStart: t.positionStart + delta,
+                    positionEnd: t.positionEnd + delta,
+                  };
+                });
+
+                dispatch(
+                  applyTimelineEdit({
+                    ...(nextTracks ? { tracks: nextTracks } : {}),
+                    mediaFiles: nextMediaFiles,
+                    textElements: nextTextElements,
+                  }),
+                );
               }}
               onResize={({ target, width, delta, direction }: OnResize) => {
                 if (!isFiniteNumber(width)) return;

@@ -10,50 +10,81 @@ import {
   ProjectPublishRecord,
   RenderEngine,
   TimelineTrack,
+  TimelineMarker,
   TrackKind,
 } from "../../types";
 
 const MAX_HISTORY = 50;
 
-const createTrack = (kind: TrackKind, index: number): TimelineTrack => ({
+const createTrack = (index: number): TimelineTrack => ({
   id: crypto.randomUUID(),
-  kind,
-  name: `${kind === "video" ? "V" : "A"}${index}`,
+  kind: "layer",
+  name: `Layer ${index}`,
 });
 
 const normalizeTracks = (value: unknown): TimelineTrack[] => {
-  const raw = Array.isArray(value) ? (value as TimelineTrack[]) : [];
-  const tracks = raw.filter(
-    (track) =>
-      track &&
-      typeof track === "object" &&
-      (track.kind === "video" || track.kind === "audio") &&
-      typeof track.id === "string" &&
-      typeof track.name === "string",
-  );
+  const raw = Array.isArray(value) ? (value as unknown[]) : [];
+  const sanitized: TimelineTrack[] = raw
+    .filter(
+      (track) =>
+        track &&
+        typeof track === "object" &&
+        typeof (track as any).id === "string",
+    )
+    .map((track, idx) => ({
+      id: String((track as any).id),
+      kind: "layer" as TrackKind,
+      name:
+        typeof (track as any).name === "string"
+          ? String((track as any).name)
+          : `Layer ${idx + 1}`,
+      muted:
+        typeof (track as any).muted === "boolean"
+          ? (track as any).muted
+          : undefined,
+      locked:
+        typeof (track as any).locked === "boolean"
+          ? (track as any).locked
+          : undefined,
+      hidden:
+        typeof (track as any).hidden === "boolean"
+          ? (track as any).hidden
+          : undefined,
+    }));
 
-  const videoTracks = tracks.filter((t) => t.kind === "video");
-  const audioTracks = tracks.filter((t) => t.kind === "audio");
+  const withMinimum =
+    sanitized.length >= 2
+      ? sanitized
+      : [
+          ...sanitized,
+          ...Array.from({ length: 2 - sanitized.length }, (_, i) =>
+            createTrack(sanitized.length + i + 1),
+          ),
+        ];
 
-  const normalizedVideos =
-    videoTracks.length >= 2
-      ? videoTracks
-      : [...videoTracks, ...Array.from({ length: 2 - videoTracks.length }, (_, i) => createTrack("video", videoTracks.length + i + 1))];
-
-  const normalizedAudios =
-    audioTracks.length > 0 ? audioTracks : [createTrack("audio", 1)];
-
-  return [...normalizedVideos, ...normalizedAudios];
+  return withMinimum.map((track, idx) => ({ ...track, name: `Layer ${idx + 1}` }));
 };
 
-const pickDefaultTrackId = (tracks: TimelineTrack[], kind: TrackKind) => {
-  const track = tracks.find((t) => t.kind === kind);
-  return track?.id ?? null;
-};
+const normalizeMarkers = (value: unknown): TimelineMarker[] => {
+  const raw = Array.isArray(value) ? (value as TimelineMarker[]) : [];
+  const markers = raw
+    .filter(
+      (marker) =>
+        marker &&
+        typeof marker === "object" &&
+        typeof marker.id === "string" &&
+        typeof (marker as any).time === "number" &&
+        Number.isFinite((marker as any).time),
+    )
+    .map((marker) => ({
+      id: marker.id,
+      time: Math.max(0, marker.time),
+      label: typeof marker.label === "string" ? marker.label : undefined,
+      color: typeof marker.color === "string" ? marker.color : undefined,
+    }))
+    .sort((a, b) => a.time - b.time);
 
-const pickOverlayVideoTrackId = (tracks: TimelineTrack[]) => {
-  const videoTracks = tracks.filter((t) => t.kind === "video");
-  return videoTracks[1]?.id ?? videoTracks[0]?.id ?? null;
+  return markers;
 };
 
 const defaultExportSettings: ExportConfig = {
@@ -69,8 +100,7 @@ const defaultExportSettings: ExportConfig = {
 export const createProjectState = (
   overrides: Partial<ProjectState> = {},
 ): ProjectState => {
-  const { exportSettings: exportSettingsOverrides, ...restOverrides } =
-    overrides;
+  const { exportSettings: exportSettingsOverrides, ...restOverrides } = overrides;
   const now = new Date().toISOString();
   const next: ProjectState = {
     id: crypto.randomUUID(),
@@ -80,6 +110,7 @@ export const createProjectState = (
     mediaFiles: [],
     textElements: [],
     tracks: normalizeTracks(undefined),
+    markers: normalizeMarkers(undefined),
     exports: [],
     currentTime: 0,
     isPlaying: false,
@@ -104,6 +135,7 @@ export const createProjectState = (
     },
   };
   next.tracks = normalizeTracks(next.tracks);
+  next.markers = normalizeMarkers((next as any).markers);
   return next;
 };
 
@@ -130,10 +162,45 @@ const calculateTotalDuration = (
   return Math.max(0, ...mediaDurations, ...textDurations);
 };
 
+const pruneEmptyTracks = (state: ProjectState) => {
+  const usedTrackIds = new Set<string>();
+  for (const clip of state.mediaFiles) {
+    if (typeof clip.trackId === "string") usedTrackIds.add(clip.trackId);
+  }
+  for (const clip of state.textElements) {
+    if (typeof clip.trackId === "string") usedTrackIds.add(clip.trackId);
+  }
+
+  state.tracks = normalizeTracks(state.tracks).filter(
+    (track, idx) => idx < 2 || usedTrackIds.has(track.id),
+  );
+};
+
 const projectStateSlice = createSlice({
   name: "projectState",
   initialState,
   reducers: {
+    applyTimelineEdit: (
+      state,
+      action: PayloadAction<{
+        mediaFiles?: MediaFile[];
+        textElements?: TextElement[];
+        tracks?: TimelineTrack[];
+      }>,
+    ) => {
+      pushHistory(state);
+      if (Array.isArray(action.payload.mediaFiles)) {
+        state.mediaFiles = action.payload.mediaFiles;
+      }
+      if (Array.isArray(action.payload.textElements)) {
+        state.textElements = action.payload.textElements;
+      }
+      if (Array.isArray(action.payload.tracks)) {
+        state.tracks = normalizeTracks(action.payload.tracks);
+      }
+      state.duration = calculateTotalDuration(state.mediaFiles, state.textElements);
+      pruneEmptyTracks(state);
+    },
     setMediaFiles: (state, action: PayloadAction<MediaFile[]>) => {
       pushHistory(state);
       state.mediaFiles = action.payload;
@@ -142,25 +209,87 @@ const projectStateSlice = createSlice({
         state.mediaFiles,
         state.textElements,
       );
+      pruneEmptyTracks(state);
     },
     setTracks: (state, action: PayloadAction<TimelineTrack[]>) => {
       pushHistory(state);
       state.tracks = normalizeTracks(action.payload);
     },
-    addTrack: (state, action: PayloadAction<{ kind: TrackKind }>) => {
+    addMarker: (
+      state,
+      action: PayloadAction<{ time: number; label?: string; color?: string }>,
+    ) => {
       pushHistory(state);
-      const { kind } = action.payload;
-      const existingOfKind = state.tracks.filter((t) => t.kind === kind);
-      const nextIndex = existingOfKind.length + 1;
-      const nextTrack = createTrack(kind, nextIndex);
+      const time =
+        typeof action.payload.time === "number" &&
+        Number.isFinite(action.payload.time)
+          ? Math.max(0, action.payload.time)
+          : 0;
+      state.markers = normalizeMarkers([
+        ...(state.markers ?? []),
+        {
+          id: crypto.randomUUID(),
+          time,
+          label: action.payload.label,
+          color: action.payload.color,
+        },
+      ]);
+    },
+    updateMarker: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        time?: number;
+        label?: string;
+        color?: string;
+      }>,
+    ) => {
+      pushHistory(state);
+      state.markers = normalizeMarkers(
+        (state.markers ?? []).map((marker) => {
+          if (marker.id !== action.payload.id) return marker;
+          return {
+            ...marker,
+            ...(typeof action.payload.time === "number" &&
+            Number.isFinite(action.payload.time)
+              ? { time: Math.max(0, action.payload.time) }
+              : {}),
+            ...(typeof action.payload.label === "string"
+              ? { label: action.payload.label }
+              : {}),
+            ...(typeof action.payload.color === "string"
+              ? { color: action.payload.color }
+              : {}),
+          };
+        }),
+      );
+    },
+    deleteMarker: (state, action: PayloadAction<string>) => {
+      pushHistory(state);
+      state.markers = normalizeMarkers(
+        (state.markers ?? []).filter((marker) => marker.id !== action.payload),
+      );
+    },
+    addLayer: (
+      state,
+      action: PayloadAction<{ insertAt?: number; id?: string } | undefined>,
+    ) => {
+      pushHistory(state);
+      state.tracks = normalizeTracks(state.tracks);
 
-      if (kind === "video") {
-        const insertAt = state.tracks.filter((t) => t.kind === "video").length;
-        state.tracks.splice(insertAt, 0, nextTrack);
-        return;
-      }
+      const rawInsertAt = action.payload?.insertAt;
+      const insertAt =
+        typeof rawInsertAt === "number" && Number.isFinite(rawInsertAt)
+          ? Math.max(0, Math.min(state.tracks.length, Math.floor(rawInsertAt)))
+          : state.tracks.length;
 
-      state.tracks.push(nextTrack);
+      const id =
+        typeof action.payload?.id === "string" ? action.payload.id : undefined;
+      state.tracks.splice(insertAt, 0, {
+        ...createTrack(state.tracks.length + 1),
+        ...(id ? { id } : {}),
+      });
+      state.tracks = normalizeTracks(state.tracks);
     },
     setProjectName: (state, action: PayloadAction<string>) => {
       pushHistory(state);
@@ -186,6 +315,7 @@ const projectStateSlice = createSlice({
         state.mediaFiles,
         state.textElements,
       );
+      pruneEmptyTracks(state);
     },
     setCurrentTime: (state, action: PayloadAction<number>) => {
       state.currentTime = action.payload;
@@ -268,29 +398,55 @@ const projectStateSlice = createSlice({
       };
 
       next.tracks = normalizeTracks((action.payload as any).tracks);
+      next.markers = normalizeMarkers((action.payload as any).markers);
 
-      const defaultVideoTrackId = pickDefaultTrackId(next.tracks, "video");
-      const overlayVideoTrackId = pickOverlayVideoTrackId(next.tracks);
-      const defaultAudioTrackId = pickDefaultTrackId(next.tracks, "audio");
+      const trackIds = new Set(next.tracks.map((t) => t.id));
+      const baseTrackId = next.tracks[0]?.id ?? null;
+      const overlayTrackId = next.tracks[1]?.id ?? baseTrackId;
 
-      if (defaultVideoTrackId) {
-        next.mediaFiles = next.mediaFiles.map((clip) => {
-          if (clip.trackId) return clip;
-          const trackId =
-            clip.type === "audio"
-              ? defaultAudioTrackId ?? defaultVideoTrackId
-              : clip.type === "image"
-                ? overlayVideoTrackId ?? defaultVideoTrackId
-                : defaultVideoTrackId;
+      const ensureAudioTrackId = () => {
+        const existing = next.mediaFiles.find(
+          (clip) =>
+            clip.type === "audio" &&
+            typeof clip.trackId === "string" &&
+            trackIds.has(clip.trackId),
+        )?.trackId;
+        if (existing) return existing;
+
+        const third = next.tracks[2]?.id;
+        if (third) return third;
+
+        const newTrack = createTrack(next.tracks.length + 1);
+        next.tracks = normalizeTracks([...next.tracks, newTrack]);
+        trackIds.add(newTrack.id);
+        return newTrack.id;
+      };
+
+      next.mediaFiles = next.mediaFiles.map((clip) => {
+        const hasValidTrack =
+          typeof clip.trackId === "string" && trackIds.has(clip.trackId);
+        if (hasValidTrack) return clip;
+
+        if (clip.type === "audio") {
+          const trackId = ensureAudioTrackId();
           return { ...clip, trackId };
-        });
-      }
+        }
 
-      if (overlayVideoTrackId) {
-        next.textElements = next.textElements.map((clip) =>
-          clip.trackId ? clip : { ...clip, trackId: overlayVideoTrackId },
-        );
-      }
+        if (clip.type === "image") {
+          return overlayTrackId ? { ...clip, trackId: overlayTrackId } : clip;
+        }
+
+        return baseTrackId ? { ...clip, trackId: baseTrackId } : clip;
+      });
+
+      next.textElements = next.textElements.map((clip) => {
+        const hasValidTrack =
+          typeof clip.trackId === "string" && trackIds.has(clip.trackId);
+        if (hasValidTrack) return clip;
+        return overlayTrackId ? { ...clip, trackId: overlayTrackId } : clip;
+      });
+
+      pruneEmptyTracks(next as ProjectState);
 
       next.exports = next.exports.map((exp) => {
         const publish = exp.publish as any;
@@ -370,10 +526,14 @@ const projectStateSlice = createSlice({
 });
 
 export const {
+  applyTimelineEdit,
   setMediaFiles,
   setTextElements,
   setTracks,
-  addTrack,
+  addLayer,
+  addMarker,
+  updateMarker,
+  deleteMarker,
   setCurrentTime,
   setProjectName,
   setIsPlaying,

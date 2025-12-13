@@ -1,7 +1,7 @@
 "use client";
 
 import { getFile, storeFile, useAppDispatch, useAppSelector } from "@/app/store";
-import { setMediaFiles } from "@/app/store/slices/projectSlice";
+import { setMediaFiles, setTracks } from "@/app/store/slices/projectSlice";
 import type { MediaFile } from "@/app/types";
 import { mimeToExt } from "@/app/types";
 import { Button } from "@/components/ui/button";
@@ -156,8 +156,22 @@ export default function MediaProperties() {
       const audioId = crypto.randomUUID();
       await storeFile(audioFile, audioId);
 
-      const audioTrackId =
-        tracks.find((track) => track.kind === "audio")?.id ?? undefined;
+      const audioTrackId = (() => {
+        const existing = mediaFiles.find(
+          (clip) => clip.type === "audio" && typeof clip.trackId === "string",
+        )?.trackId;
+        if (existing) return existing;
+        const third = tracks[2]?.id;
+        if (third) return third;
+        const nextId = crypto.randomUUID();
+        dispatch(
+          setTracks([
+            ...tracks,
+            { id: nextId, kind: "layer", name: `Layer ${tracks.length + 1}` },
+          ]),
+        );
+        return nextId;
+      })();
 
       const newAudio: MediaFile = {
         ...mediaFile,

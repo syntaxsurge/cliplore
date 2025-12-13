@@ -39,7 +39,7 @@ export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
         onClick={(e) => e.stopPropagation()}
         onDoubleClick={(e) => e.stopPropagation()}
       >
-        <span className="text-xs font-medium text-white/60">Tracks</span>
+        <span className="text-xs font-medium text-white/60">Layers</span>
       </div>
 
       <div className="relative h-full" style={{ width: `${laneWidthPx}px` }}>
