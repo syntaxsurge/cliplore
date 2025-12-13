@@ -20,6 +20,7 @@ import { throttle } from "lodash";
 import {
   Copy,
   Flag,
+  Info,
   Layers,
   LocateFixed,
   LocateOff,
@@ -47,6 +48,19 @@ import TextTimeline from "./elements-timeline/TextTimeline";
 import { computeRipplePlacement } from "./ops";
 import { categorizeFile } from "@/app/utils/utils";
 import { createMediaFileFromFile } from "@/lib/media/ingest";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const TRACK_LABEL_WIDTH_PX = 144;
 const LIBRARY_ASSET_MIME = "application/x-cliplore-library-asset";
@@ -87,6 +101,7 @@ export const Timeline = () => {
     "top" | "bottom" | null
   >(null);
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
+  const [timelineHelpOpen, setTimelineHelpOpen] = useState(false);
 
   const zoom = isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
   const safeDuration = isFiniteNumber(duration) && duration > 0 ? duration : 0;
@@ -182,34 +197,48 @@ export const Timeline = () => {
     if (!el) return;
 
     const handleWheel = (event: WheelEvent) => {
-      if (!event.altKey) return;
-      event.preventDefault();
+      if (event.altKey) {
+        event.preventDefault();
 
-      const rect = el.getBoundingClientRect();
-      const scrollOffset = el.scrollLeft;
-      const offsetX =
-        event.clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
-      const secondsAtCursor = Math.max(0, offsetX) / zoom;
+        const rect = el.getBoundingClientRect();
+        const scrollOffset = el.scrollLeft;
+        const offsetX =
+          event.clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
+        const secondsAtCursor = Math.max(0, offsetX) / zoom;
 
-      const normalized = Math.min(2, Math.max(0.3, Math.abs(event.deltaY) / 120));
-      const baseFactor = 1.12;
-      const factor = event.deltaY < 0 ? baseFactor : 1 / baseFactor;
-      const nextZoom = Math.max(
-        TIMELINE_ZOOM_MIN,
-        Math.min(
-          TIMELINE_ZOOM_MAX,
-          Math.round(zoom * Math.pow(factor, normalized)),
-        ),
-      );
+        const normalized = Math.min(
+          2,
+          Math.max(0.3, Math.abs(event.deltaY) / 120),
+        );
+        const baseFactor = 1.12;
+        const factor = event.deltaY < 0 ? baseFactor : 1 / baseFactor;
+        const nextZoom = Math.max(
+          TIMELINE_ZOOM_MIN,
+          Math.min(
+            TIMELINE_ZOOM_MAX,
+            Math.round(zoom * Math.pow(factor, normalized)),
+          ),
+        );
 
-      if (nextZoom === zoom) return;
+        if (nextZoom === zoom) return;
 
-      dispatch(setTimelineZoom(nextZoom));
+        dispatch(setTimelineZoom(nextZoom));
 
-      const nextOffsetX = secondsAtCursor * nextZoom;
-      const nextScrollLeft =
-        nextOffsetX - (event.clientX - rect.left) + TRACK_LABEL_WIDTH_PX;
-      el.scrollLeft = Math.max(0, nextScrollLeft);
+        const nextOffsetX = secondsAtCursor * nextZoom;
+        const nextScrollLeft =
+          nextOffsetX - (event.clientX - rect.left) + TRACK_LABEL_WIDTH_PX;
+        el.scrollLeft = Math.max(0, nextScrollLeft);
+        return;
+      }
+
+      if (event.shiftKey) {
+        event.preventDefault();
+        const delta =
+          Math.abs(event.deltaX) > Math.abs(event.deltaY)
+            ? event.deltaX
+            : event.deltaY;
+        el.scrollLeft = Math.max(0, el.scrollLeft + delta);
+      }
     };
 
     el.addEventListener("wheel", handleWheel, { passive: false });
@@ -996,6 +1025,68 @@ export const Timeline = () => {
               aria-label="Timeline zoom"
             />
             <span className="select-none text-lg text-white/70">+</span>
+
+            <Dialog open={timelineHelpOpen} onOpenChange={setTimelineHelpOpen}>
+              <TooltipProvider delayDuration={250}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setTimelineHelpOpen(true)}
+                      className="h-9 w-9 rounded-md border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-0"
+                      aria-label="Timeline shortcuts and help"
+                    >
+                      <Info className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" align="end" className="max-w-[320px]">
+                    <div className="text-xs font-semibold text-popover-foreground">
+                      Timeline shortcuts
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Alt/Option + scroll to zoom. Shift + scroll to pan
+                      horizontally.
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <DialogContent className="max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Timeline shortcuts</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+                  <p>
+                    Use these shortcuts to navigate the timeline quickly while
+                    editing.
+                  </p>
+                  <ul className="list-disc space-y-1 pl-5">
+                    <li>
+                      <span className="font-medium text-foreground">Zoom:</span>{" "}
+                      Hold{" "}
+                      <kbd className="rounded bg-muted px-1">Alt</kbd> /{" "}
+                      <kbd className="rounded bg-muted px-1">Option</kbd> and
+                      scroll to zoom under your cursor.
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">Pan:</span>{" "}
+                      Hold{" "}
+                      <kbd className="rounded bg-muted px-1">Shift</kbd> and
+                      scroll to pan the timeline horizontally.
+                    </li>
+                    <li>
+                      <span className="font-medium text-foreground">
+                        Follow playhead:
+                      </span>{" "}
+                      Press <kbd className="rounded bg-muted px-1">F</kbd> to
+                      toggle auto-scroll.
+                    </li>
+                  </ul>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
       </div>
@@ -1079,17 +1170,27 @@ export const Timeline = () => {
             </div>
           ))}
 
-	          <div
-	            className="absolute top-0 bottom-0 z-50 w-[2px] cursor-ew-resize bg-red-500"
-	            data-timeline-interactive="true"
-	            style={{
-	              left: `${TRACK_LABEL_WIDTH_PX + playheadTime * zoom}px`,
-	            }}
-	            onMouseDown={(e) => {
+          <div
+            className="pointer-events-none absolute top-0 bottom-0 z-50 w-[2px] bg-red-500"
+            style={{
+              left: `${TRACK_LABEL_WIDTH_PX + playheadTime * zoom}px`,
+            }}
+          />
+          <button
+            type="button"
+            className="absolute top-0 z-50 h-12 w-6 -translate-x-1/2 cursor-ew-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/50"
+            data-timeline-interactive="true"
+            style={{
+              left: `${TRACK_LABEL_WIDTH_PX + playheadTime * zoom}px`,
+            }}
+            onMouseDown={(e) => {
               e.stopPropagation();
               setIsDraggingMarker(true);
             }}
-          />
+            aria-label="Drag playhead"
+          >
+            <div className="mx-auto mt-1 h-0 w-0 border-x-[6px] border-x-transparent border-t-[10px] border-t-red-500" />
+          </button>
 
           <div className="divide-y divide-white/10">
             <div

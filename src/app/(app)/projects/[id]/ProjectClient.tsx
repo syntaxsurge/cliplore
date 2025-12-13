@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImperativePanelHandle } from "react-resizable-panels";
 import {
   getFile,
   getProject,
@@ -28,7 +27,7 @@ import MediaProperties from "../../../components/editor/PropertiesSection/MediaP
 import TextProperties from "../../../components/editor/PropertiesSection/TextProperties";
 import { Timeline } from "../../../components/editor/timeline/Timline";
 import { PreviewPlayer } from "../../../components/editor/player/remotion/Player";
-import type { ActiveElement, MediaFile } from "@/app/types";
+import type { MediaFile } from "@/app/types";
 import ExportList from "../../../components/editor/AssetsPanel/tools-section/ExportList";
 import EditorTopBar from "@/app/components/editor/EditorTopBar";
 import { EditorPlayerProvider } from "@/app/components/editor/player/remotion/EditorPlayerContext";
@@ -48,47 +47,8 @@ export default function ProjectClient({ projectId }: Props) {
   const projectState = useAppSelector((state) => state.projectState);
   const { currentProjectId } = useAppSelector((state) => state.projects);
   const [isLoading, setIsLoading] = useState(true);
-  const [showAssets, setShowAssets] = useState(true);
-  const [showProperties, setShowProperties] = useState(true);
-  const [lastAssetsSection, setLastAssetsSection] =
-    useState<Exclude<ActiveElement, null>>("media");
   const router = useRouter();
   const { activeSection, activeElement } = projectState;
-  const assetsPanelRef = useRef<ImperativePanelHandle>(null);
-  const propertiesPanelRef = useRef<ImperativePanelHandle>(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const isMobile = window.matchMedia("(max-width: 1024px)").matches;
-    if (isMobile) {
-      setShowAssets(false);
-      setShowProperties(false);
-      dispatch(setActiveSection(null));
-    }
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (activeSection) setLastAssetsSection(activeSection);
-  }, [activeSection]);
-
-  useEffect(() => {
-    const panel = assetsPanelRef.current;
-    if (!panel) return;
-    if (showAssets) {
-      panel.expand();
-      if (!activeSection) dispatch(setActiveSection(lastAssetsSection));
-    } else {
-      if (activeSection !== null) dispatch(setActiveSection(null));
-      panel.collapse();
-    }
-  }, [activeSection, dispatch, lastAssetsSection, showAssets]);
-
-  useEffect(() => {
-    const panel = propertiesPanelRef.current;
-    if (!panel) return;
-    if (showProperties) panel.expand();
-    else panel.collapse();
-  }, [showProperties]);
 
   useEffect(() => {
     const loadProject = async () => {
@@ -139,7 +99,6 @@ export default function ProjectClient({ projectId }: Props) {
   }, [projectState, dispatch, currentProjectId]);
 
   const handleFocus = (section: "media" | "text" | "export") => {
-    if (!showAssets) setShowAssets(true);
     dispatch(setActiveSection(section));
   };
 
@@ -147,13 +106,7 @@ export default function ProjectClient({ projectId }: Props) {
     <EditorPlayerProvider>
       <SoraJobManager />
       <div className="flex h-screen flex-col select-none bg-black">
-        <EditorTopBar
-          projectId={projectId}
-          showAssets={showAssets}
-          showProperties={showProperties}
-          onToggleAssets={() => setShowAssets((v) => !v)}
-          onToggleProperties={() => setShowProperties((v) => !v)}
-        />
+        <EditorTopBar projectId={projectId} />
         {isLoading ? (
           <div className="fixed inset-0 flex items-center bg-black bg-opacity-50 justify-center z-50">
             <div className="bg-black bg-opacity-70 p-6 rounded-lg flex flex-col items-center">
@@ -168,15 +121,15 @@ export default function ProjectClient({ projectId }: Props) {
               <div className="w-[72px] shrink-0 border-r border-white/10 bg-black/60 p-2">
                 <div className="flex flex-col gap-2">
                   <LibraryButton
-                    active={showAssets && activeSection === "media"}
+                    active={activeSection === "media"}
                     onClick={() => handleFocus("media")}
                   />
                   <TextButton
-                    active={showAssets && activeSection === "text"}
+                    active={activeSection === "text"}
                     onClick={() => handleFocus("text")}
                   />
                   <ExportButton
-                    active={showAssets && activeSection === "export"}
+                    active={activeSection === "export"}
                     onClick={() => handleFocus("export")}
                   />
                 </div>
@@ -187,13 +140,8 @@ export default function ProjectClient({ projectId }: Props) {
                 className="h-full w-full flex-1 overflow-hidden"
               >
                 <ResizablePanel
-                  ref={assetsPanelRef}
                   defaultSize={24}
                   minSize={18}
-                  collapsible
-                  collapsedSize={0}
-                  onCollapse={() => setShowAssets(false)}
-                  onExpand={() => setShowAssets(true)}
                   className="min-w-[280px]"
                 >
                   <div className="h-full overflow-y-auto border-r border-white/10 bg-black/40 p-4">
@@ -229,10 +177,7 @@ export default function ProjectClient({ projectId }: Props) {
                   </div>
                 </ResizablePanel>
 
-                <ResizableHandle
-                  withHandle={showAssets}
-                  className={showAssets ? undefined : "hidden"}
-                />
+                <ResizableHandle withHandle />
 
                 <ResizablePanel defaultSize={54} minSize={30}>
                   <div className="h-full w-full overflow-hidden bg-black">
@@ -240,19 +185,11 @@ export default function ProjectClient({ projectId }: Props) {
                   </div>
                 </ResizablePanel>
 
-                <ResizableHandle
-                  withHandle={showProperties}
-                  className={showProperties ? undefined : "hidden"}
-                />
+                <ResizableHandle withHandle />
 
                 <ResizablePanel
-                  ref={propertiesPanelRef}
                   defaultSize={22}
                   minSize={16}
-                  collapsible
-                  collapsedSize={0}
-                  onCollapse={() => setShowProperties(false)}
-                  onExpand={() => setShowProperties(true)}
                   className="min-w-[280px]"
                 >
                   <div className="h-full overflow-y-auto border-l border-white/10 bg-black/40 p-4">

@@ -16,12 +16,20 @@ import { useEditorPlayer } from "./EditorPlayerContext";
 
 export default function MoveableOverlay() {
   const dispatch = useAppDispatch();
-  const { editingTextId } = useEditorPlayer();
-  const { activeElement, activeElementIndex, mediaFiles, textElements, resolution } =
-    useAppSelector((state) => state.projectState);
+  const { editingTextId, player } = useEditorPlayer();
+  const {
+    activeElement,
+    activeElementIndex,
+    mediaFiles,
+    textElements,
+    resolution,
+    currentTime,
+  } = useAppSelector((state) => state.projectState);
 
   const targetRef = useRef<HTMLElement | null>(null);
   const [target, setTarget] = useState<HTMLElement | null>(null);
+  const moveableRef = useRef<Moveable | null>(null);
+  const updateRectRafRef = useRef<number | null>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(
     null,
   );
@@ -43,18 +51,91 @@ export default function MoveableOverlay() {
     return null;
   }, [activeElement, activeElementIndex, mediaFiles, textElements]);
 
+  const selectedId = selected?.id ?? null;
+
+  const scheduleUpdateRect = useCallback(() => {
+    if (updateRectRafRef.current !== null) {
+      window.cancelAnimationFrame(updateRectRafRef.current);
+    }
+    updateRectRafRef.current = window.requestAnimationFrame(() => {
+      moveableRef.current?.updateRect?.();
+      updateRectRafRef.current = null;
+    });
+  }, []);
+
   useEffect(() => {
-    if (!selected) {
+    return () => {
+      if (updateRectRafRef.current !== null) {
+        window.cancelAnimationFrame(updateRectRafRef.current);
+        updateRectRafRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
       targetRef.current = null;
       setTarget(null);
       return;
     }
-    const el = document.querySelector(
-      `.id-${selected.id}`,
-    ) as HTMLElement | null;
-    targetRef.current = el;
-    setTarget(el);
-  }, [selected]);
+
+    let cancelled = false;
+    let timeoutId: number | null = null;
+    let handleFrameUpdate: (() => void) | null = null;
+    const selector = `.id-${selectedId}`;
+
+    const syncTarget = () => {
+      if (cancelled) return null;
+      const el = document.querySelector(selector) as HTMLElement | null;
+      targetRef.current = el;
+      setTarget((prev) => (prev === el ? prev : el));
+      return el;
+    };
+
+    const rafId = window.requestAnimationFrame(() => {
+      const resolved = syncTarget();
+      scheduleUpdateRect();
+
+      if (resolved) return;
+      if (!player) return;
+
+      handleFrameUpdate = () => {
+        const next = syncTarget();
+        scheduleUpdateRect();
+        if (next) {
+          player.removeEventListener("frameupdate", handleFrameUpdate as () => void);
+          handleFrameUpdate = null;
+          if (timeoutId !== null) {
+            window.clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+        }
+      };
+
+      player.addEventListener("frameupdate", handleFrameUpdate);
+      timeoutId = window.setTimeout(() => {
+        if (handleFrameUpdate) {
+          player.removeEventListener("frameupdate", handleFrameUpdate);
+          handleFrameUpdate = null;
+        }
+      }, 750);
+    });
+
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(rafId);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      if (handleFrameUpdate) {
+        player?.removeEventListener("frameupdate", handleFrameUpdate);
+        handleFrameUpdate = null;
+      }
+    };
+  }, [currentTime, player, scheduleUpdateRect, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    scheduleUpdateRect();
+  }, [scheduleUpdateRect, selectedId, selected, containerScale]);
 
   useEffect(() => {
     const container = document.querySelector(
@@ -208,6 +289,7 @@ export default function MoveableOverlay() {
       </div>
 
       <Moveable
+        ref={moveableRef}
         target={target}
         container={portalContainer}
         origin={false}
@@ -223,6 +305,7 @@ export default function MoveableOverlay() {
         controlPadding={8}
         zoom={containerScale > 0 ? 1 / containerScale : 1}
         className="moveable-canvas"
+        useResizeObserver
         snappable
         snapGap={false}
         snapDirections={{
