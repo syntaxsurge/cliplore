@@ -1,5 +1,3 @@
-import { serverEnv } from "@/lib/env/server";
-
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 
 type SoraSeconds = 4 | 8 | 12;
@@ -9,34 +7,27 @@ function toSoraSecondsString(seconds: SoraSeconds): SoraSecondsString {
   return `${seconds}` as SoraSecondsString;
 }
 
-async function openaiFetch(path: string, init: RequestInit) {
-  if (!serverEnv.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is required to use the Sora Videos API.");
-  }
+type OpenAIAuth = { apiKey: string };
 
-  const res = await fetch(`${OPENAI_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${serverEnv.OPENAI_API_KEY}`,
-      ...(init.headers ?? {}),
-    },
-  });
+async function openaiFetch(apiKey: string, path: string, init: RequestInit) {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${apiKey}`);
 
-  return res;
+  return fetch(`${OPENAI_API_BASE}${path}`, { ...init, headers });
 }
 
-async function openaiJson<T>(path: string, init: RequestInit) {
-  const res = await openaiFetch(path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
-  });
+async function openaiJson<T>(apiKey: string, path: string, init: RequestInit) {
+  const headers = new Headers(init.headers);
+  headers.set("Content-Type", "application/json");
+
+  const res = await openaiFetch(apiKey, path, { ...init, headers });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenAI request failed: ${res.status} ${text}`);
+    throw Object.assign(
+      new Error(`OpenAI request failed: ${res.status} ${text}`),
+      { status: res.status },
+    );
   }
 
   return res.json() as Promise<T>;
@@ -53,8 +44,8 @@ export async function createSoraJob(params: {
   prompt: string;
   seconds?: SoraSeconds;
   size?: "720x1280" | "1280x720" | "1024x1792" | "1792x1024";
-}) {
-  const job = await openaiJson<{ id: string }>("/videos", {
+}, auth: OpenAIAuth) {
+  const job = await openaiJson<{ id: string }>(auth.apiKey, "/videos", {
     method: "POST",
     body: JSON.stringify({
       model: params.model ?? "sora-2",
@@ -67,12 +58,15 @@ export async function createSoraJob(params: {
   return job.id;
 }
 
-export async function getSoraJob(jobId: string): Promise<SoraJob> {
+export async function getSoraJob(
+  jobId: string,
+  auth: OpenAIAuth,
+): Promise<SoraJob> {
   const job = await openaiJson<{
     id: string;
     status: string;
     error?: { message?: string } | string;
-  }>(`/videos/${encodeURIComponent(jobId)}`, { method: "GET" });
+  }>(auth.apiKey, `/videos/${encodeURIComponent(jobId)}`, { method: "GET" });
 
   const rawStatus = job.status.toLowerCase();
   const errorMessage =
@@ -104,14 +98,16 @@ export async function getSoraJob(jobId: string): Promise<SoraJob> {
   return { id: job.id, status: "processing" };
 }
 
-export async function getSoraContentResponse(jobId: string) {
-  const res = await openaiFetch(`/videos/${encodeURIComponent(jobId)}/content`, {
+export async function getSoraContentResponse(jobId: string, auth: OpenAIAuth) {
+  const res = await openaiFetch(auth.apiKey, `/videos/${encodeURIComponent(jobId)}/content`, {
     method: "GET",
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenAI content failed: ${res.status} ${text}`);
+    throw Object.assign(new Error(`OpenAI content failed: ${res.status} ${text}`), {
+      status: res.status,
+    });
   }
 
   return res;

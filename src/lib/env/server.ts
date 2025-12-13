@@ -6,7 +6,7 @@ const optionalNonEmptyString = z.preprocess(
 );
 
 const serverSchema = z.object({
-  OPENAI_API_KEY: optionalNonEmptyString,
+  OPENAI_BYOK_COOKIE_SECRET: optionalNonEmptyString,
   PINATA_JWT: optionalNonEmptyString,
   B2_S3_ENDPOINT: optionalNonEmptyString,
   B2_S3_REGION: optionalNonEmptyString,
@@ -17,7 +17,7 @@ const serverSchema = z.object({
 });
 
 export const serverEnv = serverSchema.parse({
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  OPENAI_BYOK_COOKIE_SECRET: process.env.OPENAI_BYOK_COOKIE_SECRET,
   PINATA_JWT: process.env.PINATA_JWT,
   B2_S3_ENDPOINT: process.env.B2_S3_ENDPOINT,
   B2_S3_REGION: process.env.B2_S3_REGION,

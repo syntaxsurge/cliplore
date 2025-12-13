@@ -23,6 +23,7 @@ import {
   LICENSE_PRESETS,
   type LicensePreset,
 } from "@/lib/story/license-presets";
+import { OpenAIKeyCard } from "./OpenAIKeyCard";
 
 const LICENSE_PRESET_ORDER: LicensePreset[] = [
   "commercial-5",
@@ -135,6 +136,8 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <OpenAIKeyCard />
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <Card>

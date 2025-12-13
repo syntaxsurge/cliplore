@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
 import { getSoraContentResponse } from "@/features/ai/services/sora";
+import { getOpenAIKeyCookie } from "@/lib/openai/byok-cookie";
 
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
+  const apiKey = await getOpenAIKeyCookie();
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "OpenAI key not set. Go to Settings → AI to add your API key." },
+      { status: 401 },
+    );
+  }
+
   const { searchParams } = new URL(req.url);
   const jobId = searchParams.get("jobId");
 
@@ -12,7 +21,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const res = await getSoraContentResponse(jobId);
+    const res = await getSoraContentResponse(jobId, { apiKey });
     const contentType = res.headers.get("content-type") ?? "video/mp4";
 
     if (contentType.includes("application/json")) {
@@ -52,9 +61,27 @@ export async function GET(req: Request) {
     });
   } catch (error) {
     console.error("Sora content proxy error", error);
+    const status =
+      typeof (error as { status?: unknown } | null)?.status === "number"
+        ? (error as { status: number }).status
+        : null;
+
+    if (status === 401 || status === 403) {
+      return NextResponse.json(
+        { error: "OpenAI key is invalid or expired. Update it in Settings → AI." },
+        { status: 401 },
+      );
+    }
+
+    if (status === 429) {
+      return NextResponse.json(
+        { error: "OpenAI rate limit exceeded. Try again in a moment." },
+        { status: 429 },
+      );
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to fetch video content";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }
-

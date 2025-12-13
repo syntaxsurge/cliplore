@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAppSelector } from "@/app/store";
 import type { MediaType } from "@/app/types";
 import UploadMedia from "../AddButtons/UploadMedia";
@@ -19,6 +20,8 @@ import { cn } from "@/lib/utils";
 import { History, Search, Sparkles } from "lucide-react";
 import { SoraPanel } from "./SoraPanel";
 import { SoraHistoryPanel } from "./SoraHistoryPanel";
+import { ensureOpenAIKeyOrRedirect } from "@/features/ai/byok/require-openai-key";
+import toast from "react-hot-toast";
 
 type LibraryFilter = "all" | Exclude<MediaType, "unknown">;
 
@@ -30,6 +33,9 @@ const filters: { id: LibraryFilter; label: string }[] = [
 ];
 
 export default function LibraryPanel() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const totalFiles = useAppSelector(
     (state) => state.projectState.filesID?.length ?? 0,
   );
@@ -39,6 +45,21 @@ export default function LibraryPanel() {
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const normalizedQuery = useMemo(() => query.trim(), [query]);
+  const nextPath = useMemo(() => {
+    const queryString = searchParams.toString();
+    return queryString ? `${pathname}?${queryString}` : pathname;
+  }, [pathname, searchParams]);
+
+  const handleOpenGenerate = async () => {
+    try {
+      const ok = await ensureOpenAIKeyOrRedirect(router.push, nextPath);
+      if (!ok) return;
+      setAiOpen(true);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to check OpenAI key status.");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -71,17 +92,16 @@ export default function LibraryPanel() {
 
         <div className="grid grid-cols-2 gap-2">
           <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-            <DialogTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="w-full border-white/10 bg-black/30 text-white hover:bg-black/40 hover:text-white"
-              >
-                <Sparkles className="h-4 w-4" aria-hidden="true" />
-                Generate
-              </Button>
-            </DialogTrigger>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleOpenGenerate}
+              className="w-full border-white/10 bg-black/30 text-white hover:bg-black/40 hover:text-white"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              Generate
+            </Button>
             <DialogContent className="max-w-xl border-white/10 bg-black/90 text-white">
               <DialogHeader>
                 <DialogTitle>Generate with Sora</DialogTitle>

@@ -6,7 +6,7 @@ Cliplore is a Sora-powered, IP-native video studio built on Next.js. It combines
 
 - 🎞️ Real-time Preview: Remotion-based preview so edits are instant.
 - 🧰 Browser render: Export with ffmpeg.wasm (CPU) or Diffusion Studio Core (hardware‑accelerated WebCodecs) for faster final renders.
-- 🤖 Sora generation: Server-side OpenAI video job endpoints (`/api/sora`, `/api/sora/content`) to create, poll, and download renders.
+- 🤖 Sora generation: Server-side OpenAI video job endpoints (`/api/sora`, `/api/sora/content`) to create, poll, and download renders using a user-provided API key saved in Settings.
 - 🪪 Story IP: Helpers to register IP Assets, attach PIL terms, and mint license tokens on Story.
 - 👤 Wallet + profile: Wallet-first app shell (RainbowKit) with Convex-backed creator defaults in `/settings` (display name + default license preset).
 - 📊 Dashboard: `/dashboard` surfaces wallet status, Convex project/IP stats, and quick links into the editor.
@@ -51,7 +51,7 @@ Then navigate to [http://localhost:3000](http://localhost:3000)
 Set these in `.env.local`:
 
 ```
-OPENAI_API_KEY=sk-...
+OPENAI_BYOK_COOKIE_SECRET= # used to encrypt/decrypt the user's OpenAI key cookie
 PINATA_JWT=Bearer ...
 
 CONVEX_DEPLOYMENT=dev:your-deployment-slug # used by Convex CLI for local dev
@@ -66,3 +66,5 @@ NEXT_PUBLIC_SPG_NFT_CONTRACT_ADDRESS=0x... # SPG collection to mint into
 NEXT_PUBLIC_WIP_TOKEN_ADDRESS=0x... # WIP token for PIL mint fees
 NEXT_PUBLIC_DIFFUSION_LICENSE_KEY=... # optional, removes Diffusion Core watermark for GPU renders
 ```
+
+OpenAI API keys are entered by the user in `Settings → AI` and stored on the device as an encrypted, HTTP-only cookie.

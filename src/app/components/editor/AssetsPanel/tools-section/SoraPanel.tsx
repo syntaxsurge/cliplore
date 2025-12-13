@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch } from "@/app/store";
 import { addSoraJob } from "@/app/store/slices/projectSlice";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import type { SoraJob } from "@/app/types";
+import { ensureOpenAIKeyOrRedirect } from "@/features/ai/byok/require-openai-key";
 
 type Props = {
   onGenerated?: () => void;
@@ -14,6 +16,9 @@ type Props = {
 };
 
 export function SoraPanel({ onGenerated, hideHeader = false, className }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const [prompt, setPrompt] = useState("");
   const [seconds, setSeconds] = useState<4 | 8 | 12>(8);
@@ -21,8 +26,23 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
     "720x1280" | "1280x720" | "1024x1792" | "1792x1024"
   >("1280x720");
 
+  const nextPath = useMemo(() => {
+    const queryString = searchParams.toString();
+    return queryString ? `${pathname}?${queryString}` : pathname;
+  }, [pathname, searchParams]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    try {
+      const ok = await ensureOpenAIKeyOrRedirect(router.push, nextPath);
+      if (!ok) return;
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to check OpenAI key status.");
+      return;
+    }
+
     if (!prompt.trim()) {
       toast.error("Enter a prompt to generate a Sora clip.");
       return;
