@@ -35,6 +35,37 @@ type StoredMultipartSession = {
   createdAt: number;
 };
 
+let ensuredCorsOrigin: string | null = null;
+let ensureCorsPromise: Promise<void> | null = null;
+
+async function ensureBucketCorsForOrigin(origin: string) {
+  if (ensuredCorsOrigin === origin) return;
+  if (ensureCorsPromise) return ensureCorsPromise;
+
+  ensureCorsPromise = (async () => {
+    const res = await fetch("/api/storage/cors/ensure", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origin }),
+    });
+
+    if (res.status === 404) {
+      ensuredCorsOrigin = origin;
+      return;
+    }
+
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) {
+      throw new Error(data.error ?? "Failed to ensure Backblaze bucket CORS");
+    }
+    ensuredCorsOrigin = origin;
+  })().finally(() => {
+    ensureCorsPromise = null;
+  });
+
+  return ensureCorsPromise;
+}
+
 function getUploadSessionStorageKey(input: {
   wallet: string;
   projectId: string;
@@ -247,7 +278,25 @@ export async function uploadFileToB2(input: {
         signal: input.signal,
       });
     } catch (err) {
-      throw new Error(formatFetchFailureMessage(err));
+      const origin = window.location?.origin ?? "";
+      try {
+        if (origin) await ensureBucketCorsForOrigin(origin);
+      } catch (ensureErr) {
+        const ensureSuffix =
+          ensureErr instanceof Error ? ` Auto-configuring CORS failed: ${ensureErr.message}` : "";
+        throw new Error(`${formatFetchFailureMessage(err)}${ensureSuffix}`);
+      }
+
+      try {
+        putRes = await fetch(init.uploadUrl, {
+          method: "PUT",
+          headers: init.requiredHeaders,
+          body: input.file,
+          signal: input.signal,
+        });
+      } catch (retryErr) {
+        throw new Error(formatFetchFailureMessage(retryErr));
+      }
     }
 
     if (!putRes.ok) {
@@ -315,7 +364,26 @@ export async function uploadFileToB2(input: {
           signal: input.signal,
         });
       } catch (err) {
-        throw new Error(formatFetchFailureMessage(err));
+        const origin = window.location?.origin ?? "";
+        try {
+          if (origin) await ensureBucketCorsForOrigin(origin);
+        } catch (ensureErr) {
+          const ensureSuffix =
+            ensureErr instanceof Error
+              ? ` Auto-configuring CORS failed: ${ensureErr.message}`
+              : "";
+          throw new Error(`${formatFetchFailureMessage(err)}${ensureSuffix}`);
+        }
+
+        try {
+          res = await fetch(uploadUrl, {
+            method: "PUT",
+            body: chunk,
+            signal: input.signal,
+          });
+        } catch (retryErr) {
+          throw new Error(formatFetchFailureMessage(retryErr));
+        }
       }
 
       if (!res.ok) {
