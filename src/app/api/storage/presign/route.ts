@@ -93,7 +93,6 @@ export async function POST(req: Request) {
           Bucket: bucket,
           Key: key,
           ContentType: contentType,
-          ContentDisposition: `inline; filename="${fileName}"`,
         }),
         { expiresIn: EXPIRES_IN_SECONDS },
       );
@@ -117,7 +116,6 @@ export async function POST(req: Request) {
         Bucket: bucket,
         Key: key,
         ContentType: contentType,
-        ContentDisposition: `inline; filename="${fileName}"`,
       }),
     );
 
@@ -141,4 +139,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

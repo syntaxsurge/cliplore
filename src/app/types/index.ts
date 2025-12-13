@@ -34,6 +34,7 @@ export interface MediaFile {
   startTime: number; // within the source video
   src?: string;
   endTime: number;
+  sourceDurationSeconds?: number;
   positionStart: number; // position in the final video
   positionEnd: number;
   includeInMerge: boolean;

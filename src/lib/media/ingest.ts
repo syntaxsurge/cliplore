@@ -154,6 +154,9 @@ export async function createMediaFileFromFile(options: {
     return defaultDurationSeconds;
   })();
 
+  const sourceDurationSeconds =
+    type === "video" || type === "audio" ? durationSeconds : undefined;
+
   const safePositionStart =
     isFiniteNumber(positionStart) && positionStart >= 0 ? positionStart : 0;
   const positionEnd = safePositionStart + durationSeconds;
@@ -196,6 +199,7 @@ export async function createMediaFileFromFile(options: {
     fileId,
     startTime: 0,
     endTime: clamp(durationSeconds, 0, durationSeconds),
+    sourceDurationSeconds,
     src,
     positionStart: safePositionStart,
     positionEnd,

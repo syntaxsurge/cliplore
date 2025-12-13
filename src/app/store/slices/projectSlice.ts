@@ -569,20 +569,48 @@ const projectStateSlice = createSlice({
       };
 
       next.mediaFiles = next.mediaFiles.map((clip) => {
+        const sourceDurationSeconds =
+          clip.type === "video" || clip.type === "audio"
+            ? (() => {
+                const existing =
+                  typeof clip.sourceDurationSeconds === "number" &&
+                  Number.isFinite(clip.sourceDurationSeconds) &&
+                  clip.sourceDurationSeconds > 0
+                    ? clip.sourceDurationSeconds
+                    : 0;
+                const endTime =
+                  typeof clip.endTime === "number" && Number.isFinite(clip.endTime)
+                    ? Math.max(0, clip.endTime)
+                    : 0;
+                const candidate = existing > 0 ? existing : endTime;
+                return Math.max(candidate, endTime);
+              })()
+            : clip.sourceDurationSeconds;
+
+        const clipWithSourceDuration =
+          sourceDurationSeconds !== clip.sourceDurationSeconds
+            ? { ...clip, sourceDurationSeconds }
+            : clip;
+
         const hasValidTrack =
-          typeof clip.trackId === "string" && trackIds.has(clip.trackId);
-        if (hasValidTrack) return clip;
+          typeof clipWithSourceDuration.trackId === "string" &&
+          trackIds.has(clipWithSourceDuration.trackId);
+        if (hasValidTrack) return clipWithSourceDuration;
 
-        if (clip.type === "audio") {
+        if (clipWithSourceDuration.type === "audio") {
           const trackId = ensureAudioTrackId();
-          return { ...clip, trackId };
+          return { ...clipWithSourceDuration, trackId };
         }
 
-        if (clip.type === "image") {
-          return overlayTrackId ? { ...clip, trackId: overlayTrackId } : clip;
+        if (clipWithSourceDuration.type === "image") {
+          return overlayTrackId
+            ? { ...clipWithSourceDuration, trackId: overlayTrackId }
+            : clipWithSourceDuration;
         }
 
-        return baseTrackId ? { ...clip, trackId: baseTrackId } : clip;
+        return baseTrackId
+          ? { ...clipWithSourceDuration, trackId: baseTrackId }
+          : clipWithSourceDuration;
       });
 
       next.textElements = next.textElements.map((clip) => {

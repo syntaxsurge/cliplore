@@ -7,9 +7,10 @@ type HeaderProps = {
   labelWidth: number;
   totalSeconds: number;
   zoom: number;
+  onLabelClick?: () => void;
 };
 
-export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
+export const Header = ({ labelWidth, totalSeconds, zoom, onLabelClick }: HeaderProps) => {
   const secondInterval = 0.2; // Every 0.2s
   const safeTotalSeconds =
     isFiniteNumber(totalSeconds) && totalSeconds > 0
@@ -36,8 +37,14 @@ export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
       <div
         className="sticky left-0 z-30 flex h-full items-center border-r border-white/10 bg-[#1E1D21] px-3"
         style={{ width: `${labelWidth}px` }}
-        onClick={(e) => e.stopPropagation()}
-        onDoubleClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onLabelClick?.();
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onLabelClick?.();
+        }}
       >
         <span className="text-xs font-medium text-white/60">Layers</span>
       </div>

@@ -232,11 +232,12 @@ export default function TextTimeline({
         .filter((clip) => (clip.trackId ?? fallbackTrackId) === trackId)
         .map((clip) => (
         <React.Fragment key={clip.id}>
-          <div
-            ref={getTargetRef(clip.id)}
-            onClick={() => handleClick("text", clip.id)}
-            className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 text-sm text-white/90 shadow-sm ${
-              activeElement === "text" &&
+	          <div
+	            data-timeline-clip="true"
+	            ref={getTargetRef(clip.id)}
+	            onClick={() => handleClick("text", clip.id)}
+	            className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 text-sm text-white/90 shadow-sm ${
+	              activeElement === "text" &&
               textElements[activeElementIndex]?.id === clip.id
                 ? "ring-2 ring-blue-500/70"
                 : "hover:bg-white/10"

@@ -2,13 +2,14 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { useEffect, useRef, useState } from "react";
 import { getFile, storeFile, useAppDispatch, useAppSelector } from "@/app/store";
-import { Heart, Save } from "lucide-react";
+import { Heart, Save, Upload } from "lucide-react";
 import { extractConfigs } from "@/app/utils/extractConfigs";
 import { mimeToExt } from "@/app/types";
 import { toast } from "react-hot-toast";
 import FfmpegProgressBar from "./ProgressBar";
 import { renderWithDiffusionCore } from "@/lib/media/core-render";
 import { addExport } from "@/app/store/slices/projectSlice";
+import { useParams, useRouter } from "next/navigation";
 
 interface FileUploaderProps {
   loadFunction: () => Promise<void>;
@@ -23,8 +24,11 @@ export default function FfmpegRender({
   logMessages,
   }: FileUploaderProps) {
     const dispatch = useAppDispatch();
-    const { mediaFiles, projectName, exportSettings, duration, textElements, tracks } =
+    const { id: projectId, mediaFiles, projectName, exportSettings, duration, textElements, tracks } =
       useAppSelector((state) => state.projectState);
+    const params = useParams<{ id: string }>();
+    const router = useRouter();
+    const routeProjectId = typeof params?.id === "string" ? params.id : null;
   const totalDuration = duration;
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
@@ -32,6 +36,7 @@ export default function FfmpegRender({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [gpuProgress, setGpuProgress] = useState<number | null>(null);
+  const [lastExportId, setLastExportId] = useState<string | null>(null);
   const engine = exportSettings.renderEngine ?? "ffmpeg";
 
   useEffect(() => {
@@ -531,9 +536,10 @@ export default function FfmpegRender({
       setLoaded(true);
       setIsRendering(false);
 
+      const exportId = crypto.randomUUID();
       dispatch(
         addExport({
-          id: crypto.randomUUID(),
+          id: exportId,
           fileId: exportFileId,
           name: exportFile.name,
           createdAt: now.toISOString(),
@@ -542,6 +548,7 @@ export default function FfmpegRender({
           config: JSON.parse(JSON.stringify(exportSettings)),
         }),
       );
+      setLastExportId(exportId);
 
       toast.success("Export saved to your project.");
     } catch (err) {
@@ -635,26 +642,45 @@ export default function FfmpegRender({
                   </div>
                 </div>
               )
-            ) : (
-              <div>
-                {previewUrl && (
-                  <video src={previewUrl} controls className="w-full mb-4" />
-                )}
-                <div className="flex justify-between">
-                  <a
-                    href={previewUrl || "#"}
-                    download={`${projectName}.mp4`}
-                    className={`inline-flex items-center p-3 bg-white hover:bg-[#ccc] rounded-lg text-gray-900 font-bold transition-all transform `}
-                  >
-                    <Save size={18} />
-                    <span className="ml-2">Save Video</span>
-                  </a>
-                  <a
-                    href="https://github.com/sponsors/syntaxsurge"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={`inline-flex items-center p-3 bg-pink-600 hover:bg-pink-500 rounded-lg text-gray-900 font-bold transition-all transform`}
-                  >
+	            ) : (
+	              <div>
+	                {previewUrl && (
+	                  <video src={previewUrl} controls className="w-full mb-4" />
+	                )}
+	                <div className="flex flex-wrap justify-between gap-3">
+	                  <a
+	                    href={previewUrl || "#"}
+	                    download={`${projectName}.mp4`}
+	                    className={`inline-flex items-center p-3 bg-white hover:bg-[#ccc] rounded-lg text-gray-900 font-bold transition-all transform `}
+	                  >
+	                    <Save size={18} />
+	                    <span className="ml-2">Save Video</span>
+	                  </a>
+	                  {lastExportId && (routeProjectId || projectId) ? (
+	                    <button
+	                      type="button"
+	                      onClick={() => {
+	                        const resolvedProjectId = routeProjectId || projectId;
+	                        if (!resolvedProjectId) return;
+	                        router.push(
+	                          `/projects/${resolvedProjectId}/publish?exportId=${encodeURIComponent(
+	                            lastExportId,
+	                          )}`,
+	                        );
+	                      }}
+	                      className="inline-flex items-center rounded-lg bg-blue-600 p-3 font-bold text-white transition-all hover:bg-blue-500"
+	                      aria-label="Publish this export"
+	                    >
+	                      <Upload size={18} />
+	                      <span className="ml-2">Publish</span>
+	                    </button>
+	                  ) : null}
+	                  <a
+	                    href="https://github.com/sponsors/syntaxsurge"
+	                    target="_blank"
+	                    rel="noopener noreferrer"
+	                    className={`inline-flex items-center p-3 bg-pink-600 hover:bg-pink-500 rounded-lg text-gray-900 font-bold transition-all transform`}
+	                  >
                     <Heart size={20} className="mr-2" />
                     Sponsor on Github
                   </a>

@@ -57,6 +57,20 @@ async function readJson<T>(res: Response): Promise<T> {
   return data;
 }
 
+function formatFetchFailureMessage(err: unknown) {
+  const suffix =
+    err instanceof Error && err.message
+      ? ` (${err.message})`
+      : err
+        ? ` (${String(err)})`
+        : "";
+  const origin =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "this origin";
+  return `Upload request failed${suffix}. This is usually caused by blocked cross-origin PUT (CORS) or an invalid Backblaze endpoint. Ensure your B2 bucket CORS allows PUT from ${origin} and your presigned upload URL uses https.`;
+}
+
 function inferContentType(kind: StorageUploadKind, file: File) {
   if (file.type) return file.type;
   return kind === "video" ? "video/mp4" : "image/png";
@@ -224,12 +238,17 @@ export async function uploadFileToB2(input: {
     }));
 
   if ("strategy" in init && init.strategy === "single") {
-    const putRes = await fetch(init.uploadUrl, {
-      method: "PUT",
-      headers: init.requiredHeaders,
-      body: input.file,
-      signal: input.signal,
-    });
+    let putRes: Response;
+    try {
+      putRes = await fetch(init.uploadUrl, {
+        method: "PUT",
+        headers: init.requiredHeaders,
+        body: input.file,
+        signal: input.signal,
+      });
+    } catch (err) {
+      throw new Error(formatFetchFailureMessage(err));
+    }
 
     if (!putRes.ok) {
       const text = await putRes.text();
@@ -288,11 +307,16 @@ export async function uploadFileToB2(input: {
 
       const { uploadUrl } = await signPart({ key, uploadId, partNumber });
 
-      const res = await fetch(uploadUrl, {
-        method: "PUT",
-        body: chunk,
-        signal: input.signal,
-      });
+      let res: Response;
+      try {
+        res = await fetch(uploadUrl, {
+          method: "PUT",
+          body: chunk,
+          signal: input.signal,
+        });
+      } catch (err) {
+        throw new Error(formatFetchFailureMessage(err));
+      }
 
       if (!res.ok) {
         const text = await res.text();

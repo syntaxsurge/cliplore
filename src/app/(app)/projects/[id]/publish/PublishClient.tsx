@@ -18,6 +18,7 @@ import { rehydrate } from "@/app/store/slices/projectSlice";
 import { setCurrentProject, updateProject } from "@/app/store/slices/projectsSlice";
 import { uploadFileToB2 } from "@/lib/storage/upload-client";
 import { formatBytes, ipfsUriToGatewayUrl } from "@/lib/utils";
+import { formatTime } from "@/app/utils/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -97,6 +98,22 @@ export default function PublishClient({
   const [thumbnailTimestamp, setThumbnailTimestamp] = useState(0.1);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  const exportDurationSeconds = useMemo(() => {
+    const fromExport =
+      typeof selectedExport?.durationSeconds === "number" &&
+      Number.isFinite(selectedExport.durationSeconds) &&
+      selectedExport.durationSeconds > 0
+        ? selectedExport.durationSeconds
+        : 0;
+    const fromVideo =
+      typeof videoRef.current?.duration === "number" &&
+      Number.isFinite(videoRef.current.duration) &&
+      videoRef.current.duration > 0
+        ? videoRef.current.duration
+        : 0;
+    return Math.max(fromExport, fromVideo);
+  }, [selectedExport]);
 
   const isSpgConfigured =
     (clientEnv.NEXT_PUBLIC_SPG_NFT_CONTRACT_ADDRESS as string) !== zeroAddress;
@@ -224,48 +241,73 @@ export default function PublishClient({
     }
   };
 
-  const handleGenerateThumbnail = async () => {
+  const handleGenerateThumbnail = async (timeOverride?: number) => {
     if (!exportPreviewUrl) {
       toast.error("Select an export first.");
       return;
-    }
+	    }
 
-    try {
-      const video = document.createElement("video");
-      video.src = exportPreviewUrl;
-      video.muted = true;
-      video.playsInline = true;
-      await new Promise<void>((resolve, reject) => {
-        const onLoaded = () => resolve();
-        const onError = () => reject(new Error("Failed to load video"));
-        video.addEventListener("loadeddata", onLoaded, { once: true });
-        video.addEventListener("error", onError, { once: true });
-      });
+	    try {
+	      const desired =
+	        typeof timeOverride === "number" && Number.isFinite(timeOverride)
+	          ? timeOverride
+	        : Number.isFinite(thumbnailTimestamp)
+	          ? thumbnailTimestamp
+	          : 0.1;
 
-      const duration = Number.isFinite(video.duration) ? video.duration : 0;
-      const desired = Number.isFinite(thumbnailTimestamp)
-        ? thumbnailTimestamp
-        : 0.1;
-      const t = Math.max(0, Math.min(desired, duration || desired));
-      video.currentTime = t;
-      await new Promise<void>((resolve) => {
-        video.addEventListener("seeked", () => resolve(), { once: true });
-      });
+      const existingVideo = videoRef.current;
+      const video =
+        existingVideo && existingVideo.src === exportPreviewUrl ? existingVideo : null;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Canvas context missing");
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const capture = async (el: HTMLVideoElement) => {
+        if (Number.isFinite(el.duration) && el.duration > 0) {
+          const t = Math.max(0, Math.min(desired, el.duration));
+          el.pause();
+          if (!Number.isFinite(el.currentTime) || Math.abs(el.currentTime - t) > 0.01) {
+            el.currentTime = t;
+            await new Promise<void>((resolve) => {
+              el.addEventListener("seeked", () => resolve(), { once: true });
+            });
+          }
+          setThumbnailTimestamp(t);
+        }
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("Thumbnail encoding failed"))),
-          "image/png",
-          0.92,
-        );
-      });
+        const canvas = document.createElement("canvas");
+        canvas.width = el.videoWidth || 1280;
+        canvas.height = el.videoHeight || 720;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Canvas context missing");
+        ctx.drawImage(el, 0, 0, canvas.width, canvas.height);
+
+        return await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(
+            (b) => (b ? resolve(b) : reject(new Error("Thumbnail encoding failed"))),
+            "image/png",
+            0.92,
+          );
+        });
+      };
+
+      const blob = video
+        ? await capture(video)
+        : await (async () => {
+            const temp = document.createElement("video");
+            temp.src = exportPreviewUrl;
+            temp.muted = true;
+            temp.playsInline = true;
+            await new Promise<void>((resolve, reject) => {
+              const onLoaded = () => resolve();
+              const onError = () => reject(new Error("Failed to load video"));
+              temp.addEventListener("loadeddata", onLoaded, { once: true });
+              temp.addEventListener("error", onError, { once: true });
+            });
+            try {
+              return await capture(temp);
+            } finally {
+              temp.removeAttribute("src");
+              temp.load();
+            }
+          })();
 
       const file = new File([blob], `${title || "thumbnail"}.png`, {
         type: "image/png",
@@ -655,12 +697,16 @@ export default function PublishClient({
                 Publishing always references a specific exported artifact.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {sortedExports.map((exp) => (
-                <label
-                  key={exp.id}
-                  className="flex cursor-pointer items-start justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3 text-sm hover:bg-muted/40"
-                >
+	            <CardContent className="space-y-3">
+	              {sortedExports.map((exp) => (
+	                <label
+	                  key={exp.id}
+	                  className={`flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${
+	                    exp.id === selectedExportId
+	                      ? "border-emerald-500/40 bg-emerald-500/10 ring-1 ring-emerald-500/20"
+	                      : "border-border bg-card hover:bg-muted/40"
+	                  }`}
+	                >
                   <div className="space-y-1">
                     <p className="font-medium text-foreground">{exp.name}</p>
                     <p className="text-xs text-muted-foreground">
@@ -763,43 +809,83 @@ export default function PublishClient({
                     />
                   </div>
 
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="space-y-1">
+	                  <div className="space-y-3">
+	                    <div className="flex flex-wrap items-center justify-between gap-2">
+	                      <div className="space-y-1">
                         <p className="text-sm font-medium text-foreground">
                           Thumbnail (optional)
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Used for Story metadata and marketplace previews.
                         </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Input
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          step={0.1}
-                          value={thumbnailTimestamp}
-                          onChange={(e) => {
-                            const next = Number(e.target.value);
-                            setThumbnailTimestamp(Number.isFinite(next) ? next : 0);
-                          }}
-                          className="h-9 w-24"
-                          aria-label="Thumbnail timestamp in seconds"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => void handleGenerateThumbnail()}
-                          disabled={!exportPreviewUrl}
-                        >
-                          Generate
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
+	                      </div>
+	                      <div className="flex flex-wrap gap-2">
+	                        <div className="w-full max-w-[260px] space-y-1">
+	                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+	                            <span>
+	                              {formatTime(Math.max(0, thumbnailTimestamp))} /{" "}
+	                              {formatTime(Math.max(0, exportDurationSeconds))}
+	                            </span>
+	                            <span>{Math.max(0, thumbnailTimestamp).toFixed(2)}s</span>
+	                          </div>
+	                          <input
+	                            type="range"
+	                            min={0}
+	                            max={Math.max(0.01, exportDurationSeconds)}
+	                            step={0.01}
+	                            value={Math.min(
+	                              Math.max(0, thumbnailTimestamp),
+	                              Math.max(0.01, exportDurationSeconds),
+	                            )}
+	                            onPointerDown={() => {
+	                              videoRef.current?.pause();
+	                            }}
+	                            onChange={(e) => {
+	                              const next = Number(e.target.value);
+	                              const clamped = Number.isFinite(next) ? Math.max(0, next) : 0;
+	                              setThumbnailTimestamp(clamped);
+	                              const video = videoRef.current;
+	                              if (!video) return;
+	                              if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+	                              video.currentTime = Math.max(
+	                                0,
+	                                Math.min(clamped, video.duration),
+	                              );
+	                            }}
+	                            className="w-full accent-emerald-500"
+	                            aria-label="Thumbnail scrubber"
+	                            disabled={!exportPreviewUrl || exportDurationSeconds <= 0}
+	                          />
+	                        </div>
+	                        <Button
+	                          type="button"
+	                          size="sm"
+	                          variant="secondary"
+	                          onClick={() => void handleGenerateThumbnail()}
+	                          disabled={!exportPreviewUrl}
+	                        >
+	                          Capture frame
+	                        </Button>
+	                        <Button
+	                          type="button"
+	                          size="sm"
+	                          variant="outline"
+	                          onClick={() => {
+	                            const t = videoRef.current?.currentTime;
+	                            if (typeof t !== "number" || !Number.isFinite(t)) {
+	                              void handleGenerateThumbnail();
+	                              return;
+	                            }
+	                            void handleGenerateThumbnail(t);
+	                          }}
+	                          disabled={!exportPreviewUrl}
+	                        >
+	                          Use current frame
+	                        </Button>
+	                        <Button
+	                          type="button"
+	                          size="sm"
+	                          variant="outline"
                           onClick={() => handleSelectThumbnailFile(null)}
                           disabled={!thumbnailFile}
                         >

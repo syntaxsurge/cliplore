@@ -38,6 +38,16 @@ type Props = {
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
+const getSourceDurationSeconds = (clip: MediaFile) => {
+  const source =
+    isFiniteNumber(clip.sourceDurationSeconds) && clip.sourceDurationSeconds > 0
+      ? clip.sourceDurationSeconds
+      : null;
+  if (source) return source;
+  const fallback = isFiniteNumber(clip.endTime) && clip.endTime > 0 ? clip.endTime : null;
+  return fallback;
+};
+
 export function MediaTimelineTrack({
   trackId,
   mediaTypes,
@@ -169,11 +179,11 @@ export function MediaTimelineTrack({
     return bounds;
   };
 
-  const handleRightResize = (
-    clip: MediaFile,
-    target: HTMLElement,
-    width: number,
-  ) => {
+	  const handleRightResize = (
+	    clip: MediaFile,
+	    target: HTMLElement,
+	    width: number,
+	  ) => {
     const currentTrackId =
       clip.trackId ?? fallbackTrackIdForType[clip.type] ?? trackId;
     const bounds = getTrackBounds(currentTrackId);
@@ -183,33 +193,54 @@ export function MediaTimelineTrack({
       desiredStart: clip.positionEnd,
     });
 
-    const desiredDuration = Math.max(0, width / zoom);
-    const unclampedEnd = clip.positionStart + desiredDuration;
-    const clampedEnd = Math.min(unclampedEnd, maxEnd);
-    const nextDuration = Math.max(0, clampedEnd - clip.positionStart);
+	    const playbackSpeed =
+	      isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
+	        ? clip.playbackSpeed
+	        : 1;
 
-    const playbackSpeed =
-      isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
-        ? clip.playbackSpeed
-        : 1;
+	    const sourceDurationSeconds =
+	      clip.type === "video" || clip.type === "audio"
+	        ? getSourceDurationSeconds(clip)
+	        : null;
+	    const maxEndBySource =
+	      clip.type === "video" || clip.type === "audio"
+	        ? (() => {
+	            if (!sourceDurationSeconds) return clip.positionEnd;
+	            const startTime =
+	              isFiniteNumber(clip.startTime) && clip.startTime >= 0 ? clip.startTime : 0;
+	            const availableSeconds = Math.max(0, sourceDurationSeconds - startTime);
+	            const maxDurationOnTimeline = availableSeconds / playbackSpeed;
+	            return clip.positionStart + maxDurationOnTimeline;
+	          })()
+	        : Number.POSITIVE_INFINITY;
 
-    const updates: Partial<MediaFile> = {
-      positionEnd: clampedEnd,
-    };
+	    const desiredDuration = Math.max(0, width / zoom);
+	    const unclampedEnd = clip.positionStart + desiredDuration;
+	    const clampedEnd = Math.min(unclampedEnd, maxEnd, maxEndBySource);
+	    const nextDuration = Math.max(0, clampedEnd - clip.positionStart);
 
-    if (clip.type === "video" || clip.type === "audio") {
-      updates.endTime = clip.startTime + nextDuration * playbackSpeed;
-    }
+	    const updates: Partial<MediaFile> = {
+	      positionEnd: clampedEnd,
+	    };
 
-    onUpdateMedia(clip.id, updates);
-    target.style.width = `${Math.max(2, nextDuration * zoom)}px`;
-  };
+	    if (clip.type === "video" || clip.type === "audio") {
+	      const startTime =
+	        isFiniteNumber(clip.startTime) && clip.startTime >= 0 ? clip.startTime : 0;
+	      const nextEndTime = startTime + nextDuration * playbackSpeed;
+	      updates.endTime = sourceDurationSeconds
+	        ? Math.min(nextEndTime, sourceDurationSeconds)
+	        : nextEndTime;
+	    }
 
-  const handleLeftResize = (
-    clip: MediaFile,
-    target: HTMLElement,
-    width: number,
-  ) => {
+	    onUpdateMedia(clip.id, updates);
+	    target.style.width = `${Math.max(2, nextDuration * zoom)}px`;
+	  };
+
+	  const handleLeftResize = (
+	    clip: MediaFile,
+	    target: HTMLElement,
+	    width: number,
+	  ) => {
     const currentTrackId =
       clip.trackId ?? fallbackTrackIdForType[clip.type] ?? trackId;
     const bounds = getTrackBounds(currentTrackId);
@@ -219,28 +250,45 @@ export function MediaTimelineTrack({
       desiredStart: clip.positionStart,
     });
 
-    const desiredDuration = Math.max(0, width / zoom);
-    const unclampedStart = Math.max(0, clip.positionEnd - desiredDuration);
-    const clampedStart = Math.max(unclampedStart, minStart);
-    const nextDuration = Math.max(0, clip.positionEnd - clampedStart);
+	    const playbackSpeed =
+	      isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
+	        ? clip.playbackSpeed
+	        : 1;
 
-    const playbackSpeed =
-      isFiniteNumber(clip.playbackSpeed) && clip.playbackSpeed > 0
-        ? clip.playbackSpeed
-        : 1;
+	    const sourceDurationSeconds =
+	      clip.type === "video" || clip.type === "audio"
+	        ? getSourceDurationSeconds(clip)
+	        : null;
+	    const clipEndTime =
+	      clip.type === "video" || clip.type === "audio"
+	        ? (() => {
+	            const endTime = isFiniteNumber(clip.endTime) ? Math.max(0, clip.endTime) : 0;
+	            return sourceDurationSeconds ? Math.min(endTime, sourceDurationSeconds) : endTime;
+	          })()
+	        : 0;
 
-    const updates: Partial<MediaFile> = {
-      positionStart: clampedStart,
-    };
+	    const minStartBySource =
+	      clip.type === "video" || clip.type === "audio"
+	        ? clip.positionEnd - clipEndTime / playbackSpeed
+	        : 0;
 
-    if (clip.type === "video" || clip.type === "audio") {
-      updates.startTime = Math.max(0, clip.endTime - nextDuration * playbackSpeed);
-    }
+	    const desiredDuration = Math.max(0, width / zoom);
+	    const unclampedStart = Math.max(0, clip.positionEnd - desiredDuration);
+	    const clampedStart = Math.max(unclampedStart, minStart, minStartBySource);
+	    const nextDuration = Math.max(0, clip.positionEnd - clampedStart);
 
-    onUpdateMedia(clip.id, updates);
-    target.style.left = `${clampedStart * zoom}px`;
-    target.style.width = `${Math.max(2, nextDuration * zoom)}px`;
-  };
+	    const updates: Partial<MediaFile> = {
+	      positionStart: clampedStart,
+	    };
+
+	    if (clip.type === "video" || clip.type === "audio") {
+	      updates.startTime = Math.max(0, clipEndTime - nextDuration * playbackSpeed);
+	    }
+
+	    onUpdateMedia(clip.id, updates);
+	    target.style.left = `${clampedStart * zoom}px`;
+	    target.style.width = `${Math.max(2, nextDuration * zoom)}px`;
+	  };
 
   useEffect(() => {
     for (const clip of mediaFiles) {
@@ -284,12 +332,13 @@ export function MediaTimelineTrack({
               );
               const leftPx = Math.max(0, positionStart * zoom);
 
-              return (
-                <div
-                  ref={getTargetRef(clip.id)}
-                  onClick={() => handleClick(clip.id)}
-                  className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border px-2 text-sm text-white/90 shadow-sm ${
-                    clip.type === "video"
+	              return (
+	                <div
+	                  data-timeline-clip="true"
+	                  ref={getTargetRef(clip.id)}
+	                  onClick={() => handleClick(clip.id)}
+	                  className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border px-2 text-sm text-white/90 shadow-sm ${
+	                    clip.type === "video"
                       ? "border-indigo-400/40 bg-indigo-500/15"
                       : clip.type === "image"
                         ? "border-sky-400/40 bg-sky-500/15"

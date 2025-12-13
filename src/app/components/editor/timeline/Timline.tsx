@@ -689,89 +689,24 @@ export const Timeline = () => {
     [dispatch, getTimeFromClientX, player, safeFps],
   );
 
+  const clearSelection = useCallback(() => {
+    dispatch(setActiveElement(null));
+    dispatch(setActiveElementIndex(0));
+  }, [dispatch]);
+
   const handleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
     setTimeFromClientX(e.clientX);
     setSelectedMarkerId(null);
-  };
 
-  const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!timelineRef.current) return;
-    const time = setTimeFromClientX(e.clientX) ?? 0;
-    setSelectedMarkerId(null);
-    const resolvedTrackId = fallbackTextTrackId ?? null;
-    if (!resolvedTrackId) {
-      toast.error("Unable to place text without a layer.");
-      return;
+    const target = e.target as HTMLElement | null;
+    const clickedInteractive =
+      target instanceof HTMLElement &&
+      (target.closest('[data-timeline-clip="true"]') ||
+        target.closest('[data-timeline-interactive="true"]'));
+    if (!clickedInteractive) {
+      clearSelection();
     }
-    const newText = {
-      id: crypto.randomUUID(),
-      text: "New text",
-      trackId: resolvedTrackId,
-      positionStart: time,
-      positionEnd: time + 5,
-      x: 600,
-      y: 600,
-      width: 800,
-      height: 200,
-      font: "Arial",
-      fontSize: 64,
-      color: "#ffffff",
-      backgroundColor: "transparent",
-      align: "center" as const,
-      zIndex: 0,
-      opacity: 100,
-      rotation: 0,
-      fadeInDuration: 0.3,
-      fadeOutDuration: 0.3,
-      animation: "fade" as const,
-      blur: 0,
-    };
-
-    const duration = Math.max(0, newText.positionEnd - newText.positionStart);
-    const placement = computeRipplePlacement({
-      clips: getTrackBounds(resolvedTrackId),
-      movingId: newText.id,
-      desiredStart: time,
-      duration,
-    });
-
-    const shiftedMediaFiles = mediaFiles.map((clip) => {
-      const delta = placement.shifts[clip.id];
-      if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
-        return clip;
-      }
-      return {
-        ...clip,
-        positionStart: clip.positionStart + delta,
-        positionEnd: clip.positionEnd + delta,
-      };
-    });
-
-    const shiftedTextElements = textElements
-      .map((clip) => {
-        const delta = placement.shifts[clip.id];
-        if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
-          return clip;
-        }
-        return {
-          ...clip,
-          positionStart: clip.positionStart + delta,
-          positionEnd: clip.positionEnd + delta,
-        };
-      })
-      .concat({
-        ...newText,
-        positionStart: placement.start,
-        positionEnd: placement.end,
-      });
-
-    dispatch(
-      applyTimelineEdit({
-        mediaFiles: shiftedMediaFiles as any,
-        textElements: shiftedTextElements as any,
-      }),
-    );
   };
 
   useEffect(() => {
@@ -1069,7 +1004,6 @@ export const Timeline = () => {
         className="relative min-h-0 w-full flex-1 overflow-auto border-t border-gray-800 bg-[#1E1D21] z-10"
         ref={timelineRef}
         onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
         onDragOver={(e) => {
           if (!isLibraryAssetDrag(e.dataTransfer)) return;
           e.preventDefault();
@@ -1086,11 +1020,12 @@ export const Timeline = () => {
         onDrop={handleLibraryDrop}
       >
         <div className="relative" style={{ width: `${timelineCanvasWidthPx}px` }}>
-          <Header
-            labelWidth={TRACK_LABEL_WIDTH_PX}
-            totalSeconds={totalSeconds}
-            zoom={zoom}
-          />
+	          <Header
+	            labelWidth={TRACK_LABEL_WIDTH_PX}
+	            totalSeconds={totalSeconds}
+	            zoom={zoom}
+	            onLabelClick={clearSelection}
+	          />
 
           {markers.map((marker) => (
             <div
@@ -1144,12 +1079,13 @@ export const Timeline = () => {
             </div>
           ))}
 
-          <div
-            className="absolute top-0 bottom-0 z-50 w-[2px] cursor-ew-resize bg-red-500"
-            style={{
-              left: `${TRACK_LABEL_WIDTH_PX + playheadTime * zoom}px`,
-            }}
-            onMouseDown={(e) => {
+	          <div
+	            className="absolute top-0 bottom-0 z-50 w-[2px] cursor-ew-resize bg-red-500"
+	            data-timeline-interactive="true"
+	            style={{
+	              left: `${TRACK_LABEL_WIDTH_PX + playheadTime * zoom}px`,
+	            }}
+	            onMouseDown={(e) => {
               e.stopPropagation();
               setIsDraggingMarker(true);
             }}
@@ -1162,15 +1098,18 @@ export const Timeline = () => {
                 gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
               }}
             >
-              <div
-                className={`sticky left-0 z-20 flex h-8 items-center gap-2 border-r bg-[#1E1D21] px-3 ${
-                  layerInsertPreview === "top"
-                    ? "border-blue-500/20 text-blue-200/90"
-                    : "border-white/10"
-                }`}
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-              >
+	              <div
+	                className={`sticky left-0 z-20 flex h-8 items-center gap-2 border-r bg-[#1E1D21] px-3 ${
+	                  layerInsertPreview === "top"
+	                    ? "border-blue-500/20 text-blue-200/90"
+	                    : "border-white/10"
+	                }`}
+	                onClick={(e) => {
+	                  e.stopPropagation();
+	                  clearSelection();
+	                }}
+	                onDoubleClick={(e) => e.stopPropagation()}
+	              >
                 {layerInsertPreview === "top" ? (
                   <>
                     <Layers className="h-4 w-4" aria-hidden="true" />
@@ -1208,11 +1147,14 @@ export const Timeline = () => {
                   gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
                 }}
               >
-                <div
-                  className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
-                  onClick={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                >
+	                <div
+	                  className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+	                  onClick={(e) => {
+	                    e.stopPropagation();
+	                    clearSelection();
+	                  }}
+	                  onDoubleClick={(e) => e.stopPropagation()}
+	                >
                   <Layers className="h-4 w-4 text-white/60" aria-hidden="true" />
                   <span className="text-xs font-medium tracking-wide uppercase">
                     {track.name}
@@ -1247,15 +1189,18 @@ export const Timeline = () => {
                 gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
               }}
             >
-              <div
-                className={`sticky left-0 z-20 flex h-8 items-center gap-2 border-r bg-[#1E1D21] px-3 ${
-                  layerInsertPreview === "bottom"
-                    ? "border-blue-500/20 text-blue-200/90"
-                    : "border-white/10"
-                }`}
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-              >
+	              <div
+	                className={`sticky left-0 z-20 flex h-8 items-center gap-2 border-r bg-[#1E1D21] px-3 ${
+	                  layerInsertPreview === "bottom"
+	                    ? "border-blue-500/20 text-blue-200/90"
+	                    : "border-white/10"
+	                }`}
+	                onClick={(e) => {
+	                  e.stopPropagation();
+	                  clearSelection();
+	                }}
+	                onDoubleClick={(e) => e.stopPropagation()}
+	              >
                 {layerInsertPreview === "bottom" ? (
                   <>
                     <Layers className="h-4 w-4" aria-hidden="true" />
