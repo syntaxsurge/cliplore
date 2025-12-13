@@ -10,7 +10,7 @@ import { listProjects } from "@/app/store";
 import type { ProjectState } from "@/app/types";
 import { createConvexIpAsset, fetchConvexIpAssetByIpId } from "@/lib/api/convex";
 import { clientEnv } from "@/lib/env/client";
-import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
+import { getStoryIpaExplorerUrl, getStoryTxExplorerUrl } from "@/lib/story/explorer";
 import { useStoryClient } from "@/lib/story/useStoryClient";
 import { cn, ipfsUriToGatewayUrl } from "@/lib/utils";
 import { claimAllWipRevenue, getClaimableWipRevenue } from "@/features/ipfi/services/claim";
@@ -72,12 +72,18 @@ function formatUserError(error: unknown, fallback: string) {
   return fallback;
 }
 
+function formatShortHash(value: string) {
+  if (!value) return value;
+  if (value.length <= 12) return value;
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
 function StatusCallout(props: { tone: "success" | "error" | "info"; children: ReactNode }) {
   const { tone, children } = props;
   return (
     <div
       className={cn(
-        "rounded-md border px-3 py-2 text-sm",
+        "max-w-full break-words rounded-md border px-3 py-2 text-sm",
         tone === "success"
           ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
           : tone === "error"
@@ -248,12 +254,14 @@ export default function AssetDetailPage() {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [wrapMessage, setWrapMessage] = useState<string | null>(null);
+  const [wrapTxHash, setWrapTxHash] = useState<`0x${string}` | null>(null);
 
   const [unwrapAmount, setUnwrapAmount] = useState("1");
   const [unwrapStatus, setUnwrapStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [unwrapMessage, setUnwrapMessage] = useState<string | null>(null);
+  const [unwrapTxHash, setUnwrapTxHash] = useState<`0x${string}` | null>(null);
 
   const handleCopy = async (value: string) => {
     try {
@@ -600,11 +608,13 @@ export default function AssetDetailPage() {
   const handleWrap = async () => {
     setWrapStatus("loading");
     setWrapMessage(null);
+    setWrapTxHash(null);
     try {
       ensureWalletReady();
       const res = await wrapIpToWip({ client: storyClient!, amountIp: wrapAmount });
       setWrapStatus("success");
-      setWrapMessage(`Wrapped IP→WIP. Tx: ${res.txHash ?? "submitted"}`);
+      setWrapTxHash(res.txHash ?? null);
+      setWrapMessage("Wrapped IP → WIP.");
       void refetchIpBalance();
       void refetchWipBalance();
     } catch (err: any) {
@@ -617,6 +627,7 @@ export default function AssetDetailPage() {
   const handleUnwrap = async () => {
     setUnwrapStatus("loading");
     setUnwrapMessage(null);
+    setUnwrapTxHash(null);
     try {
       ensureWalletReady();
       const res = await unwrapWipToIp({
@@ -624,7 +635,8 @@ export default function AssetDetailPage() {
         amountWip: unwrapAmount,
       });
       setUnwrapStatus("success");
-      setUnwrapMessage(`Unwrapped WIP→IP. Tx: ${res.txHash ?? "submitted"}`);
+      setUnwrapTxHash(res.txHash ?? null);
+      setUnwrapMessage("Unwrapped WIP → IP.");
       void refetchIpBalance();
       void refetchWipBalance();
     } catch (err: any) {
@@ -1340,7 +1352,20 @@ export default function AssetDetailPage() {
 	                    </Button>
 	                    {wrapMessage ? (
 	                      <StatusCallout tone={wrapStatus === "success" ? "success" : "error"}>
-	                        {wrapMessage}
+	                        <div className="space-y-1">
+	                          <p>{wrapMessage}</p>
+	                          {wrapStatus === "success" && wrapTxHash ? (
+	                            <a
+	                              className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
+	                              href={getStoryTxExplorerUrl({ txHash: wrapTxHash })}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              title={wrapTxHash}
+	                            >
+	                              View transaction <span className="font-mono">({formatShortHash(wrapTxHash)})</span>
+	                            </a>
+	                          ) : null}
+	                        </div>
 	                      </StatusCallout>
 	                    ) : null}
 	                  </div>
@@ -1372,7 +1397,21 @@ export default function AssetDetailPage() {
 	                    </Button>
 	                    {unwrapMessage ? (
 	                      <StatusCallout tone={unwrapStatus === "success" ? "success" : "error"}>
-	                        {unwrapMessage}
+	                        <div className="space-y-1">
+	                          <p>{unwrapMessage}</p>
+	                          {unwrapStatus === "success" && unwrapTxHash ? (
+	                            <a
+	                              className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
+	                              href={getStoryTxExplorerUrl({ txHash: unwrapTxHash })}
+	                              target="_blank"
+	                              rel="noreferrer"
+	                              title={unwrapTxHash}
+	                            >
+	                              View transaction{" "}
+	                              <span className="font-mono">({formatShortHash(unwrapTxHash)})</span>
+	                            </a>
+	                          ) : null}
+	                        </div>
 	                      </StatusCallout>
 	                    ) : null}
 	                  </div>
