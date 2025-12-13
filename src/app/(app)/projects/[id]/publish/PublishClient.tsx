@@ -710,8 +710,8 @@ export default function PublishClient({
           </div>
           <h1 className="text-4xl font-semibold text-foreground">Publish</h1>
           <p className="text-muted-foreground">
-            Export first, then register your final cut as a Story IP Asset with attached
-            license terms.
+            Select an export, set a thumbnail + metadata, then upload and register it as a
+            Story IP Asset.
           </p>
         </div>
 
@@ -808,10 +808,10 @@ export default function PublishClient({
 	          <div className="lg:col-span-8 space-y-6">
 	            <Card>
 	              <CardHeader>
-	                <CardTitle>Preview & thumbnail</CardTitle>
-	                <CardDescription>
-	                  Confirm the final cut and choose an optional cover frame.
-	                </CardDescription>
+		              <CardTitle>Preview & Thumbnail</CardTitle>
+		              <CardDescription>
+		                  Confirm the final cut and optionally choose a cover frame.
+		              </CardDescription>
 	              </CardHeader>
 	              <CardContent className="space-y-4">
 	                {exportPreviewUrl ? (
@@ -849,9 +849,9 @@ export default function PublishClient({
 	                            Optional cover image for marketplace previews.
 	                          </p>
 	                        </div>
-	                        <Badge variant="outline">
-	                          {thumbnailFile ? "Selected" : "Optional"}
-	                        </Badge>
+		                        <Badge variant={thumbnailFile ? "success" : "outline"}>
+		                          {thumbnailFile ? "Selected" : "Optional"}
+		                        </Badge>
 	                      </div>
 
 	                      <div className="relative aspect-video overflow-hidden rounded-xl border border-border bg-muted/30">
@@ -869,19 +869,19 @@ export default function PublishClient({
 	                            <p className="font-medium text-foreground/80">
 	                              No thumbnail selected
 	                            </p>
-	                            <p>Scrub the slider to preview a frame, then capture it.</p>
+		                            <p>Scrub to preview a frame, then set it as your thumbnail.</p>
 	                          </div>
 	                        )}
 
-	                        {thumbnailScrubPreviewUrl ? (
-	                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
-	                            Frame preview
-	                          </div>
-	                        ) : thumbnailPreviewUrl ? (
-	                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
-	                            Selected
-	                          </div>
-	                        ) : null}
+		                        {thumbnailScrubPreviewUrl ? (
+		                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
+		                            Preview
+		                          </div>
+		                        ) : thumbnailPreviewUrl ? (
+		                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
+		                            Selected
+		                          </div>
+		                        ) : null}
 
 	                        {thumbnailPreviewUrl && thumbnailScrubPreviewUrl ? (
 	                          <div className="absolute bottom-2 right-2 overflow-hidden rounded-lg border border-border bg-background/70 backdrop-blur">
@@ -895,11 +895,11 @@ export default function PublishClient({
 	                                className="object-cover"
 	                              />
 	                            </div>
-	                            <div className="px-2 py-1 text-[10px] font-medium text-foreground/80">
-	                              Current
-	                            </div>
-	                          </div>
-	                        ) : null}
+		                            <div className="px-2 py-1 text-[10px] font-medium text-foreground/80">
+		                              Selected
+		                            </div>
+		                          </div>
+		                        ) : null}
 	                      </div>
 
 	                      <div className="space-y-2">
@@ -937,36 +937,25 @@ export default function PublishClient({
 	                        />
 	                      </div>
 
-	                      <div className="flex flex-wrap gap-2">
-	                        <Button
-	                          type="button"
-	                          size="sm"
-	                          variant="secondary"
-	                          onClick={() => void handleGenerateThumbnail()}
-	                          disabled={!exportPreviewUrl}
-	                        >
-	                          Capture frame
-	                        </Button>
-	                        <Button
-	                          type="button"
-	                          size="sm"
-	                          variant="outline"
-	                          onClick={() => {
-	                            const t = videoRef.current?.currentTime;
-	                            if (typeof t !== "number" || !Number.isFinite(t)) {
-	                              void handleGenerateThumbnail();
-	                              return;
-	                            }
-	                            void handleGenerateThumbnail(t);
-	                          }}
-	                          disabled={!exportPreviewUrl}
-	                        >
-	                          Use current frame
-	                        </Button>
-	                        <Button
-	                          type="button"
-	                          size="sm"
-	                          variant="outline"
+		                      <div className="flex flex-wrap gap-2">
+		                        <Button
+		                          type="button"
+		                          size="sm"
+		                          variant="secondary"
+		                          onClick={() => {
+		                            const t = videoRef.current?.currentTime;
+		                            const captureTime =
+		                              typeof t === "number" && Number.isFinite(t) ? t : thumbnailTimestamp;
+		                            void handleGenerateThumbnail(captureTime);
+		                          }}
+		                          disabled={!exportPreviewUrl}
+		                        >
+		                          Set thumbnail
+		                        </Button>
+		                        <Button
+		                          type="button"
+		                          size="sm"
+		                          variant="outline"
 	                          onClick={() => handleSelectThumbnailFile(null)}
 	                          disabled={!thumbnailFile}
 	                        >
@@ -1001,10 +990,10 @@ export default function PublishClient({
 	            >
 	              <Card>
 	                <CardHeader>
-	                  <CardTitle>Metadata</CardTitle>
-	                  <CardDescription>
-	                    This is what collectors and remixers see on Story.
-	                  </CardDescription>
+		              <CardTitle>Metadata</CardTitle>
+		              <CardDescription>
+	                    Title, description, and licensing terms shown on Story.
+		              </CardDescription>
 	                </CardHeader>
 	                <CardContent className="space-y-5">
 	                  <div className="grid gap-4 sm:grid-cols-2">
@@ -1052,63 +1041,83 @@ export default function PublishClient({
 
 	              <Card>
 	                <CardHeader>
-	                  <CardTitle>Upload & register</CardTitle>
-	                  <CardDescription>
+		              <CardTitle>Upload & Register</CardTitle>
+		              <CardDescription>
 	                    Upload to Backblaze B2, pin metadata to IPFS, and register on Story.
-	                  </CardDescription>
+		              </CardDescription>
 	                </CardHeader>
 	                <CardContent className="space-y-5">
-	                  <div className="grid gap-4 lg:grid-cols-2">
-	                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
-	                      <p className="text-sm font-medium text-foreground">
-	                        Readiness checks
-	                      </p>
-	                      <ul className="space-y-1 text-sm text-muted-foreground">
-	                        <li>
-	                          Wallet:{" "}
-	                          <span className="text-foreground">
-	                            {isConnected && address ? "Connected" : "Not connected"}
-	                          </span>
-	                        </li>
-	                        <li>
-	                          SPG NFT contract:{" "}
-	                          <span className="text-foreground">
-	                            {isSpgConfigured ? "Configured" : "Missing"}
-	                          </span>
-	                        </li>
-	                        <li>
-	                          WIP token address:{" "}
-	                          <span className="text-foreground">
-	                            {isWipConfigured ? "Configured" : "Missing"}
-	                          </span>
-	                        </li>
-	                      </ul>
-	                    </div>
+		                  <div className="grid gap-4 lg:grid-cols-2">
+		                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+		                      <p className="text-sm font-medium text-foreground">Readiness</p>
+		                      <ul className="space-y-2 text-sm">
+		                        <li className="flex items-center justify-between gap-3">
+		                          <span className="text-muted-foreground">Wallet</span>
+		                          <Badge
+		                            variant={isConnected && address ? "success" : "warning"}
+		                            className="px-2 py-0.5 text-[11px] font-semibold"
+		                          >
+		                            {isConnected && address ? "Connected" : "Connect wallet"}
+		                          </Badge>
+		                        </li>
+		                        <li className="flex items-center justify-between gap-3">
+		                          <span className="text-muted-foreground">SPG NFT contract</span>
+		                          <Badge
+		                            variant={isSpgConfigured ? "success" : "warning"}
+		                            className="px-2 py-0.5 text-[11px] font-semibold"
+		                          >
+		                            {isSpgConfigured ? "Configured" : "Missing"}
+		                          </Badge>
+		                        </li>
+		                        <li className="flex items-center justify-between gap-3">
+		                          <span className="text-muted-foreground">WIP token</span>
+		                          <Badge
+		                            variant={isWipConfigured ? "success" : "warning"}
+		                            className="px-2 py-0.5 text-[11px] font-semibold"
+		                          >
+		                            {isWipConfigured ? "Configured" : "Missing"}
+		                          </Badge>
+		                        </li>
+		                      </ul>
+		                    </div>
 
-	                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
-	                      <p className="text-sm font-medium text-foreground">
-	                        Status
-	                      </p>
-	                      <p className="text-sm text-muted-foreground">
-	                        <span className="font-semibold text-foreground">
-	                          {status === "idle" && "Ready"}
-	                          {status === "uploading" && "Uploading"}
-	                          {status === "registering" && "Registering"}
-	                          {status === "success" && "Published"}
-	                          {status === "error" && "Error"}
-	                        </span>
-	                      </p>
-	                      {message ? (
-	                        <p
-	                          className={`text-sm ${
-	                            status === "error"
-	                              ? "text-destructive"
-	                              : "text-emerald-600 dark:text-emerald-300"
-	                          }`}
-	                        >
-	                          {message}
-	                        </p>
-	                      ) : null}
+		                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+		                      <div className="flex items-start justify-between gap-3">
+		                        <p className="text-sm font-medium text-foreground">Status</p>
+		                        <Badge
+		                          variant={
+		                            status === "success"
+		                              ? "success"
+		                              : status === "uploading" || status === "registering"
+		                                ? "warning"
+		                                : "outline"
+		                          }
+		                          className={
+		                            status === "error"
+		                              ? "px-2 py-0.5 text-[11px] font-semibold border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200"
+		                              : "px-2 py-0.5 text-[11px] font-semibold"
+		                          }
+		                        >
+		                          {status === "idle" && "Ready"}
+		                          {status === "uploading" && "Uploading"}
+		                          {status === "registering" && "Registering"}
+		                          {status === "success" && "Published"}
+		                          {status === "error" && "Error"}
+		                        </Badge>
+		                      </div>
+		                      {message ? (
+		                        <p
+		                          className={`text-sm ${
+		                            status === "error"
+		                              ? "text-destructive"
+		                              : status === "success"
+		                                ? "text-emerald-600 dark:text-emerald-300"
+		                                : "text-muted-foreground"
+		                          }`}
+		                        >
+		                          {message}
+		                        </p>
+		                      ) : null}
 
 	                      {status === "uploading" && uploadProgress ? (
 	                        <div className="space-y-2 pt-1">
