@@ -1,7 +1,7 @@
 import { Player } from "@remotion/player";
 import Composition from "./sequence/composition";
 import { useAppSelector, useAppDispatch } from "@/app/store";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   setCurrentTime,
   setIsMuted,
@@ -19,12 +19,14 @@ import {
   VolumeX,
 } from "lucide-react";
 import { useCurrentPlayerFrame } from "./useCurrentPlayerFrame";
+import { cn } from "@/lib/utils";
 
 export const PreviewPlayer = () => {
   const projectState = useAppSelector((state) => state.projectState);
   const { duration, currentTime, isPlaying, isMuted, fps } = projectState;
   const { playerRef, player, registerPlayer } = useEditorPlayer();
   const dispatch = useAppDispatch();
+  const fullscreenRef = useRef<HTMLDivElement | null>(null);
   const safeFps =
     typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : 30;
   const playerFrame = useCurrentPlayerFrame(player);
@@ -94,8 +96,10 @@ export const PreviewPlayer = () => {
 
   useEffect(() => {
     const update = () => {
-      const player = playerRef.current;
-      setIsFullscreen(player?.isFullscreen() ?? false);
+      const isContainerFullscreen =
+        document.fullscreenElement === fullscreenRef.current;
+      const isPlayerFullscreen = playerRef.current?.isFullscreen() ?? false;
+      setIsFullscreen(isContainerFullscreen || isPlayerFullscreen);
     };
     update();
     document.addEventListener("fullscreenchange", update);
@@ -115,8 +119,50 @@ export const PreviewPlayer = () => {
     return `${minutes}:${rem.toString().padStart(2, "0")}`;
   };
 
+  const toggleFullscreen = async () => {
+    const el = fullscreenRef.current;
+    if (!el) return;
+
+    try {
+      const fullscreenElement = document.fullscreenElement;
+      const player = playerRef.current;
+      const isThisFullscreen =
+        fullscreenElement === el || (player?.isFullscreen() ?? false);
+
+      if (isThisFullscreen) {
+        if (fullscreenElement) {
+          await document.exitFullscreen?.();
+        } else {
+          player?.exitFullscreen();
+        }
+        return;
+      }
+
+      if (fullscreenElement && fullscreenElement !== el) {
+        await document.exitFullscreen?.();
+      }
+
+      await el.requestFullscreen?.();
+    } catch {
+      const player = playerRef.current;
+      try {
+        if (!player) return;
+        if (player.isFullscreen()) player.exitFullscreen();
+        else player.requestFullscreen();
+      } catch {
+        // no-op: fullscreen is best-effort
+      }
+    }
+  };
+
   return (
-    <div className="flex h-full w-full flex-col">
+    <div
+      ref={fullscreenRef}
+      className={cn(
+        "flex w-full flex-col bg-black",
+        isFullscreen ? "h-[100dvh]" : "h-full",
+      )}
+    >
       <div className="relative min-h-0 flex-1">
         <Player
           ref={registerPlayer}
@@ -222,10 +268,7 @@ export const PreviewPlayer = () => {
             size="icon"
             variant="ghost"
             onClick={() => {
-              const player = playerRef.current;
-              if (!player) return;
-              if (player.isFullscreen()) player.exitFullscreen();
-              else player.requestFullscreen();
+              void toggleFullscreen();
             }}
             aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
           >
