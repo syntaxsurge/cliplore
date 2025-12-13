@@ -38,10 +38,19 @@ export default defineSchema({
     licensorWallet: v.string(),
     licenseTermsId: v.optional(v.string()),
     txHash: v.optional(v.string()),
+    chainId: v.optional(v.number()),
+    ipMetadataUri: v.optional(v.string()),
+    ipMetadataHash: v.optional(v.string()),
+    nftMetadataUri: v.optional(v.string()),
+    nftMetadataHash: v.optional(v.string()),
+    videoKey: v.optional(v.string()),
+    thumbnailKey: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
     createdAt: v.number(),
   })
     .index("by_project", ["projectId"])
-    .index("by_ipId", ["ipId"]),
+    .index("by_ipId", ["ipId"])
+    .index("by_licensorWallet", ["licensorWallet"]),
   soraJobs: defineTable({
     projectId: v.id("projects"),
     jobId: v.string(),

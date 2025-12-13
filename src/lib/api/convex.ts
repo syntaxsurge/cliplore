@@ -73,17 +73,29 @@ export async function createConvexProject(input: {
   return handleResponse<{ project: { id: string } }>(res);
 }
 
-export async function fetchConvexIpAssets() {
-  const res = await fetch("/api/convex/ip-assets", {
+export async function fetchConvexIpAssets(params?: { wallet?: string }) {
+  const url = params?.wallet
+    ? `/api/convex/ip-assets?wallet=${encodeURIComponent(params.wallet)}`
+    : "/api/convex/ip-assets";
+  const res = await fetch(url, {
     method: "GET",
     cache: "no-store",
   });
   return handleResponse<{ ipAssets: Array<any> }>(res);
 }
 
+export async function fetchConvexIpAssetByIpId(ipId: string) {
+  const res = await fetch(
+    `/api/convex/ip-assets?ipId=${encodeURIComponent(ipId)}`,
+    { method: "GET", cache: "no-store" },
+  );
+  return handleResponse<{ ipAsset: any | null }>(res);
+}
+
 export async function createConvexIpAsset(input: {
   wallet: string;
-  localProjectId: string;
+  localProjectId?: string;
+  projectTitle?: string;
   ipId: string;
   title: string;
   summary: string;
@@ -92,6 +104,13 @@ export async function createConvexIpAsset(input: {
   thumbnailUrl?: string;
   licenseTermsId?: string;
   txHash?: string;
+  chainId?: number;
+  ipMetadataUri?: string;
+  ipMetadataHash?: string;
+  nftMetadataUri?: string;
+  nftMetadataHash?: string;
+  videoKey?: string;
+  thumbnailKey?: string;
 }) {
   const res = await fetch("/api/convex/ip-assets", {
     method: "POST",

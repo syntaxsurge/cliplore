@@ -1,5 +1,6 @@
 import { defineChain } from "viem";
 import { clientEnv } from "../env/client";
+import { getStoryProtocolExplorerBaseUrl } from "../story/explorer";
 
 export const storyAeneid = defineChain({
   id: clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID,
@@ -16,7 +17,7 @@ export const storyAeneid = defineChain({
   blockExplorers: {
     default: {
       name: "Story Explorer",
-      url: "https://explorer.story.foundation/",
+      url: `${getStoryProtocolExplorerBaseUrl(clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID)}/`,
     },
   },
 });

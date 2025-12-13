@@ -11,7 +11,7 @@
     "format": "prettier --write .",
     "format:code": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs,mjs,cts,mts,json,css,scss,mdx,html}\"",
     "lint:all": "pnpm run lint:fix && pnpm run lint && pnpm run format:code",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node -e \"require('fs').rmSync('.next/types',{recursive:true,force:true})\" && tsc --noEmit",
     "convex:dev": "node ./scripts/convex-dev.cjs",
     "convex:deploy": "npx convex deploy -y",
     "convex:redeploy": "pnpm run convex:deploy && pnpm run convex:dev",

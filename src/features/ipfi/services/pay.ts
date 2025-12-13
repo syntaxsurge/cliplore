@@ -1,8 +1,8 @@
 "use client";
 
-import { WIP_TOKEN_ADDRESS } from "@story-protocol/core-sdk";
 import { parseEther, zeroAddress } from "viem";
 import type { StoryClient } from "@story-protocol/core-sdk";
+import { clientEnv } from "@/lib/env/client";
 
 export async function tipIpWithWip(params: {
   client: StoryClient;
@@ -14,8 +14,7 @@ export async function tipIpWithWip(params: {
   return client.royalty.payRoyaltyOnBehalf({
     receiverIpId,
     payerIpId: zeroAddress,
-    token: WIP_TOKEN_ADDRESS,
+    token: clientEnv.NEXT_PUBLIC_WIP_TOKEN_ADDRESS as `0x${string}`,
     amount: parseEther(amountWip),
   });
 }
-

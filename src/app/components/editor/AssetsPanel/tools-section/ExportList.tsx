@@ -142,11 +142,12 @@ export default function ExportList({ projectId }: { projectId: string }) {
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            const exportQuery = `?exportId=${encodeURIComponent(exp.id)}`;
-                            router.push(`/projects/${projectId}/ipfi${exportQuery}`);
+                            router.push(
+                              `/assets/${encodeURIComponent(exp.publish!.ipId)}?tab=royalties`,
+                            );
                           }}
                         >
-                          IPFi
+                          Manage asset
                         </Button>
                       ) : null}
 

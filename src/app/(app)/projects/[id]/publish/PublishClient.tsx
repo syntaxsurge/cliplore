@@ -9,6 +9,7 @@ import { parseEther, sha256, zeroAddress } from "viem";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { useStoryClient } from "@/lib/story/useStoryClient";
+import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
 import { clientEnv } from "@/lib/env/client";
 import { uploadIpMetadataAction } from "@/lib/story/actions/upload-ip-metadata";
 import { LICENSE_PRESETS, type LicensePreset } from "@/lib/story/license-presets";
@@ -26,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, Copy, ExternalLink, Loader2, Upload } from "lucide-react";
-import { RoyaltiesPanel } from "./RoyaltiesPanel";
 
 const LICENSE_PRESET_ORDER: LicensePreset[] = [
   "commercial-5",
@@ -95,6 +95,12 @@ export default function PublishClient({
     "idle" | "uploading" | "registering" | "success" | "error"
   >("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [marketplaceSyncStatus, setMarketplaceSyncStatus] = useState<
+    "idle" | "syncing" | "success" | "error"
+  >("idle");
+  const [marketplaceSyncMessage, setMarketplaceSyncMessage] = useState<
+    string | null
+  >(null);
   const [isPending, startTransition] = useTransition();
   const [uploadProgress, setUploadProgress] =
     useState<UploadProgressState | null>(null);
@@ -317,6 +323,46 @@ export default function PublishClient({
     }
   };
 
+  const handleRetryMarketplaceSync = async () => {
+    if (!selectedExport?.publish?.ipId) return;
+    if (!address) {
+      toast.error("Connect your wallet to sync the marketplace listing.");
+      return;
+    }
+
+    setMarketplaceSyncStatus("syncing");
+    setMarketplaceSyncMessage("Syncing listing to marketplace…");
+    try {
+      await createConvexIpAsset({
+        wallet: address,
+        localProjectId: projectId,
+        projectTitle: projectState.projectName,
+        ipId: selectedExport.publish.ipId,
+        title: selectedExport.publish.title,
+        summary: selectedExport.publish.summary,
+        terms: selectedExport.publish.terms,
+        videoUrl: selectedExport.publish.videoUrl,
+        thumbnailUrl: selectedExport.publish.thumbnailUrl,
+        licenseTermsId: selectedExport.publish.licenseTermsId,
+        txHash: selectedExport.publish.txHash,
+        chainId: clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID,
+        ipMetadataUri: selectedExport.publish.ipMetadataUri,
+        ipMetadataHash: selectedExport.publish.ipMetadataHash,
+        nftMetadataUri: selectedExport.publish.nftMetadataUri,
+        nftMetadataHash: selectedExport.publish.nftMetadataHash,
+        videoKey: selectedExport.publish.videoKey,
+        thumbnailKey: selectedExport.publish.thumbnailKey,
+      });
+      setMarketplaceSyncStatus("success");
+      setMarketplaceSyncMessage(null);
+      toast.success("Marketplace synced");
+    } catch (err: any) {
+      console.error(err);
+      setMarketplaceSyncStatus("error");
+      setMarketplaceSyncMessage(err?.message ?? "Marketplace sync failed.");
+    }
+  };
+
   const handleGenerateThumbnail = async (timeOverride?: number) => {
     if (!exportPreviewUrl) {
       toast.error("Select an export first.");
@@ -512,6 +558,8 @@ export default function PublishClient({
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    setMarketplaceSyncStatus("idle");
+    setMarketplaceSyncMessage(null);
 
     if (!selectedExport || !selectedExportId) {
       setStatus("error");
@@ -672,9 +720,12 @@ export default function PublishClient({
       dispatch(updateProject(nextProject));
 
       try {
+        setMarketplaceSyncStatus("syncing");
+        setMarketplaceSyncMessage("Syncing listing to marketplace…");
         await createConvexIpAsset({
           wallet: address,
           localProjectId: projectId,
+          projectTitle: baseProject.projectName,
           ipId,
           title: publishRecord.title,
           summary: publishRecord.summary,
@@ -683,9 +734,22 @@ export default function PublishClient({
           thumbnailUrl: publishRecord.thumbnailUrl,
           licenseTermsId,
           txHash,
+          chainId: clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID,
+          ipMetadataUri: publishRecord.ipMetadataUri,
+          ipMetadataHash: publishRecord.ipMetadataHash,
+          nftMetadataUri: publishRecord.nftMetadataUri,
+          nftMetadataHash: publishRecord.nftMetadataHash,
+          videoKey: publishRecord.videoKey,
+          thumbnailKey: publishRecord.thumbnailKey,
         });
+        setMarketplaceSyncStatus("success");
+        setMarketplaceSyncMessage(null);
       } catch (err) {
         console.debug("Convex IP asset sync failed", err);
+        setMarketplaceSyncStatus("error");
+        setMarketplaceSyncMessage(
+          "Marketplace sync failed. You can retry once Convex is available.",
+        );
       }
 
       setStatus("success");
@@ -768,7 +832,7 @@ export default function PublishClient({
               </Button>
               <Button size="sm" asChild>
                 <a
-                  href={`https://explorer.story.foundation/ip-assets/${published.ipId}`}
+                  href={getStoryIpaExplorerUrl({ ipId: published.ipId })}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -1423,20 +1487,12 @@ export default function PublishClient({
 	                      <div className="flex flex-wrap gap-2">
 	                        <Button size="sm" variant="secondary" asChild>
 	                          <Link href={`/ip/${published.ipId}`}>
-	                            View marketplace page
+	                            View public page
 	                          </Link>
 	                        </Button>
 	                        <Button size="sm" asChild>
-	                          <Link
-	                            href={
-	                              selectedExportId
-	                                ? `/projects/${projectId}/ipfi?exportId=${encodeURIComponent(
-	                                    selectedExportId,
-	                                  )}`
-	                                : `/projects/${projectId}/ipfi`
-	                            }
-	                          >
-	                            Open IPFi
+	                          <Link href={`/assets/${published.ipId}?tab=royalties`}>
+	                            Open asset dashboard
 	                          </Link>
 	                        </Button>
 	                        <Button
@@ -1447,24 +1503,47 @@ export default function PublishClient({
 	                          <Copy className="h-4 w-4" />
 	                          Copy IP ID
 	                        </Button>
-	                        <Button size="sm" asChild>
-	                          <a
-	                            href={`https://explorer.story.foundation/ip-assets/${published.ipId}`}
-	                            target="_blank"
-	                            rel="noreferrer"
-	                          >
-	                            <ExternalLink className="h-4 w-4" />
-	                            Story Explorer
+                        <Button size="sm" asChild>
+                          <a
+                            href={getStoryIpaExplorerUrl({ ipId: published.ipId })}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Story Explorer
 	                          </a>
 	                        </Button>
+	                        {marketplaceSyncStatus === "error" ||
+	                        marketplaceSyncStatus === "syncing" ? (
+	                          <Button
+	                            size="sm"
+	                            variant="outline"
+	                            onClick={() => void handleRetryMarketplaceSync()}
+	                            disabled={marketplaceSyncStatus === "syncing"}
+	                          >
+	                            {marketplaceSyncStatus === "syncing"
+	                              ? "Retrying…"
+	                              : "Retry marketplace sync"}
+	                          </Button>
+	                        ) : null}
 	                      </div>
+	                      {marketplaceSyncMessage ? (
+	                        <p
+	                          className={`text-xs ${
+	                            marketplaceSyncStatus === "error"
+	                              ? "text-destructive"
+	                              : "text-muted-foreground"
+	                          }`}
+	                        >
+	                          {marketplaceSyncMessage}
+	                        </p>
+	                      ) : null}
 	                    </div>
 	                  ) : null}
 	                </CardContent>
 	              </Card>
 	            </form>
 
-	            {published?.ipId ? <RoyaltiesPanel ipId={published.ipId} /> : null}
 	          </div>
 	        </div>
 	      )}

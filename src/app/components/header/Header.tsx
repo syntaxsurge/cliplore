@@ -24,12 +24,12 @@ export default function Header() {
 
   const marketingItems = [
     { href: "/", label: "Home" },
-    { href: "/explore", label: "Explore IP" },
+    { href: "/explore", label: "Explore" },
   ] as const;
 
   const appItems = [
-    { href: "/projects", label: "Projects" },
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/projects", label: "Studio" },
+    { href: "/assets", label: "Assets" },
     { href: "/settings", label: "Settings" },
   ] as const;
 

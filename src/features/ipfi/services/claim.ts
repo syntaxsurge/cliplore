@@ -1,7 +1,7 @@
 "use client";
 
-import { WIP_TOKEN_ADDRESS } from "@story-protocol/core-sdk";
 import type { StoryClient } from "@story-protocol/core-sdk";
+import { clientEnv } from "@/lib/env/client";
 
 export async function getClaimableWipRevenue(params: {
   client: StoryClient;
@@ -12,7 +12,7 @@ export async function getClaimableWipRevenue(params: {
   return client.royalty.claimableRevenue({
     ipId,
     claimer,
-    token: WIP_TOKEN_ADDRESS,
+    token: clientEnv.NEXT_PUBLIC_WIP_TOKEN_ADDRESS as `0x${string}`,
   });
 }
 
@@ -27,11 +27,10 @@ export async function claimAllWipRevenue(params: {
     claimer,
     childIpIds: [],
     royaltyPolicies: [],
-    currencyTokens: [WIP_TOKEN_ADDRESS],
+    currencyTokens: [clientEnv.NEXT_PUBLIC_WIP_TOKEN_ADDRESS as `0x${string}`],
     claimOptions: {
       autoTransferAllClaimedTokensFromIp: true,
       autoUnwrapIpTokens: true,
     },
   });
 }
-
