@@ -11,6 +11,13 @@ export async function tipIpWithWip(params: {
 }) {
   const { client, receiverIpId, amountWip } = params;
 
+  const vault = await client.royalty.getRoyaltyVaultAddress(receiverIpId);
+  if (vault === zeroAddress) {
+    throw new Error(
+      "Royalties aren’t active yet. Mint a license or register a derivative to deploy the IP Royalty Vault.",
+    );
+  }
+
   return client.royalty.payRoyaltyOnBehalf({
     receiverIpId,
     payerIpId: zeroAddress,

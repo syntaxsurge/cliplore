@@ -1,18 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
-import { useAccount } from "wagmi";
-import { formatEther, isAddress } from "viem";
+import { useAccount, useBalance } from "wagmi";
+import { formatEther, isAddress, zeroAddress } from "viem";
 import { listProjects } from "@/app/store";
 import type { ProjectState } from "@/app/types";
 import { createConvexIpAsset, fetchConvexIpAssetByIpId } from "@/lib/api/convex";
 import { clientEnv } from "@/lib/env/client";
 import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
 import { useStoryClient } from "@/lib/story/useStoryClient";
-import { ipfsUriToGatewayUrl } from "@/lib/utils";
+import { cn, ipfsUriToGatewayUrl } from "@/lib/utils";
 import { claimAllWipRevenue, getClaimableWipRevenue } from "@/features/ipfi/services/claim";
 import { setCommercialRemixTerms } from "@/features/ipfi/services/license";
 import { tipIpWithWip } from "@/features/ipfi/services/pay";
@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Copy, ExternalLink, Loader2 } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, Globe, Loader2 } from "lucide-react";
 
 type IpAssetRecord = {
   ipId: string;
@@ -52,6 +52,44 @@ type LocalAssetSource = {
 };
 
 type TabKey = "overview" | "licensing" | "royalties" | "files";
+
+type RoyaltyVaultStatus = "idle" | "loading" | "ready" | "not-deployed" | "error";
+
+function formatUserError(error: unknown, fallback: string) {
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const candidate =
+      typeof (error as any).shortMessage === "string"
+        ? String((error as any).shortMessage)
+        : typeof (error as any).message === "string"
+          ? String((error as any).message)
+          : null;
+
+    if (candidate) {
+      return candidate.split(" Contract Call:")[0].split(" Docs:")[0];
+    }
+  }
+  return fallback;
+}
+
+function StatusCallout(props: { tone: "success" | "error" | "info"; children: ReactNode }) {
+  const { tone, children } = props;
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-3 py-2 text-sm",
+        tone === "success"
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+          : tone === "error"
+            ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200"
+            : "border-border/60 bg-muted/30 text-muted-foreground",
+      )}
+      role={tone === "error" ? "alert" : "status"}
+    >
+      {children}
+    </div>
+  );
+}
 
 function parseTab(value: string | null): TabKey {
   if (value === "licensing" || value === "royalties" || value === "files") return value;
@@ -127,6 +165,26 @@ export default function AssetDetailPage() {
   const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
   const storyClient = useStoryClient();
+  const balanceAddress = address ?? zeroAddress;
+
+  const {
+    data: ipBalance,
+    isLoading: isIpBalanceLoading,
+    refetch: refetchIpBalance,
+  } = useBalance({
+    address: balanceAddress,
+    query: { enabled: Boolean(address) },
+  });
+
+  const {
+    data: wipBalance,
+    isLoading: isWipBalanceLoading,
+    refetch: refetchWipBalance,
+  } = useBalance({
+    address: balanceAddress,
+    token: clientEnv.NEXT_PUBLIC_WIP_TOKEN_ADDRESS as `0x${string}`,
+    query: { enabled: Boolean(address) },
+  });
 
   const ipIdParam = useMemo(() => {
     const raw = params?.ipId;
@@ -150,7 +208,9 @@ export default function AssetDetailPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const [royaltyVault, setRoyaltyVault] = useState<`0x${string}` | null>(null);
-  const [isResolvingVault, setIsResolvingVault] = useState(false);
+  const [royaltyVaultStatus, setRoyaltyVaultStatus] = useState<RoyaltyVaultStatus>("idle");
+  const [royaltyVaultError, setRoyaltyVaultError] = useState<string | null>(null);
+  const [vaultRefreshIndex, setVaultRefreshIndex] = useState(0);
 
   const [licenseMintFee, setLicenseMintFee] = useState("1");
   const [licenseRevShare, setLicenseRevShare] = useState(10);
@@ -165,7 +225,7 @@ export default function AssetDetailPage() {
   >("idle");
   const [tipMessage, setTipMessage] = useState<string | null>(null);
 
-  const [claimerMode, setClaimerMode] = useState<"wallet" | "ip">("wallet");
+  const [claimerMode, setClaimerMode] = useState<"wallet" | "ip">("ip");
   const [claimableStatus, setClaimableStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -234,7 +294,7 @@ export default function AssetDetailPage() {
     } catch (err: any) {
       setAsset(null);
       setLocalSource(null);
-      setLoadError(err?.message ?? "Failed to load IP asset.");
+      setLoadError(formatUserError(err, "Failed to load IP asset."));
     } finally {
       setIsLoading(false);
     }
@@ -249,28 +309,39 @@ export default function AssetDetailPage() {
   useEffect(() => {
     if (!asset?.ipId || !storyClient) {
       setRoyaltyVault(null);
+      setRoyaltyVaultStatus("idle");
+      setRoyaltyVaultError(null);
       return;
     }
 
     let cancelled = false;
-    setIsResolvingVault(true);
+    setRoyaltyVault(null);
+    setRoyaltyVaultStatus("loading");
+    setRoyaltyVaultError(null);
     storyClient.royalty
       .getRoyaltyVaultAddress(asset.ipId as `0x${string}`)
       .then((vault) => {
-        if (!cancelled) setRoyaltyVault(vault);
+        if (cancelled) return;
+        if (vault === zeroAddress) {
+          setRoyaltyVault(null);
+          setRoyaltyVaultStatus("not-deployed");
+          return;
+        }
+        setRoyaltyVault(vault);
+        setRoyaltyVaultStatus("ready");
       })
       .catch((err) => {
         console.error(err);
-        if (!cancelled) setRoyaltyVault(null);
-      })
-      .finally(() => {
-        if (!cancelled) setIsResolvingVault(false);
+        if (cancelled) return;
+        setRoyaltyVault(null);
+        setRoyaltyVaultStatus("error");
+        setRoyaltyVaultError(formatUserError(err, "Failed to resolve the IP Royalty Vault."));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [asset?.ipId, storyClient]);
+  }, [asset?.ipId, storyClient, vaultRefreshIndex]);
 
   const ensureWalletReady = () => {
     if (!isConnected || !address) {
@@ -284,11 +355,45 @@ export default function AssetDetailPage() {
     }
   };
 
+  const ensureRoyaltiesActive = () => {
+    if (royaltyVaultStatus === "loading") {
+      throw new Error("Resolving the IP Royalty Vault. Try again in a moment.");
+    }
+    if (royaltyVaultStatus === "not-deployed") {
+      throw new Error(
+        "Royalties aren’t active yet. Mint a license or register a derivative to deploy the IP Royalty Vault.",
+      );
+    }
+    if (royaltyVaultStatus === "error") {
+      throw new Error(
+        royaltyVaultError
+          ? `Failed to resolve the IP Royalty Vault: ${royaltyVaultError}`
+          : "Failed to resolve the IP Royalty Vault.",
+      );
+    }
+    if (!royaltiesActive) {
+      throw new Error("IP Royalty Vault unavailable.");
+    }
+  };
+
   const claimerAddress = useMemo(() => {
     if (!asset?.ipId) return null;
     if (claimerMode === "ip") return asset.ipId;
     return address ?? null;
   }, [address, asset?.ipId, claimerMode]);
+
+  const royaltiesActive = royaltyVaultStatus === "ready" && Boolean(royaltyVault);
+  const walletReady = Boolean(isConnected && address && storyClient);
+  const royaltyVaultDisplay =
+    royaltyVaultStatus === "ready" && royaltyVault
+      ? royaltyVault
+      : royaltyVaultStatus === "loading"
+        ? "Resolving…"
+        : royaltyVaultStatus === "not-deployed"
+          ? "Not active yet"
+          : royaltyVaultStatus === "error"
+            ? "Failed to resolve"
+            : "—";
 
   const handleSyncToConvex = async () => {
     if (!address) return;
@@ -329,7 +434,7 @@ export default function AssetDetailPage() {
     } catch (err: any) {
       console.error(err);
       setSyncStatus("error");
-      setSyncMessage(err?.message ?? "Sync failed.");
+      setSyncMessage(formatUserError(err, "Sync failed."));
     }
   };
 
@@ -389,13 +494,13 @@ export default function AssetDetailPage() {
           setIsListedInConvex(true);
         } catch (syncErr: any) {
           console.error(syncErr);
-          toast.error(syncErr?.message ?? "Marketplace sync failed.");
+          toast.error(formatUserError(syncErr, "Marketplace sync failed."));
         }
       }
     } catch (err: any) {
       console.error(err);
       setLicenseStatus("error");
-      setLicenseMessage(err?.message ?? "Failed to attach license terms.");
+      setLicenseMessage(formatUserError(err, "Failed to attach license terms."));
     }
   };
 
@@ -404,6 +509,7 @@ export default function AssetDetailPage() {
     setTipMessage(null);
     try {
       ensureWalletReady();
+      ensureRoyaltiesActive();
       const res = await tipIpWithWip({
         client: storyClient!,
         receiverIpId: asset!.ipId as `0x${string}`,
@@ -414,15 +520,17 @@ export default function AssetDetailPage() {
     } catch (err: any) {
       console.error(err);
       setTipStatus("error");
-      setTipMessage(err?.message ?? "Tip failed.");
+      setTipMessage(formatUserError(err, "Tip failed."));
     }
   };
 
   const handleRefreshClaimable = async () => {
     setClaimableStatus("loading");
     setClaimableMessage(null);
+    setClaimMessage(null);
     try {
       ensureWalletReady();
+      ensureRoyaltiesActive();
       if (!claimerAddress || !isAddress(claimerAddress)) {
         throw new Error("Valid claimer address required.");
       }
@@ -437,15 +545,17 @@ export default function AssetDetailPage() {
     } catch (err: any) {
       console.error(err);
       setClaimableStatus("error");
-      setClaimableMessage(err?.message ?? "Failed to fetch claimable revenue.");
+      setClaimableMessage(formatUserError(err, "Failed to fetch claimable revenue."));
     }
   };
 
   const handleClaimAll = async () => {
     setClaimStatus("loading");
     setClaimMessage(null);
+    setClaimableMessage(null);
     try {
       ensureWalletReady();
+      ensureRoyaltiesActive();
       if (!claimerAddress || !isAddress(claimerAddress)) {
         throw new Error("Valid claimer address required.");
       }
@@ -459,7 +569,7 @@ export default function AssetDetailPage() {
     } catch (err: any) {
       console.error(err);
       setClaimStatus("error");
-      setClaimMessage(err?.message ?? "Claim failed.");
+      setClaimMessage(formatUserError(err, "Claim failed."));
     }
   };
 
@@ -468,6 +578,7 @@ export default function AssetDetailPage() {
     setFractionMessage(null);
     try {
       ensureWalletReady();
+      ensureRoyaltiesActive();
       if (!isAddress(fractionTarget)) {
         throw new Error("Recipient must be a valid address.");
       }
@@ -482,7 +593,7 @@ export default function AssetDetailPage() {
     } catch (err: any) {
       console.error(err);
       setFractionStatus("error");
-      setFractionMessage(err?.message ?? "Transfer failed.");
+      setFractionMessage(formatUserError(err, "Transfer failed."));
     }
   };
 
@@ -494,10 +605,12 @@ export default function AssetDetailPage() {
       const res = await wrapIpToWip({ client: storyClient!, amountIp: wrapAmount });
       setWrapStatus("success");
       setWrapMessage(`Wrapped IP→WIP. Tx: ${res.txHash ?? "submitted"}`);
+      void refetchIpBalance();
+      void refetchWipBalance();
     } catch (err: any) {
       console.error(err);
       setWrapStatus("error");
-      setWrapMessage(err?.message ?? "Wrap failed.");
+      setWrapMessage(formatUserError(err, "Wrap failed."));
     }
   };
 
@@ -512,10 +625,12 @@ export default function AssetDetailPage() {
       });
       setUnwrapStatus("success");
       setUnwrapMessage(`Unwrapped WIP→IP. Tx: ${res.txHash ?? "submitted"}`);
+      void refetchIpBalance();
+      void refetchWipBalance();
     } catch (err: any) {
       console.error(err);
       setUnwrapStatus("error");
-      setUnwrapMessage(err?.message ?? "Unwrap failed.");
+      setUnwrapMessage(formatUserError(err, "Unwrap failed."));
     }
   };
 
@@ -584,24 +699,27 @@ export default function AssetDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => void handleCopy(asset.ipId)}
-          >
-            <Copy className="h-4 w-4" />
-            Copy IP ID
-          </Button>
-          <Button size="sm" variant="outline" asChild>
-            <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>Public page</Link>
-          </Button>
-          <Button size="sm" asChild>
-            <a
-              href={getStoryIpaExplorerUrl({ ipId: asset.ipId })}
-              target="_blank"
-              rel="noreferrer"
-            >
+	        <div className="flex flex-wrap items-center gap-2">
+	          <Button
+	            size="sm"
+	            variant="outline"
+	            onClick={() => void handleCopy(asset.ipId)}
+	          >
+	            <Copy className="h-4 w-4" />
+	            Copy IP ID
+	          </Button>
+	          <Button size="sm" asChild>
+	            <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>
+	              <Globe className="h-4 w-4" />
+	              Public page
+	            </Link>
+	          </Button>
+	          <Button size="sm" variant="outline" asChild>
+	            <a
+	              href={getStoryIpaExplorerUrl({ ipId: asset.ipId })}
+	              target="_blank"
+	              rel="noreferrer"
+	            >
               <ExternalLink className="h-4 w-4" />
               Story Explorer
             </a>
@@ -625,29 +743,29 @@ export default function AssetDetailPage() {
             >
               {syncStatus === "syncing" ? "Syncing…" : "Sync to Convex"}
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => void load()}
-              disabled={syncStatus === "syncing"}
-            >
-              Refresh
-            </Button>
-            {syncMessage ? (
-              <p
-                className={`text-sm ${
-                  syncStatus === "error"
-                    ? "text-destructive"
-                    : syncStatus === "success"
-                      ? "text-emerald-600 dark:text-emerald-300"
-                      : "text-muted-foreground"
-                }`}
-              >
-                {syncMessage}
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
+	            <Button
+	              variant="outline"
+	              onClick={() => void load()}
+	              disabled={syncStatus === "syncing"}
+	            >
+	              Refresh
+	            </Button>
+	            {syncMessage ? (
+	              <StatusCallout
+	                tone={
+	                  syncStatus === "success"
+	                    ? "success"
+	                    : syncStatus === "error"
+	                      ? "error"
+	                      : "info"
+	                }
+	              >
+	                {syncMessage}
+	              </StatusCallout>
+	            ) : null}
+	          </CardContent>
+	        </Card>
+	      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <Button
@@ -721,20 +839,25 @@ export default function AssetDetailPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="space-y-2">
-                  <Label>Public page</Label>
-                  <div className="flex items-center gap-2">
-                    <Input readOnly value={`/ip/${asset.ipId}`} />
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      aria-label="Copy public page path"
-                      onClick={() => void handleCopy(`/ip/${asset.ipId}`)}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+	                  <Label>Public page</Label>
+	                  <div className="flex items-center gap-2">
+	                    <Input readOnly value={`/ip/${asset.ipId}`} />
+	                    <Button
+	                      type="button"
+	                      size="icon"
+	                      variant="outline"
+	                      aria-label="Copy public page path"
+	                      onClick={() => void handleCopy(`/ip/${asset.ipId}`)}
+	                    >
+	                      <Copy className="h-4 w-4" />
+	                    </Button>
+	                    <Button asChild type="button" size="icon" variant="outline" aria-label="Open public page">
+	                      <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>
+	                        <Globe className="h-4 w-4" />
+	                      </Link>
+	                    </Button>
+	                  </div>
+	                </div>
 
                 <div className="space-y-2">
                   <Label>Story Explorer</Label>
@@ -761,16 +884,10 @@ export default function AssetDetailPage() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={
-                      royaltyVault
-                        ? royaltyVault
-                        : isResolvingVault
-                          ? "Resolving…"
-                          : "Unavailable"
-                    }
-                  />
+	                  <Input
+	                    readOnly
+	                    value={royaltyVaultDisplay}
+	                  />
                   {royaltyVault ? (
                     <Button
                       type="button"
@@ -837,27 +954,21 @@ export default function AssetDetailPage() {
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  onClick={() => void handleAttachTerms()}
-                  disabled={licenseStatus === "loading"}
-                >
-                  {licenseStatus === "loading" ? "Attaching…" : "Attach terms"}
-                </Button>
-                {licenseMessage ? (
-                  <p
-                    className={`text-sm ${
-                      licenseStatus === "success"
-                        ? "text-emerald-600 dark:text-emerald-300"
-                        : "text-destructive"
-                    }`}
-                  >
-                    {licenseMessage}
-                  </p>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+	              <div className="flex flex-wrap items-center gap-2">
+	                <Button
+	                  onClick={() => void handleAttachTerms()}
+	                  disabled={licenseStatus === "loading"}
+	                >
+	                  {licenseStatus === "loading" ? "Attaching…" : "Attach terms"}
+	                </Button>
+	              </div>
+	              {licenseMessage ? (
+	                <StatusCallout tone={licenseStatus === "success" ? "success" : "error"}>
+	                  {licenseMessage}
+	                </StatusCallout>
+	              ) : null}
+	            </CardContent>
+	          </Card>
 
           <Card>
             <CardHeader>
@@ -879,243 +990,392 @@ export default function AssetDetailPage() {
         </div>
       ) : null}
 
-      {tab === "royalties" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tip this IP</CardTitle>
-              <CardDescription>Send WIP tips/payments into the IP Royalty Vault.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="tipAmount">Amount (WIP)</Label>
-                <Input
-                  id="tipAmount"
-                  inputMode="decimal"
-                  value={tipAmount}
-                  onChange={(e) => setTipAmount(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={() => void handleTip()} disabled={tipStatus === "loading"}>
-                  {tipStatus === "loading" ? "Sending…" : "Send tip"}
-                </Button>
-                {tipMessage ? (
-                  <p
-                    className={`text-sm ${
-                      tipStatus === "success"
-                        ? "text-emerald-600 dark:text-emerald-300"
-                        : "text-destructive"
-                    }`}
-                  >
-                    {tipMessage}
-                  </p>
-                ) : null}
-              </div>
-            </CardContent>
-          </Card>
+	      {tab === "royalties" ? (
+	        <div className="grid gap-6 lg:grid-cols-2">
+	          <Card className="lg:col-span-2">
+	            <CardHeader>
+	              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+	                <div className="space-y-1">
+	                  <CardTitle>IP Royalty Vault</CardTitle>
+	                  <CardDescription>
+	                    Onchain vault that receives tips and licensing revenue for this IP.
+	                  </CardDescription>
+	                </div>
+	                <div className="flex flex-wrap items-center gap-2">
+	                  {royaltyVaultStatus === "ready" ? (
+	                    <Badge variant="success">Active</Badge>
+	                  ) : royaltyVaultStatus === "not-deployed" ? (
+	                    <Badge variant="warning">Not active</Badge>
+	                  ) : royaltyVaultStatus === "loading" ? (
+	                    <Badge variant="outline">Resolving…</Badge>
+	                  ) : royaltyVaultStatus === "error" ? (
+	                    <Badge variant="warning">Resolve failed</Badge>
+	                  ) : (
+	                    <Badge variant="outline">Unknown</Badge>
+	                  )}
+	                  <Button
+	                    type="button"
+	                    size="sm"
+	                    variant="outline"
+	                    onClick={() => setVaultRefreshIndex((i) => i + 1)}
+	                    disabled={royaltyVaultStatus === "loading"}
+	                  >
+	                    Refresh vault
+	                  </Button>
+	                </div>
+	              </div>
+	            </CardHeader>
+	            <CardContent className="space-y-4">
+	              <div className="flex items-center gap-2">
+	                <Input readOnly value={royaltyVaultDisplay} />
+	                {royaltiesActive && royaltyVault ? (
+	                  <Button
+	                    type="button"
+	                    size="icon"
+	                    variant="outline"
+	                    aria-label="Copy royalty vault"
+	                    onClick={() => void handleCopy(royaltyVault)}
+	                  >
+	                    <Copy className="h-4 w-4" />
+	                  </Button>
+	                ) : null}
+	              </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Royalties dashboard</CardTitle>
-              <CardDescription>Check claimable revenue and claim WIP to your wallet.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant={claimerMode === "ip" ? "default" : "outline"}
-                  onClick={() => setClaimerMode("ip")}
-                >
-                  Claim as IP Account
-                </Button>
-                <Button
-                  type="button"
-                  variant={claimerMode === "wallet" ? "default" : "outline"}
-                  onClick={() => setClaimerMode("wallet")}
-                  disabled={!address}
-                >
-                  Claim as my wallet
-                </Button>
-              </div>
+	              {royaltyVaultStatus === "not-deployed" ? (
+	                <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground space-y-2">
+	                  <p>
+	                    Royalties aren’t active yet. Story deploys the IP Royalty Vault after the first license
+	                    mint or derivative registration.
+	                  </p>
+	                  <div className="flex flex-wrap items-center gap-2">
+	                    <Button asChild variant="secondary">
+	                      <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>Open public page</Link>
+	                    </Button>
+	                    <Button asChild variant="outline">
+	                      <a
+	                        href="https://docs.story.foundation/developers/typescript-sdk/pay-ipa"
+	                        target="_blank"
+	                        rel="noreferrer"
+	                      >
+	                        Story docs
+	                      </a>
+	                    </Button>
+	                  </div>
+	                </div>
+	              ) : null}
 
-              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground space-y-1">
-                <p>
-                  Claimer: <span className="font-mono">{claimerAddress ?? "—"}</span>
-                </p>
+	              {royaltyVaultStatus === "error" && royaltyVaultError ? (
+	                <StatusCallout tone="error">{royaltyVaultError}</StatusCallout>
+	              ) : null}
+	            </CardContent>
+	          </Card>
+
+	          <Card>
+	            <CardHeader>
+	              <CardTitle>Tip this IP</CardTitle>
+	              <CardDescription>
+	                Send WIP into this IP’s royalty vault. Tips are distributed to Royalty Token holders.
+	              </CardDescription>
+	            </CardHeader>
+	            <CardContent className="space-y-4">
+	              <div className="space-y-2">
+	                <Label htmlFor="tipAmount">Amount (WIP)</Label>
+	                <Input
+	                  id="tipAmount"
+	                  inputMode="decimal"
+	                  value={tipAmount}
+	                  onChange={(e) => setTipAmount(e.target.value)}
+	                />
+	                <p className="text-xs text-muted-foreground">
+	                  Balance:{" "}
+	                  {!address
+	                    ? "Connect wallet to see balance."
+	                    : isWipBalanceLoading
+	                      ? "Loading…"
+	                      : `${wipBalance?.formatted ?? "0"} WIP`}
+	                </p>
+	                {!royaltiesActive ? (
+	                  <p className="text-sm text-muted-foreground">
+	                    Tips are disabled until the IP Royalty Vault is active.
+	                  </p>
+	                ) : null}
+	              </div>
+	              <div className="flex flex-wrap items-center gap-2">
+	                <Button
+	                  onClick={() => void handleTip()}
+	                  disabled={tipStatus === "loading" || !walletReady || !royaltiesActive}
+	                >
+	                  {tipStatus === "loading" ? "Sending…" : "Send tip"}
+	                </Button>
+	              </div>
+	              {tipMessage ? (
+	                <StatusCallout tone={tipStatus === "success" ? "success" : "error"}>{tipMessage}</StatusCallout>
+	              ) : null}
+	            </CardContent>
+	          </Card>
+
+	          <Card>
+	            <CardHeader>
+	              <CardTitle>Claim revenue</CardTitle>
+	              <CardDescription>
+	                Check claimable WIP and claim it to your wallet. IP account is recommended for creators.
+	              </CardDescription>
+	            </CardHeader>
+	            <CardContent className="space-y-4">
+	              <div className="space-y-2">
+	                <Label>Claim as</Label>
+	                <div
+	                  role="tablist"
+	                  aria-label="Select claimer mode"
+	                  className="inline-flex w-full rounded-md border border-input bg-background p-1"
+	                >
+	                  <button
+	                    type="button"
+	                    role="tab"
+	                    aria-selected={claimerMode === "ip"}
+	                    className={cn(
+	                      "flex-1 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+	                      claimerMode === "ip"
+	                        ? "bg-primary text-primary-foreground shadow-sm"
+	                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+	                    )}
+	                    onClick={() => setClaimerMode("ip")}
+	                  >
+	                    IP account
+	                  </button>
+	                  <button
+	                    type="button"
+	                    role="tab"
+	                    aria-selected={claimerMode === "wallet"}
+	                    className={cn(
+	                      "flex-1 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+	                      claimerMode === "wallet"
+	                        ? "bg-primary text-primary-foreground shadow-sm"
+	                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+	                      !address && "pointer-events-none opacity-50",
+	                    )}
+	                    onClick={() => setClaimerMode("wallet")}
+	                    disabled={!address}
+	                  >
+	                    My wallet
+	                  </button>
+	                </div>
+	                <p className="text-xs text-muted-foreground">
+	                  Wallet mode only works if your wallet holds Royalty Tokens for this IP.
+	                </p>
+	              </div>
+
+	              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground space-y-1">
+	                <p>
+	                  Claimer: <span className="font-mono">{claimerAddress ?? "—"}</span>
+	                </p>
                 <p>
                   Token:{" "}
                   <span className="font-mono">{clientEnv.NEXT_PUBLIC_WIP_TOKEN_ADDRESS}</span>
                 </p>
-                <p>
-                  Claimable:{" "}
-                  <span className="font-mono">
-                    {claimableWip === null ? "—" : `${formatEther(claimableWip)} WIP`}
-                  </span>
-                </p>
-              </div>
+	                <p>
+	                  Claimable:{" "}
+	                  <span className="font-mono">
+	                    {!royaltiesActive
+	                      ? "Royalties not active"
+	                      : claimableWip === null
+	                        ? "—"
+	                        : `${formatEther(claimableWip)} WIP`}
+	                  </span>
+	                </p>
+	              </div>
+	              {!royaltiesActive ? (
+	                <p className="text-sm text-muted-foreground">
+	                  Claiming is disabled until the IP Royalty Vault is active.
+	                </p>
+	              ) : null}
 
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handleRefreshClaimable()}
-                  disabled={claimableStatus === "loading"}
-                >
-                  {claimableStatus === "loading" ? "Refreshing…" : "Refresh claimable"}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => void handleClaimAll()}
-                  disabled={claimStatus === "loading"}
-                >
-                  {claimStatus === "loading" ? "Claiming…" : "Claim revenue"}
-                </Button>
-              </div>
+	              <div className="flex flex-wrap items-center gap-2">
+	                <Button
+	                  type="button"
+	                  variant="outline"
+	                  onClick={() => void handleRefreshClaimable()}
+	                  disabled={claimableStatus === "loading" || !walletReady || !royaltiesActive}
+	                >
+	                  {claimableStatus === "loading" ? "Refreshing…" : "Refresh claimable"}
+	                </Button>
+	                <Button
+	                  type="button"
+	                  onClick={() => void handleClaimAll()}
+	                  disabled={claimStatus === "loading" || !walletReady || !royaltiesActive}
+	                >
+	                  {claimStatus === "loading" ? "Claiming…" : "Claim revenue"}
+	                </Button>
+	              </div>
 
-              {claimableMessage ? (
-                <p
-                  className={`text-sm ${
-                    claimableStatus === "success"
-                      ? "text-emerald-600 dark:text-emerald-300"
-                      : "text-destructive"
-                  }`}
-                >
-                  {claimableMessage}
-                </p>
-              ) : null}
-              {claimMessage ? (
-                <p
-                  className={`text-sm ${
-                    claimStatus === "success"
-                      ? "text-emerald-600 dark:text-emerald-300"
-                      : "text-destructive"
-                  }`}
-                >
-                  {claimMessage}
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
+	              {claimMessage || claimableMessage ? (
+	                <StatusCallout
+	                  tone={
+	                    (claimMessage ? claimStatus : claimableStatus) === "success"
+	                      ? "success"
+	                      : "error"
+	                  }
+	                >
+	                  {claimMessage ?? claimableMessage}
+	                </StatusCallout>
+	              ) : null}
+	            </CardContent>
+	          </Card>
 
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Advanced IPFi</CardTitle>
-              <CardDescription>Royalty-token transfers and WIP wrapping utilities.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <details className="rounded-lg border border-border bg-muted/20 p-4">
-                <summary className="cursor-pointer text-sm font-medium text-foreground">
-                  Fractionalize royalties (transfer Royalty Tokens)
-                </summary>
-                <div className="mt-4 space-y-3">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="fractionTarget">Recipient</Label>
-                      <Input
+	          <Card className="lg:col-span-2">
+	            <CardHeader>
+	              <CardTitle>Advanced IPFi</CardTitle>
+	              <CardDescription>
+	                Transfer Royalty Tokens (ownership) and wrap/unwrap between native IP and WIP.
+	              </CardDescription>
+	            </CardHeader>
+	            <CardContent className="space-y-6">
+	              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground">
+	                <p className="font-medium text-foreground">Wallet balances</p>
+	                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+	                  <p>
+	                    IP (native):{" "}
+	                    {!address
+	                      ? "—"
+	                      : isIpBalanceLoading
+	                        ? "Loading…"
+	                        : `${ipBalance?.formatted ?? "0"} IP`}
+	                  </p>
+	                  <p>
+	                    WIP (ERC-20):{" "}
+	                    {!address
+	                      ? "—"
+	                      : isWipBalanceLoading
+	                        ? "Loading…"
+	                        : `${wipBalance?.formatted ?? "0"} WIP`}
+	                  </p>
+	                </div>
+	              </div>
+
+	              <details className="rounded-lg border border-border bg-muted/20 p-4">
+	                <summary className="cursor-pointer text-sm font-medium text-foreground">
+	                  Fractionalize royalties (transfer Royalty Tokens)
+	                </summary>
+	                <div className="mt-4 space-y-3">
+	                  <p className="text-sm text-muted-foreground">
+	                    Transfers Royalty Tokens from the IP Account. 100% ownership equals 100,000,000 units.
+	                  </p>
+	                  <div className="grid gap-3 md:grid-cols-2">
+	                    <div className="space-y-2">
+	                      <Label htmlFor="fractionTarget">Recipient</Label>
+	                      <Input
                         id="fractionTarget"
                         placeholder="0x…"
                         value={fractionTarget}
                         onChange={(e) => setFractionTarget(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="fractionPercent">Percent</Label>
-                      <Input
-                        id="fractionPercent"
-                        inputMode="decimal"
-                        value={fractionPercent}
-                        onChange={(e) => setFractionPercent(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => void handleFractionalize()}
-                      disabled={fractionStatus === "loading"}
-                    >
-                      {fractionStatus === "loading" ? "Transferring…" : "Transfer"}
-                    </Button>
-                    {fractionMessage ? (
-                      <p
-                        className={`text-sm ${
-                          fractionStatus === "success"
-                            ? "text-emerald-600 dark:text-emerald-300"
-                            : "text-destructive"
-                        }`}
-                      >
-                        {fractionMessage}
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-              </details>
+	                      />
+	                    </div>
+	                    <div className="space-y-2">
+	                      <Label htmlFor="fractionPercent">Percent (%)</Label>
+	                      <div className="relative">
+	                        <Input
+	                          id="fractionPercent"
+	                          inputMode="decimal"
+	                          className="pr-10"
+	                          value={fractionPercent}
+	                          onChange={(e) => setFractionPercent(e.target.value)}
+	                        />
+	                        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+	                          %
+	                        </span>
+	                      </div>
+	                    </div>
+	                  </div>
+	                  {!royaltiesActive ? (
+	                    <p className="text-sm text-muted-foreground">
+	                      Royalties must be active (vault deployed) before Royalty Tokens can be transferred.
+	                    </p>
+	                  ) : null}
+	                  <div className="flex flex-wrap items-center gap-2">
+	                    <Button
+	                      type="button"
+	                      onClick={() => void handleFractionalize()}
+	                      disabled={fractionStatus === "loading" || !walletReady || !royaltiesActive}
+	                    >
+	                      {fractionStatus === "loading" ? "Transferring…" : "Transfer"}
+	                    </Button>
+	                  </div>
+	                  {fractionMessage ? (
+	                    <StatusCallout tone={fractionStatus === "success" ? "success" : "error"}>
+	                      {fractionMessage}
+	                    </StatusCallout>
+	                  ) : null}
+	                </div>
+	              </details>
 
               <details className="rounded-lg border border-border bg-muted/20 p-4">
                 <summary className="cursor-pointer text-sm font-medium text-foreground">
                   Wrap / unwrap WIP
                 </summary>
                 <div className="mt-4 grid gap-6 md:grid-cols-2">
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="wrapAmount">Wrap IP → WIP</Label>
-                      <Input
-                        id="wrapAmount"
-                        inputMode="decimal"
-                        value={wrapAmount}
-                        onChange={(e) => setWrapAmount(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => void handleWrap()}
-                      disabled={wrapStatus === "loading"}
-                    >
-                      {wrapStatus === "loading" ? "Wrapping…" : "Wrap"}
-                    </Button>
-                    {wrapMessage ? (
-                      <p
-                        className={`text-sm ${
-                          wrapStatus === "success"
-                            ? "text-emerald-600 dark:text-emerald-300"
-                            : "text-destructive"
-                        }`}
-                      >
-                        {wrapMessage}
-                      </p>
-                    ) : null}
-                  </div>
+	                  <div className="space-y-3">
+	                    <div className="space-y-2">
+	                      <Label htmlFor="wrapAmount">Wrap IP → WIP</Label>
+	                      <Input
+	                        id="wrapAmount"
+	                        inputMode="decimal"
+	                        value={wrapAmount}
+	                        onChange={(e) => setWrapAmount(e.target.value)}
+	                      />
+	                      <p className="text-xs text-muted-foreground">
+	                        Available:{" "}
+	                        {!address
+	                          ? "—"
+	                          : isIpBalanceLoading
+	                            ? "Loading…"
+	                            : `${ipBalance?.formatted ?? "0"} IP`}
+	                      </p>
+	                    </div>
+	                    <Button
+	                      type="button"
+	                      onClick={() => void handleWrap()}
+	                      disabled={wrapStatus === "loading" || !walletReady}
+	                    >
+	                      {wrapStatus === "loading" ? "Wrapping…" : "Wrap"}
+	                    </Button>
+	                    {wrapMessage ? (
+	                      <StatusCallout tone={wrapStatus === "success" ? "success" : "error"}>
+	                        {wrapMessage}
+	                      </StatusCallout>
+	                    ) : null}
+	                  </div>
 
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="unwrapAmount">Unwrap WIP → IP</Label>
-                      <Input
-                        id="unwrapAmount"
-                        inputMode="decimal"
-                        value={unwrapAmount}
-                        onChange={(e) => setUnwrapAmount(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => void handleUnwrap()}
-                      disabled={unwrapStatus === "loading"}
-                    >
-                      {unwrapStatus === "loading" ? "Unwrapping…" : "Unwrap"}
-                    </Button>
-                    {unwrapMessage ? (
-                      <p
-                        className={`text-sm ${
-                          unwrapStatus === "success"
-                            ? "text-emerald-600 dark:text-emerald-300"
-                            : "text-destructive"
-                        }`}
-                      >
-                        {unwrapMessage}
-                      </p>
-                    ) : null}
-                  </div>
+	                  <div className="space-y-3">
+	                    <div className="space-y-2">
+	                      <Label htmlFor="unwrapAmount">Unwrap WIP → IP</Label>
+	                      <Input
+	                        id="unwrapAmount"
+	                        inputMode="decimal"
+	                        value={unwrapAmount}
+	                        onChange={(e) => setUnwrapAmount(e.target.value)}
+	                      />
+	                      <p className="text-xs text-muted-foreground">
+	                        Available:{" "}
+	                        {!address
+	                          ? "—"
+	                          : isWipBalanceLoading
+	                            ? "Loading…"
+	                            : `${wipBalance?.formatted ?? "0"} WIP`}
+	                      </p>
+	                    </div>
+	                    <Button
+	                      type="button"
+	                      onClick={() => void handleUnwrap()}
+	                      disabled={unwrapStatus === "loading" || !walletReady}
+	                    >
+	                      {unwrapStatus === "loading" ? "Unwrapping…" : "Unwrap"}
+	                    </Button>
+	                    {unwrapMessage ? (
+	                      <StatusCallout tone={unwrapStatus === "success" ? "success" : "error"}>
+	                        {unwrapMessage}
+	                      </StatusCallout>
+	                    ) : null}
+	                  </div>
                 </div>
               </details>
             </CardContent>

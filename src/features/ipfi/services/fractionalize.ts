@@ -1,18 +1,25 @@
 "use client";
 
 import type { StoryClient } from "@story-protocol/core-sdk";
+import { zeroAddress } from "viem";
 
 const ROYALTY_TOKEN_UNITS_PER_PERCENT = 1_000_000;
 const MAX_ROYALTY_TOKEN_UNITS = 100_000_000;
 
 function parsePercentToRoyaltyUnits(percentText: string): number {
   const trimmed = percentText.trim();
-  if (!trimmed) throw new Error("Percent is required.");
-  if (!/^(?:\\d+)(?:\\.\\d+)?$/.test(trimmed)) {
+  let normalized = trimmed.replace(/%$/, "").trim();
+  if (normalized.includes(",") && !normalized.includes(".")) {
+    normalized = normalized.replace(",", ".");
+  }
+  normalized = normalized.replace(/,/g, "");
+
+  if (!normalized) throw new Error("Percent is required.");
+  if (!/^(?:\\d+)(?:\\.\\d*)?$/.test(normalized)) {
     throw new Error("Percent must be a number.");
   }
 
-  const [wholeText, fractionTextRaw = ""] = trimmed.split(".");
+  const [wholeText, fractionTextRaw = ""] = normalized.split(".");
   const whole = Number(wholeText);
 
   if (!Number.isFinite(whole) || whole < 0) {
@@ -54,6 +61,11 @@ export async function transferRoyaltyPercentToWallet(params: {
 
   const amount = parsePercentToRoyaltyUnits(percent);
   const royaltyVaultAddress = await client.royalty.getRoyaltyVaultAddress(ipId);
+  if (royaltyVaultAddress === zeroAddress) {
+    throw new Error(
+      "Royalties aren’t active yet. Mint a license or register a derivative to deploy the IP Royalty Vault.",
+    );
+  }
 
   return client.ipAccount.transferErc20({
     ipId,
@@ -66,4 +78,3 @@ export async function transferRoyaltyPercentToWallet(params: {
     ],
   });
 }
-

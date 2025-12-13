@@ -7,8 +7,8 @@ export const storyAeneid = defineChain({
   name: "Story Aeneid",
   nativeCurrency: {
     decimals: 18,
-    name: "WIP",
-    symbol: "WIP",
+    name: "IP",
+    symbol: "IP",
   },
   rpcUrls: {
     default: { http: [clientEnv.NEXT_PUBLIC_STORY_RPC_URL] },
