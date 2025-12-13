@@ -103,26 +103,38 @@ export default function TextTimeline() {
   }, [timelineZoom, textElements]);
 
   return (
-    <div>
-      {textElements.map((clip, index) => (
-        <div key={clip.id} className="bg-green-500">
+    <>
+      {textElements.map((clip) => (
+        <React.Fragment key={clip.id}>
           <div
-            key={clip.id}
             ref={(el: HTMLDivElement | null) => {
               if (el) {
                 targetRefs.current[clip.id] = el;
               }
             }}
             onClick={() => handleClick("text", clip.id)}
-            className={`absolute border border-gray-500 border-opacity-50 rounded-md top-2 h-12 rounded bg-[#27272A] text-white text-sm flex items-center justify-center cursor-pointer ${activeElement === "text" && textElements[activeElementIndex]?.id === clip.id ? "bg-[#3F3F46] border-blue-500" : ""}`}
+            className={`absolute top-2 h-12 cursor-pointer items-center justify-center rounded-md border border-gray-500 border-opacity-50 bg-[#27272A] text-sm text-white ${
+              activeElement === "text" &&
+              textElements[activeElementIndex]?.id === clip.id
+                ? "border-blue-500 bg-[#3F3F46]"
+                : ""
+            } flex`}
             style={{
-              left: `${Math.max(0, (isFiniteNumber(clip.positionStart) ? clip.positionStart : 0) * zoom)}px`,
-              width: `${Math.max(2, ((isFiniteNumber(clip.positionEnd) ? clip.positionEnd : 0) - (isFiniteNumber(clip.positionStart) ? clip.positionStart : 0)) * zoom)}px`,
+              left: `${Math.max(
+                0,
+                (isFiniteNumber(clip.positionStart) ? clip.positionStart : 0) *
+                  zoom,
+              )}px`,
+              width: `${Math.max(
+                2,
+                ((isFiniteNumber(clip.positionEnd) ? clip.positionEnd : 0) -
+                  (isFiniteNumber(clip.positionStart) ? clip.positionStart : 0)) *
+                  zoom,
+              )}px`,
               zIndex: clip.zIndex,
             }}
           >
-            {/* <MoveableTimeline /> */}
-            <Type className="h-5 w-5 min-w-6 mr-2 flex-shrink-0 text-white/80" />
+            <Type className="mr-2 h-5 w-5 min-w-6 flex-shrink-0 text-white/80" />
             <span className="truncate text-x">{clip.text}</span>
           </div>
 
@@ -134,6 +146,12 @@ export default function TextTimeline() {
             }}
             target={targetRefs.current[clip.id] || null}
             container={null}
+            className={
+              activeElement === "text" &&
+              textElements[activeElementIndex]?.id === clip.id
+                ? "moveable-timeline"
+                : "moveable-control-box-hidden"
+            }
             renderDirections={
               activeElement === "text" &&
               textElements[activeElementIndex]?.id === clip.id
@@ -143,22 +161,14 @@ export default function TextTimeline() {
             draggable={true}
             throttleDrag={0}
             rotatable={false}
+            linePadding={4}
+            controlPadding={6}
             onDragStart={({ target, clientX, clientY }) => {}}
-            onDrag={({
-              target,
-              beforeDelta,
-              beforeDist,
-              left,
-              right,
-              delta,
-              dist,
-              transform,
-            }: OnDrag) => {
+            onDrag={({ target, left }: OnDrag) => {
               handleClick("text", clip.id);
               handleDrag(clip, target as HTMLElement, left);
             }}
             onDragEnd={({ target, isDrag, clientX, clientY }) => {}}
-            /* resizable*/
             resizable={true}
             throttleResize={0}
             onResizeStart={({ target, clientX, clientY }) => {}}
@@ -176,8 +186,8 @@ export default function TextTimeline() {
             }}
             onResizeEnd={({ target, isDrag, clientX, clientY }) => {}}
           />
-        </div>
+        </React.Fragment>
       ))}
-    </div>
+    </>
   );
 }

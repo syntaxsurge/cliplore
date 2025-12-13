@@ -2,52 +2,48 @@
 
 import { getFile, useAppDispatch, useAppSelector } from "../../../../store";
 import { setMediaFiles } from "../../../../store/slices/projectSlice";
-import { storeFile } from "../../../../store";
 import { categorizeFile } from "../../../../utils/utils";
 import { Plus } from "lucide-react";
 import toast from "react-hot-toast";
+import { createMediaFileFromFile } from "@/lib/media/ingest";
 
 export default function AddMedia({ fileId }: { fileId: string }) {
-  const { mediaFiles } = useAppSelector((state) => state.projectState);
+  const { mediaFiles, resolution } = useAppSelector(
+    (state) => state.projectState,
+  );
   const dispatch = useAppDispatch();
 
   const handleFileChange = async () => {
     const updatedMedia = [...mediaFiles];
 
     const file = await getFile(fileId);
-    const mediaId = crypto.randomUUID();
+    if (!file) {
+      toast.error("File not found.");
+      return;
+    }
 
     if (fileId) {
-      const relevantClips = mediaFiles.filter(
-        (clip) => clip.type === categorizeFile(file.type),
-      );
+      const type = categorizeFile(file.type);
+      const relevantClips = mediaFiles.filter((clip) => clip.type === type);
       const lastEnd =
         relevantClips.length > 0
           ? Math.max(...relevantClips.map((f) => f.positionEnd))
           : 0;
 
-      updatedMedia.push({
-        id: mediaId,
-        fileName: file.name,
-        fileId: fileId,
-        startTime: 0,
-        endTime: 30,
-        src: URL.createObjectURL(file),
+      const src = URL.createObjectURL(file);
+      const mediaClip = await createMediaFileFromFile({
+        file,
+        fileId,
+        src,
         positionStart: lastEnd,
-        positionEnd: lastEnd + 30,
-        includeInMerge: true,
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-        rotation: 0,
-        opacity: 100,
-        crop: { x: 0, y: 0, width: 1920, height: 1080 },
-        playbackSpeed: 1,
-        volume: 100,
-        type: categorizeFile(file.type),
-        zIndex: 0,
+        frame: {
+          width: resolution?.width ?? 1920,
+          height: resolution?.height ?? 1080,
+        },
+        defaultDurationSeconds: 30,
       });
+
+      updatedMedia.push(mediaClip);
     }
     dispatch(setMediaFiles(updatedMedia));
     toast.success("Media added successfully.");

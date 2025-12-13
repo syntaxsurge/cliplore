@@ -5,8 +5,41 @@
 .moveable-origin {
   display: none !important;
 }
-.moveable-line.moveable-direction {
+
+.moveable-control-box-hidden {
   display: none !important;
+}
+
+.moveable-control-box.moveable-canvas .moveable-line.moveable-direction {
+  background: rgba(96, 165, 250, 0.95) !important;
+}
+
+.moveable-control-box.moveable-timeline .moveable-line.moveable-direction {
+  background: rgba(96, 165, 250, 0.85) !important;
+}
+
+.moveable-control-box.moveable-canvas .moveable-control {
+  width: 12px !important;
+  height: 12px !important;
+  margin-top: -6px !important;
+  margin-left: -6px !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  border: 2px solid rgba(96, 165, 250, 0.95) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 6px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+.moveable-control-box.moveable-timeline .moveable-control {
+  width: 10px !important;
+  height: 10px !important;
+  margin-top: -5px !important;
+  margin-left: -5px !important;
+  border-radius: 9999px !important;
+  background: #ffffff !important;
+  border: 2px solid rgba(96, 165, 250, 0.9) !important;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65) !important;
 }
 
 @layer base {

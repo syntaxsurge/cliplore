@@ -18,7 +18,19 @@ import TextTimeline from "./elements-timeline/TextTimeline";
 import { throttle } from "lodash";
 import GlobalKeyHandlerProps from "../../../components/editor/keys/GlobalKeyHandlerProps";
 import toast from "react-hot-toast";
-import { Check, Copy, Scissors, Trash2, X } from "lucide-react";
+import {
+  Check,
+  Copy,
+  Image as ImageIcon,
+  Music,
+  Scissors,
+  Trash2,
+  Type,
+  Video,
+  X,
+} from "lucide-react";
+
+const TRACK_LABEL_WIDTH_PX = 144;
 export const Timeline = () => {
   const {
     currentTime,
@@ -44,6 +56,9 @@ export const Timeline = () => {
     typeof duration === "number" && Number.isFinite(duration) && duration > 0
       ? duration
       : 0;
+  const totalSeconds = Math.max(safeDuration + 2, 61);
+  const laneWidthPx = totalSeconds * zoom;
+  const timelineCanvasWidthPx = TRACK_LABEL_WIDTH_PX + laneWidthPx;
 
   const throttledZoom = useMemo(
     () =>
@@ -223,8 +238,9 @@ export const Timeline = () => {
       dispatch(setIsPlaying(false));
       const rect = timelineRef.current.getBoundingClientRect();
       const scrollOffset = timelineRef.current.scrollLeft;
-      const offsetX = clientX - rect.left + scrollOffset;
-      const seconds = offsetX / zoom;
+      const offsetX =
+        clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
+      const seconds = Math.max(0, offsetX) / zoom;
       const clampedTime = Math.max(0, Math.min(safeDuration, seconds));
       dispatch(setCurrentTime(clampedTime));
       return clampedTime;
@@ -358,42 +374,113 @@ export const Timeline = () => {
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >
-        {/* Timeline Header */}
-        <Header />
+        <div className="relative" style={{ width: `${timelineCanvasWidthPx}px` }}>
+          {/* Timeline Header */}
+          <Header
+            labelWidth={TRACK_LABEL_WIDTH_PX}
+            totalSeconds={totalSeconds}
+            zoom={zoom}
+          />
 
-        <div
-          className="bg-[#1E1D21]"
-          style={{
-            width: "100%" /* or whatever width your timeline requires */,
-          }}
-        >
           {/* Timeline cursor */}
           <div
             className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-50 cursor-ew-resize"
             style={{
-              left: `${(typeof currentTime === "number" && Number.isFinite(currentTime) ? currentTime : 0) * zoom}px`,
+              left: `${TRACK_LABEL_WIDTH_PX + (typeof currentTime === "number" && Number.isFinite(currentTime) ? currentTime : 0) * zoom}px`,
             }}
             onMouseDown={(e) => {
               e.stopPropagation();
               setIsDraggingMarker(true);
             }}
           />
-          {/* Timeline elements */}
-          <div className="w-full">
-            <div className="relative h-16 z-10">
-              <VideoTimeline />
+
+          {/* Timeline rows */}
+          <div className="divide-y divide-white/10">
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+              }}
+            >
+              <div
+                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <Video className="h-4 w-4 text-white/60" aria-hidden="true" />
+                <span className="text-xs font-medium tracking-wide uppercase">
+                  Video
+                </span>
+              </div>
+              <div className="relative h-16 overflow-hidden bg-[#1B1A1E]">
+                <VideoTimeline />
+              </div>
             </div>
 
-            <div className="relative h-16 z-10">
-              <AudioTimeline />
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+              }}
+            >
+              <div
+                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <Music className="h-4 w-4 text-white/60" aria-hidden="true" />
+                <span className="text-xs font-medium tracking-wide uppercase">
+                  Music
+                </span>
+              </div>
+              <div className="relative h-16 overflow-hidden bg-[#1E1D21]">
+                <AudioTimeline />
+              </div>
             </div>
 
-            <div className="relative h-16 z-10">
-              <ImageTimeline />
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+              }}
+            >
+              <div
+                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <ImageIcon
+                  className="h-4 w-4 text-white/60"
+                  aria-hidden="true"
+                />
+                <span className="text-xs font-medium tracking-wide uppercase">
+                  Image
+                </span>
+              </div>
+              <div className="relative h-16 overflow-hidden bg-[#1B1A1E]">
+                <ImageTimeline />
+              </div>
             </div>
 
-            <div className="relative h-16 z-10">
-              <TextTimeline />
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+              }}
+            >
+              <div
+                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              >
+                <Type className="h-4 w-4 text-white/60" aria-hidden="true" />
+                <span className="text-xs font-medium tracking-wide uppercase">
+                  Text
+                </span>
+              </div>
+              <div className="relative h-16 overflow-hidden bg-[#1E1D21]">
+                <TextTimeline />
+              </div>
             </div>
           </div>
         </div>

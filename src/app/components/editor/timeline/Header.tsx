@@ -1,21 +1,42 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useAppSelector } from "../../../store";
-export const Header = () => {
-  const { duration, currentTime, timelineZoom, enableMarkerTracking } =
-    useAppSelector((state) => state.projectState);
-  const secondInterval = 0.2; // Every 0.2s
-  const totalSeconds = Math.max(duration + 2, 61);
-  const tickMarkers = Array.from(
-    { length: totalSeconds / secondInterval },
-    (_, i) => i * secondInterval,
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+type HeaderProps = {
+  labelWidth: number;
+  totalSeconds: number;
+  zoom: number;
+};
+
+export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
+  const { currentTime, enableMarkerTracking } = useAppSelector(
+    (state) => state.projectState,
   );
+  const secondInterval = 0.2; // Every 0.2s
+  const safeTotalSeconds =
+    isFiniteNumber(totalSeconds) && totalSeconds > 0
+      ? totalSeconds
+      : 61;
+  const safeZoom = isFiniteNumber(zoom) && zoom > 0 ? zoom : 60;
+  const laneWidthPx = safeTotalSeconds * safeZoom;
+
+  const tickMarkers = useMemo(() => {
+    return Array.from(
+      { length: safeTotalSeconds / secondInterval },
+      (_, i) => i * secondInterval,
+    );
+  }, [safeTotalSeconds]);
 
   // to track the marker when time changes
   const markerRefs = useRef<HTMLDivElement[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const roundedTime = Math.floor(currentTime);
+    const safeCurrentTime =
+      isFiniteNumber(currentTime) && currentTime > 0 ? currentTime : 0;
+    const roundedTime = Math.floor(safeCurrentTime);
     const el = markerRefs.current[roundedTime];
     if (el && el.scrollIntoView && enableMarkerTracking) {
       el.scrollIntoView({
@@ -27,8 +48,21 @@ export const Header = () => {
   }, [currentTime, enableMarkerTracking]);
 
   return (
-    <div className="flex items-center py-2 w-full" ref={containerRef}>
-      <div className="relative h-8">
+    <div
+      className="flex h-12 items-end border-b border-white/10 bg-[#1E1D21]"
+      ref={containerRef}
+      style={{ width: `${labelWidth + laneWidthPx}px` }}
+    >
+      <div
+        className="sticky left-0 z-30 flex h-full items-center border-r border-white/10 bg-[#1E1D21] px-3"
+        style={{ width: `${labelWidth}px` }}
+        onClick={(e) => e.stopPropagation()}
+        onDoubleClick={(e) => e.stopPropagation()}
+      >
+        <span className="text-xs font-medium text-white/60">Tracks</span>
+      </div>
+
+      <div className="relative h-full" style={{ width: `${laneWidthPx}px` }}>
         {tickMarkers.map((marker) => {
           const isWholeSecond = Number.isInteger(marker) && marker !== 0;
           return (
@@ -37,21 +71,23 @@ export const Header = () => {
                 if (el) markerRefs.current[marker] = el;
               }}
               key={marker}
-              className="absolute flex flex-col items-center"
+              className="absolute bottom-0 flex flex-col items-center"
               style={{
-                left: `${marker * timelineZoom}px`,
+                left: `${marker * safeZoom}px`,
                 width: `1px`,
                 height: "100%",
               }}
             >
-              {/* Tick line */}
               <div
-                className={`w-px ${isWholeSecond ? "h-7 bg-gray-400" : "h-2 bg-gray-300"}`}
+                className={`w-px ${
+                  isWholeSecond
+                    ? "h-8 bg-white/35"
+                    : "h-3 bg-white/20"
+                }`}
               />
 
-              {/* second labels */}
               {isWholeSecond && (
-                <span className="mt-1 text-[10px] text-gray-400 cursor-default">
+                <span className="mt-1 select-none text-[10px] text-white/50">
                   {marker}s
                 </span>
               )}

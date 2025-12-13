@@ -205,6 +205,8 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
               rotatable={false}
               resizable
               throttleResize={0}
+              linePadding={4}
+              controlPadding={6}
               onDrag={({ target, left }: OnDrag) => {
                 handleClick(clip.id);
                 handleDrag(clip, target as HTMLElement, left);
@@ -224,7 +226,7 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
               className={
                 activeElement === "media" &&
                 mediaFiles[activeElementIndex]?.id === clip.id
-                  ? ""
+                  ? "moveable-timeline"
                   : "moveable-control-box-hidden"
               }
             />

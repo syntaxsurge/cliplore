@@ -6,6 +6,7 @@ import { setFilesID, setMediaFiles } from "@/app/store/slices/projectSlice";
 import { categorizeFile } from "@/app/utils/utils";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
+import { createMediaFileFromFile } from "@/lib/media/ingest";
 
 type SoraStatus =
   | "idle"
@@ -23,7 +24,7 @@ type Props = {
 
 export function SoraPanel({ onGenerated, hideHeader = false, className }: Props) {
   const dispatch = useAppDispatch();
-  const { mediaFiles, filesID = [] } = useAppSelector(
+  const { mediaFiles, filesID = [], resolution } = useAppSelector(
     (state) => state.projectState,
   );
   const [prompt, setPrompt] = useState("");
@@ -45,33 +46,24 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
           ? Math.max(...relevantClips.map((f) => f.positionEnd))
           : 0;
 
-      updatedMedia.push({
-        id: crypto.randomUUID(),
-        fileName: file.name,
+      const src = URL.createObjectURL(file);
+      const mediaClip = await createMediaFileFromFile({
+        file,
         fileId,
-        startTime: 0,
-        endTime: 30,
-        src: URL.createObjectURL(file),
+        src,
         positionStart: lastEnd,
-        positionEnd: lastEnd + 30,
-        includeInMerge: true,
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-        rotation: 0,
-        opacity: 100,
-        crop: { x: 0, y: 0, width: 1920, height: 1080 },
-        playbackSpeed: 1,
-        volume: 100,
-        type: categorizeFile(file.type),
-        zIndex: 0,
+        frame: {
+          width: resolution?.width ?? 1920,
+          height: resolution?.height ?? 1080,
+        },
+        defaultDurationSeconds: 30,
       });
+      updatedMedia.push(mediaClip);
 
       dispatch(setFilesID([...filesID, fileId]));
       dispatch(setMediaFiles(updatedMedia));
     },
-    [dispatch, filesID, mediaFiles],
+    [dispatch, filesID, mediaFiles, resolution],
   );
 
   const pollJob = useCallback(async (jobId: string) => {
