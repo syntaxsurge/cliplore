@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useReducer, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import Moveable, { OnDrag, OnResize } from "react-moveable";
 import { useAppSelector } from "@/app/store";
 import {
@@ -35,6 +35,28 @@ export default function TextTimeline({
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [, forceUpdate] = useReducer((v) => v + 1, 0);
+  const refCallbacks = useRef<
+    Map<string, (el: HTMLDivElement | null) => void>
+  >(new Map());
+  const getTargetRef = useCallback(
+    (id: string) => {
+      const existing = refCallbacks.current.get(id);
+      if (existing) return existing;
+      const cb = (el: HTMLDivElement | null) => {
+        const prev = targetRefs.current[id] ?? null;
+        if (prev === el) return;
+        if (el) {
+          targetRefs.current[id] = el;
+          forceUpdate();
+          return;
+        }
+        delete targetRefs.current[id];
+      };
+      refCallbacks.current.set(id, cb);
+      return cb;
+    },
+    [forceUpdate],
+  );
   const { textElements, mediaFiles, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
@@ -211,16 +233,7 @@ export default function TextTimeline({
         .map((clip) => (
         <React.Fragment key={clip.id}>
           <div
-            ref={(el: HTMLDivElement | null) => {
-              const prev = targetRefs.current[clip.id] ?? null;
-              if (prev === el) return;
-              if (el) {
-                targetRefs.current[clip.id] = el;
-              } else {
-                delete targetRefs.current[clip.id];
-              }
-              forceUpdate();
-            }}
+            ref={getTargetRef(clip.id)}
             onClick={() => handleClick("text", clip.id)}
             className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 text-sm text-white/90 shadow-sm ${
               activeElement === "text" &&

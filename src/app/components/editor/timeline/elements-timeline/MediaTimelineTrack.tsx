@@ -13,7 +13,13 @@ import { MediaFile, MediaType, TimelineTrack } from "@/app/types";
 import Moveable, { OnDrag, OnResize } from "react-moveable";
 import { throttle } from "lodash";
 import { useDispatch } from "react-redux";
-import React, { useEffect, useMemo, useReducer, useRef } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from "react";
 import { Image as ImageIcon, Music, Video } from "lucide-react";
 import {
   computeRipplePlacement,
@@ -42,6 +48,28 @@ export function MediaTimelineTrack({
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const moveableRef = useRef<Record<string, Moveable | null>>({});
   const [, forceUpdate] = useReducer((v) => v + 1, 0);
+  const refCallbacks = useRef<
+    Map<string, (el: HTMLDivElement | null) => void>
+  >(new Map());
+  const getTargetRef = useCallback(
+    (id: string) => {
+      const existing = refCallbacks.current.get(id);
+      if (existing) return existing;
+      const cb = (el: HTMLDivElement | null) => {
+        const prev = targetRefs.current[id] ?? null;
+        if (prev === el) return;
+        if (el) {
+          targetRefs.current[id] = el;
+          forceUpdate();
+          return;
+        }
+        delete targetRefs.current[id];
+      };
+      refCallbacks.current.set(id, cb);
+      return cb;
+    },
+    [forceUpdate],
+  );
   const lastHoverTrackIdRef = useRef<string | null>(null);
   const { mediaFiles, textElements, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
@@ -258,16 +286,7 @@ export function MediaTimelineTrack({
 
               return (
                 <div
-                  ref={(el: HTMLDivElement | null) => {
-                    const prev = targetRefs.current[clip.id] ?? null;
-                    if (prev === el) return;
-                    if (el) {
-                      targetRefs.current[clip.id] = el;
-                    } else {
-                      delete targetRefs.current[clip.id];
-                    }
-                    forceUpdate();
-                  }}
+                  ref={getTargetRef(clip.id)}
                   onClick={() => handleClick(clip.id)}
                   className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border px-2 text-sm text-white/90 shadow-sm ${
                     clip.type === "video"
