@@ -4,7 +4,7 @@ import { uploadJsonToIPFS } from "@/lib/storage/pinata";
 import {
   buildStoryIpMetadata,
   buildStoryNftMetadata,
-  keccak256Json,
+  sha256Json,
   uploadIpMetadataSchema,
   type UploadIpMetadataInput,
 } from "@/lib/story/ip-metadata";
@@ -23,8 +23,7 @@ export async function uploadIpMetadataAction(input: unknown) {
   return {
     ipMetadataUri,
     nftMetadataUri,
-    ipMetadataHash: keccak256Json(ipMetadata),
-    nftMetadataHash: keccak256Json(nftMetadata),
+    ipMetadataHash: sha256Json(ipMetadata),
+    nftMetadataHash: sha256Json(nftMetadata),
   };
 }
-

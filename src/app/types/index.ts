@@ -119,7 +119,9 @@ export type ProjectPublishRecord = {
   videoKey?: string;
   thumbnailKey?: string;
   ipMetadataUri: string;
+  ipMetadataHash?: string;
   nftMetadataUri: string;
+  nftMetadataHash?: string;
   createdAt: string;
 };
 

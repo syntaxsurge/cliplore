@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { keccak256, toHex } from "viem";
-import { stableJsonStringify } from "@/lib/utils";
+import type { IpMetadata } from "@story-protocol/core-sdk";
+import { sha256, toHex, type Address, type Hash } from "viem";
 
 const uriSchema = z
   .string()
@@ -13,11 +13,23 @@ const uriSchema = z
     { message: "Must be an ipfs:// or http(s):// URI" },
   );
 
+const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, {
+  message: "Must be a 0x-prefixed 20-byte hex address",
+});
+
+const hashSchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/, {
+  message: "Must be a 0x-prefixed 32-byte hex hash",
+});
+
 export const uploadIpMetadataSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(5),
+  creatorAddress: addressSchema,
+  creatorName: z.string().min(1).max(32).optional(),
   videoUri: uriSchema,
+  mediaHash: hashSchema.optional(),
   thumbnailUri: uriSchema.optional(),
+  imageHash: hashSchema.optional(),
   videoMimeType: z.string().min(1).optional(),
   videoSizeBytes: z.number().int().positive().optional(),
   videoDurationSeconds: z.number().positive().optional(),
@@ -30,48 +42,84 @@ export const uploadIpMetadataSchema = z.object({
 export type UploadIpMetadataInput = z.infer<typeof uploadIpMetadataSchema>;
 
 export function buildStoryIpMetadata(input: UploadIpMetadataInput) {
-  const attributes: Array<{ trait_type: string; value: string | number }> = [
-    { trait_type: "type", value: "video" },
-  ];
+  const createdAt = new Date().toISOString();
+  const mediaType = input.videoMimeType?.startsWith("audio/")
+    ? "audio"
+    : input.videoMimeType?.startsWith("image/")
+      ? "image"
+      : "video";
 
-  if (input.videoMimeType) {
-    attributes.push({ trait_type: "video_mime_type", value: input.videoMimeType });
-  }
-  if (input.videoSizeBytes) {
-    attributes.push({ trait_type: "video_size_bytes", value: input.videoSizeBytes });
-  }
-  if (input.videoDurationSeconds) {
-    attributes.push({
-      trait_type: "video_duration_seconds",
-      value: Math.round(input.videoDurationSeconds * 100) / 100,
-    });
-  }
-  if (input.videoFps) {
-    attributes.push({ trait_type: "video_fps", value: input.videoFps });
-  }
-  if (input.videoResolution) {
-    attributes.push({ trait_type: "video_resolution", value: input.videoResolution });
-  }
-  if (input.thumbnailMimeType) {
-    attributes.push({
-      trait_type: "thumbnail_mime_type",
-      value: input.thumbnailMimeType,
-    });
-  }
-  if (input.thumbnailSizeBytes) {
-    attributes.push({
-      trait_type: "thumbnail_size_bytes",
-      value: input.thumbnailSizeBytes,
-    });
-  }
+  const fallbackName = `${input.creatorAddress.slice(0, 6)}...${input.creatorAddress.slice(-4)}`;
+  const creatorName = input.creatorName?.trim() || fallbackName;
 
-  return {
-    name: input.title,
+  const metadata: IpMetadata = {
+    title: input.title,
     description: input.description,
-    attributes,
-    animation_url: input.videoUri,
+    createdAt,
     image: input.thumbnailUri ?? input.videoUri,
+    imageHash: input.imageHash as Hash | undefined,
+    creators: [
+      {
+        name: creatorName,
+        address: input.creatorAddress as Address,
+        contributionPercent: 100,
+        role: "Creator",
+      },
+    ],
+    mediaUrl: input.videoUri,
+    mediaHash: input.mediaHash as Hash | undefined,
+    mediaType,
+    media: [
+      {
+        name: "Video",
+        url: input.videoUri,
+        mimeType: input.videoMimeType ?? "video/mp4",
+      },
+      ...(input.thumbnailUri
+        ? [
+            {
+              name: "Thumbnail",
+              url: input.thumbnailUri,
+              mimeType: input.thumbnailMimeType ?? "image/png",
+            },
+          ]
+        : []),
+    ],
   };
+
+  const videoDetails: Record<string, number | string> = {};
+  if (typeof input.videoSizeBytes === "number") {
+    videoDetails.sizeBytes = input.videoSizeBytes;
+  }
+  if (typeof input.videoDurationSeconds === "number") {
+    videoDetails.durationSeconds = Math.round(input.videoDurationSeconds * 100) / 100;
+  }
+  if (typeof input.videoFps === "number") {
+    videoDetails.fps = input.videoFps;
+  }
+  if (typeof input.videoResolution === "string" && input.videoResolution) {
+    videoDetails.resolution = input.videoResolution;
+  }
+  if (typeof input.videoMimeType === "string" && input.videoMimeType) {
+    videoDetails.mimeType = input.videoMimeType;
+  }
+
+  const thumbnailDetails: Record<string, number | string> = {};
+  if (typeof input.thumbnailSizeBytes === "number") {
+    thumbnailDetails.sizeBytes = input.thumbnailSizeBytes;
+  }
+  if (typeof input.thumbnailMimeType === "string" && input.thumbnailMimeType) {
+    thumbnailDetails.mimeType = input.thumbnailMimeType;
+  }
+
+  if (Object.keys(videoDetails).length) {
+    metadata.video = videoDetails;
+  }
+  if (Object.keys(thumbnailDetails).length) {
+    metadata.thumbnail = thumbnailDetails;
+  }
+
+  return metadata;
 }
 
 export function buildStoryNftMetadata(input: UploadIpMetadataInput) {
@@ -82,6 +130,10 @@ export function buildStoryNftMetadata(input: UploadIpMetadataInput) {
   };
 }
 
-export function keccak256Json(payload: unknown) {
-  return keccak256(toHex(stableJsonStringify(payload)));
+export function sha256Json(payload: unknown): Hash {
+  const json = JSON.stringify(payload);
+  if (!json) {
+    throw new Error("Failed to stringify payload for SHA-256 hashing.");
+  }
+  return sha256(toHex(json));
 }

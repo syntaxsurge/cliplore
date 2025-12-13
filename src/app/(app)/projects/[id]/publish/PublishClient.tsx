@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useAccount } from "wagmi";
 import { PILFlavor } from "@story-protocol/core-sdk";
-import { parseEther, zeroAddress } from "viem";
+import { parseEther, sha256, zeroAddress } from "viem";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { useStoryClient } from "@/lib/story/useStoryClient";
@@ -103,6 +103,8 @@ export default function PublishClient({
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrubCaptureInFlightRef = useRef(false);
   const scrubCaptureScheduledRef = useRef(false);
+
+  const [creatorName, setCreatorName] = useState<string>("");
 
   const exportDurationSeconds = useMemo(() => {
     const fromExport =
@@ -296,6 +298,9 @@ export default function PublishClient({
         const preset = user?.defaultLicensePreset as LicensePreset | undefined;
         if (preset && preset in LICENSE_PRESETS) {
           setLicensePreset(preset);
+        }
+        if (user?.displayName) {
+          setCreatorName(user.displayName);
         }
       } catch {
         // ignore
@@ -548,12 +553,41 @@ export default function PublishClient({
       const { baseProject, videoUpload, thumbnailUpload } =
         await uploadAssetsToB2();
 
+      if (!thumbnailUpload?.url) {
+        setStatus("error");
+        setMessage("Add a thumbnail to publish (required for Story Explorer).");
+        return;
+      }
+
+      let imageHash: `0x${string}` | undefined;
+      try {
+        if (thumbnailFile) {
+          imageHash = sha256(new Uint8Array(await thumbnailFile.arrayBuffer()));
+        } else {
+          const res = await fetch(thumbnailUpload.url, { method: "GET" });
+          if (!res.ok) {
+            throw new Error(`Thumbnail fetch failed: ${res.status}`);
+          }
+          imageHash = sha256(new Uint8Array(await res.arrayBuffer()));
+        }
+      } catch (hashErr) {
+        console.error(hashErr);
+        setStatus("error");
+        setMessage(
+          "Failed to compute thumbnail hash. Re-select the thumbnail or ensure your storage URL allows cross-origin GET.",
+        );
+        return;
+      }
+
       setMessage("Uploading Story metadata to IPFS…");
       const meta = await uploadIpMetadataAction({
         title: title.trim(),
         description: summary.trim(),
+        creatorAddress: address,
+        creatorName: creatorName.trim() || undefined,
         videoUri: videoUpload.url,
-        thumbnailUri: thumbnailUpload?.url,
+        thumbnailUri: thumbnailUpload.url,
+        imageHash,
         videoMimeType: exportFile.type || "video/mp4",
         videoSizeBytes: exportFile.size,
         videoDurationSeconds: selectedExport.durationSeconds,
@@ -617,7 +651,9 @@ export default function PublishClient({
         videoKey: videoUpload.key,
         thumbnailKey: thumbnailUpload?.key,
         ipMetadataUri: meta.ipMetadataUri,
+        ipMetadataHash: meta.ipMetadataHash,
         nftMetadataUri: meta.nftMetadataUri,
+        nftMetadataHash: meta.nftMetadataHash,
         createdAt: new Date().toISOString(),
       };
 
@@ -660,6 +696,7 @@ export default function PublishClient({
   };
 
   const published = selectedExport?.publish ?? null;
+  const hasThumbnail = Boolean(thumbnailFile || selectedExport?.upload?.thumbnailUrl);
 
   if (isLoadingProject) {
     return (
@@ -808,11 +845,11 @@ export default function PublishClient({
 	          <div className="lg:col-span-8 space-y-6">
 	            <Card>
 	              <CardHeader>
-		              <CardTitle>Preview & Thumbnail</CardTitle>
-		              <CardDescription>
-		                  Confirm the final cut and optionally choose a cover frame.
-		              </CardDescription>
-	              </CardHeader>
+			              <CardTitle>Preview & Thumbnail</CardTitle>
+			              <CardDescription>
+			                  Confirm the final cut and choose a cover frame for Story Explorer.
+			              </CardDescription>
+		              </CardHeader>
 	              <CardContent className="space-y-4">
 	                {exportPreviewUrl ? (
 	                  <div className="grid gap-4 lg:grid-cols-5">
@@ -845,14 +882,14 @@ export default function PublishClient({
 	                          <p className="text-sm font-medium text-foreground">
 	                            Thumbnail
 	                          </p>
-	                          <p className="text-xs text-muted-foreground">
-	                            Optional cover image for marketplace previews.
-	                          </p>
-	                        </div>
-		                        <Badge variant={thumbnailFile ? "success" : "outline"}>
-		                          {thumbnailFile ? "Selected" : "Optional"}
-		                        </Badge>
-	                      </div>
+		                          <p className="text-xs text-muted-foreground">
+		                            Cover image shown on Story Explorer and marketplace.
+		                          </p>
+		                        </div>
+			                        <Badge variant={hasThumbnail ? "success" : "warning"}>
+			                          {hasThumbnail ? "Ready" : "Required"}
+			                        </Badge>
+		                      </div>
 
 	                      <div className="relative aspect-video overflow-hidden rounded-xl border border-border bg-muted/30">
 	                        {thumbnailPreviewUrl || thumbnailScrubPreviewUrl ? (
@@ -865,13 +902,13 @@ export default function PublishClient({
 	                            className="object-cover"
 	                          />
 	                        ) : (
-	                          <div className="flex h-full flex-col items-center justify-center gap-1 p-4 text-center text-xs text-muted-foreground">
-	                            <p className="font-medium text-foreground/80">
-	                              No thumbnail selected
-	                            </p>
-		                            <p>Scrub to preview a frame, then set it as your thumbnail.</p>
-	                          </div>
-	                        )}
+		                          <div className="flex h-full flex-col items-center justify-center gap-1 p-4 text-center text-xs text-muted-foreground">
+		                            <p className="font-medium text-foreground/80">
+		                              No thumbnail selected
+		                            </p>
+			                            <p>Scrub to preview a frame, then set it as your thumbnail to publish.</p>
+		                          </div>
+		                        )}
 
 		                        {thumbnailScrubPreviewUrl ? (
 		                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
@@ -1051,19 +1088,28 @@ export default function PublishClient({
 		                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
 		                      <p className="text-sm font-medium text-foreground">Readiness</p>
 		                      <ul className="space-y-2 text-sm">
-		                        <li className="flex items-center justify-between gap-3">
-		                          <span className="text-muted-foreground">Wallet</span>
-		                          <Badge
-		                            variant={isConnected && address ? "success" : "warning"}
-		                            className="px-2 py-0.5 text-[11px] font-semibold"
-		                          >
-		                            {isConnected && address ? "Connected" : "Connect wallet"}
-		                          </Badge>
-		                        </li>
-		                        <li className="flex items-center justify-between gap-3">
-		                          <span className="text-muted-foreground">SPG NFT contract</span>
-		                          <Badge
-		                            variant={isSpgConfigured ? "success" : "warning"}
+			                        <li className="flex items-center justify-between gap-3">
+			                          <span className="text-muted-foreground">Wallet</span>
+			                          <Badge
+			                            variant={isConnected && address ? "success" : "warning"}
+			                            className="px-2 py-0.5 text-[11px] font-semibold"
+			                          >
+			                            {isConnected && address ? "Connected" : "Connect wallet"}
+			                          </Badge>
+			                        </li>
+			                        <li className="flex items-center justify-between gap-3">
+			                          <span className="text-muted-foreground">Thumbnail</span>
+			                          <Badge
+			                            variant={hasThumbnail ? "success" : "warning"}
+			                            className="px-2 py-0.5 text-[11px] font-semibold"
+			                          >
+			                            {hasThumbnail ? "Ready" : "Required"}
+			                          </Badge>
+			                        </li>
+			                        <li className="flex items-center justify-between gap-3">
+			                          <span className="text-muted-foreground">SPG NFT contract</span>
+			                          <Badge
+			                            variant={isSpgConfigured ? "success" : "warning"}
 		                            className="px-2 py-0.5 text-[11px] font-semibold"
 		                          >
 		                            {isSpgConfigured ? "Configured" : "Missing"}
@@ -1179,6 +1225,7 @@ export default function PublishClient({
 	                        isPending ||
 	                        status === "uploading" ||
 	                        status === "registering" ||
+	                        !hasThumbnail ||
 	                        !selectedExport ||
 	                        !exportFile ||
 	                        !!published?.ipId
@@ -1191,9 +1238,11 @@ export default function PublishClient({
 	                          ? "Registering…"
 	                          : published?.ipId
 	                            ? "Published"
-	                            : selectedExport?.upload?.videoUrl
-	                              ? "Register on Story"
-	                              : "Upload & Register"}
+	                            : !hasThumbnail
+	                              ? "Set thumbnail to publish"
+	                              : selectedExport?.upload?.videoUrl
+	                                ? "Register on Story"
+	                                : "Upload & Register"}
 	                    </Button>
 	                  </div>
 
@@ -1277,6 +1326,92 @@ export default function PublishClient({
 	                      </p>
 	                    )}
 	                  </div>
+
+	                  {published?.ipMetadataUri ? (
+	                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+	                      <div className="flex items-center justify-between gap-2">
+	                        <p className="text-sm font-medium text-foreground">IPFS metadata</p>
+	                        <Badge variant="outline">Pinata</Badge>
+	                      </div>
+	                      <div className="space-y-4">
+	                        <div className="space-y-2">
+	                          <div className="flex flex-wrap items-center justify-between gap-2">
+	                            <p className="text-sm text-muted-foreground">IP metadata</p>
+	                            <div className="flex items-center gap-2">
+	                              <Button
+	                                type="button"
+	                                size="sm"
+	                                variant="outline"
+	                                onClick={() => void handleCopy(published.ipMetadataUri)}
+	                              >
+	                                <Copy className="h-4 w-4" />
+	                                Copy
+	                              </Button>
+	                              <Button size="sm" variant="secondary" asChild>
+	                                <a
+	                                  href={ipfsUriToGatewayUrl(
+	                                    published.ipMetadataUri,
+	                                    "https://ipfs.io/ipfs/",
+	                                  )}
+	                                  target="_blank"
+	                                  rel="noreferrer"
+	                                >
+	                                  <ExternalLink className="h-4 w-4" />
+	                                  Open
+	                                </a>
+	                              </Button>
+	                            </div>
+	                          </div>
+	                          <p className="break-all text-xs text-foreground/80">
+	                            {published.ipMetadataUri}
+	                          </p>
+	                          {published.ipMetadataHash ? (
+	                            <p className="break-all text-xs text-muted-foreground">
+	                              SHA-256: {published.ipMetadataHash}
+	                            </p>
+	                          ) : null}
+	                        </div>
+
+	                        <div className="space-y-2">
+	                          <div className="flex flex-wrap items-center justify-between gap-2">
+	                            <p className="text-sm text-muted-foreground">NFT metadata</p>
+	                            <div className="flex items-center gap-2">
+	                              <Button
+	                                type="button"
+	                                size="sm"
+	                                variant="outline"
+	                                onClick={() => void handleCopy(published.nftMetadataUri)}
+	                              >
+	                                <Copy className="h-4 w-4" />
+	                                Copy
+	                              </Button>
+	                              <Button size="sm" variant="secondary" asChild>
+	                                <a
+	                                  href={ipfsUriToGatewayUrl(
+	                                    published.nftMetadataUri,
+	                                    "https://ipfs.io/ipfs/",
+	                                  )}
+	                                  target="_blank"
+	                                  rel="noreferrer"
+	                                >
+	                                  <ExternalLink className="h-4 w-4" />
+	                                  Open
+	                                </a>
+	                              </Button>
+	                            </div>
+	                          </div>
+	                          <p className="break-all text-xs text-foreground/80">
+	                            {published.nftMetadataUri}
+	                          </p>
+	                          {published.nftMetadataHash ? (
+	                            <p className="break-all text-xs text-muted-foreground">
+	                              SHA-256: {published.nftMetadataHash}
+	                            </p>
+	                          ) : null}
+	                        </div>
+	                      </div>
+	                    </div>
+	                  ) : null}
 
 	                  {published?.ipId ? (
 	                    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
