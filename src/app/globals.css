@@ -14,6 +14,14 @@
   background: rgba(96, 165, 250, 0.95) !important;
 }
 
+.moveable-control-box.moveable-canvas .moveable-line.moveable-guideline {
+  background: rgba(34, 211, 238, 0.9) !important;
+}
+
+.moveable-control-box.moveable-canvas .moveable-line.moveable-guideline.moveable-bold {
+  background: rgba(34, 211, 238, 1) !important;
+}
+
 .moveable-control-box.moveable-timeline .moveable-line.moveable-direction {
   background: rgba(96, 165, 250, 0.85) !important;
 }

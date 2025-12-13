@@ -29,6 +29,7 @@
     "@radix-ui/react-label": "^2.1.0",
     "@radix-ui/react-slider": "^1.2.0",
     "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "@rainbow-me/rainbowkit": "^2.2.1",
     "@reduxjs/toolkit": "^2.7.0",
     "@remotion/media-parser": "4.0.386",

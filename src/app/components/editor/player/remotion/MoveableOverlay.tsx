@@ -15,7 +15,7 @@ import { useEditorPlayer } from "./EditorPlayerContext";
 export default function MoveableOverlay() {
   const dispatch = useAppDispatch();
   const { editingTextId } = useEditorPlayer();
-  const { activeElement, activeElementIndex, mediaFiles, textElements } =
+  const { activeElement, activeElementIndex, mediaFiles, textElements, resolution } =
     useAppSelector((state) => state.projectState);
 
   const targetRef = useRef<HTMLElement | null>(null);
@@ -24,6 +24,7 @@ export default function MoveableOverlay() {
     null,
   );
   const [containerScale, setContainerScale] = useState(1);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   const selected = useMemo<MediaFile | TextElement | null>(() => {
     if (activeElement === "media") {
@@ -58,19 +59,26 @@ export default function MoveableOverlay() {
   useEffect(() => {
     if (!portalContainer) return;
 
-    const updateScale = () => {
+    const updateMetrics = () => {
       const rect = portalContainer.getBoundingClientRect();
       const scaleX = rect.width / portalContainer.offsetWidth;
       const scaleY = rect.height / portalContainer.offsetHeight;
       const safeScaleX = Number.isFinite(scaleX) && scaleX > 0 ? scaleX : 1;
       const safeScaleY = Number.isFinite(scaleY) && scaleY > 0 ? scaleY : 1;
       setContainerScale(Math.min(safeScaleX, safeScaleY));
+
+      const width = portalContainer.offsetWidth;
+      const height = portalContainer.offsetHeight;
+      setCanvasSize({
+        width: Number.isFinite(width) && width > 0 ? width : 0,
+        height: Number.isFinite(height) && height > 0 ? height : 0,
+      });
     };
 
-    updateScale();
-    window.addEventListener("resize", updateScale);
+    updateMetrics();
+    window.addEventListener("resize", updateMetrics);
     return () => {
-      window.removeEventListener("resize", updateScale);
+      window.removeEventListener("resize", updateMetrics);
     };
   }, [portalContainer]);
 
@@ -110,6 +118,22 @@ export default function MoveableOverlay() {
     (selected as MediaFile).type !== undefined &&
     ((selected as MediaFile).type === "image" || (selected as MediaFile).type === "video");
 
+  const snapWidth =
+    canvasSize.width > 0
+      ? canvasSize.width
+      : typeof resolution?.width === "number" && Number.isFinite(resolution.width)
+        ? resolution.width
+        : 1920;
+  const snapHeight =
+    canvasSize.height > 0
+      ? canvasSize.height
+      : typeof resolution?.height === "number" && Number.isFinite(resolution.height)
+        ? resolution.height
+        : 1080;
+
+  const centerX = snapWidth / 2;
+  const centerY = snapHeight / 2;
+
   const patchTransformRotation = (value: string, rotation: number) => {
     const nextRotation = `rotate(${rotation}deg)`;
     if (!value || value === "none") return nextRotation;
@@ -136,6 +160,23 @@ export default function MoveableOverlay() {
       controlPadding={8}
       zoom={containerScale > 0 ? 1 / containerScale : 1}
       className="moveable-canvas"
+      snappable
+      snapGap={false}
+      snapDirections={{
+        left: false,
+        top: false,
+        right: false,
+        bottom: false,
+        center: true,
+        middle: true,
+      }}
+      elementSnapDirections={false}
+      snapHorizontalThreshold={8}
+      snapVerticalThreshold={8}
+      snapRenderThreshold={8}
+      isDisplaySnapDigit={false}
+      verticalGuidelines={[centerX]}
+      horizontalGuidelines={[centerY]}
       onDrag={({ target, left, top }: OnDrag) => {
         if (!target) return;
         target.style.left = `${left}px`;

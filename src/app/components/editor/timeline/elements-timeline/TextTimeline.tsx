@@ -14,6 +14,7 @@ import { Type } from "lucide-react";
 import {
   computeRipplePlacement,
   findNeighborLimits,
+  moveArrayItem,
 } from "@/app/components/editor/timeline/ops";
 
 const isFiniteNumber = (value: unknown): value is number =>
@@ -22,14 +23,20 @@ const isFiniteNumber = (value: unknown): value is number =>
 type Props = {
   trackId: string;
   fallbackTrackId: string | null;
+  onDragHoverTrackId?: (trackId: string | null) => void;
 };
 
-export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
+export default function TextTimeline({
+  trackId,
+  fallbackTrackId,
+  onDragHoverTrackId,
+}: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const { textElements, mediaFiles, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
   const moveableRef = useRef<Record<string, Moveable | null>>({});
+  const lastHoverTrackIdRef = useRef<string | null>(null);
   const zoom =
     isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
 
@@ -109,6 +116,13 @@ export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
       (el) => el?.dataset?.timelineTrackId !== undefined,
     );
     return trackEl?.dataset?.timelineTrackId ?? null;
+  };
+
+  const reportHoverTrackId = (next: string | null) => {
+    if (!onDragHoverTrackId) return;
+    if (lastHoverTrackIdRef.current === next) return;
+    lastHoverTrackIdRef.current = next;
+    onDragHoverTrackId(next);
   };
 
   const handleResize = (
@@ -250,12 +264,13 @@ export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
             rotatable={false}
             linePadding={4}
             controlPadding={6}
-            onDragStart={({ target, clientX, clientY }) => {}}
-            onDrag={({ target, left, top }: OnDrag) => {
+            onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
               handleClick("text", clip.id);
               handleDragWithDrop(clip, target as HTMLElement, left, top);
+              reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
             }}
             onDragEnd={({ target, clientX, clientY }) => {
+              reportHoverTrackId(null);
               if (!target) return;
               onUpdateText.cancel();
               (target as HTMLElement).style.top = "";
@@ -279,18 +294,38 @@ export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
                   dropTarget === "__new-layer-bottom"
                     ? Math.min(2, tracks.length)
                     : tracks.length;
-                const nextId = crypto.randomUUID();
-                const newTrack: TimelineTrack = {
-                  id: nextId,
-                  kind: "layer",
-                  name: `Layer ${insertAt + 1}`,
-                };
-                nextTracks = [
-                  ...tracks.slice(0, insertAt),
-                  newTrack,
-                  ...tracks.slice(insertAt),
-                ];
-                targetTrackId = nextId;
+
+                const originIndex = tracks.findIndex((t) => t.id === currentTrackId);
+                const originHasOtherItems =
+                  textElementsRef.current.some(
+                    (t) =>
+                      t.id !== current.id &&
+                      (t.trackId ?? fallbackTrackId) === currentTrackId,
+                  ) || mediaFilesRef.current.some((m) => m.trackId === currentTrackId);
+
+                const reuseOriginTrack = originIndex >= 2 && !originHasOtherItems;
+
+                if (reuseOriginTrack) {
+                  const desiredIndex =
+                    dropTarget === "__new-layer-top" ? tracks.length - 1 : insertAt;
+                  if (originIndex !== desiredIndex) {
+                    nextTracks = moveArrayItem(tracks, originIndex, insertAt);
+                  }
+                  targetTrackId = currentTrackId;
+                } else {
+                  const nextId = crypto.randomUUID();
+                  const newTrack: TimelineTrack = {
+                    id: nextId,
+                    kind: "layer",
+                    name: `Layer ${insertAt + 1}`,
+                  };
+                  nextTracks = [
+                    ...tracks.slice(0, insertAt),
+                    newTrack,
+                    ...tracks.slice(insertAt),
+                  ];
+                  targetTrackId = nextId;
+                }
               }
 
               if (!targetTrackId) return;
@@ -355,7 +390,6 @@ export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
             }}
             resizable={true}
             throttleResize={0}
-            onResizeStart={({ target, clientX, clientY }) => {}}
             onResize={({ target, width, delta, direction }: OnResize) => {
               if (!isFiniteNumber(width)) return;
               if (direction[0] === 1) {
@@ -368,7 +402,6 @@ export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
                 handleLeftResize(clip, target as HTMLElement, width);
               }
             }}
-            onResizeEnd={({ target, isDrag, clientX, clientY }) => {}}
           />
         </React.Fragment>
       ))}

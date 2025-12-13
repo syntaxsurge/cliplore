@@ -3,6 +3,7 @@ import type { MediaType } from "@/app/types";
 import {
   addMarker,
   applyTimelineEdit,
+  deleteMarker,
   setActiveElement,
   setCurrentTime,
   setIsPlaying,
@@ -14,13 +15,13 @@ import {
 } from "@/app/store/slices/projectSlice";
 import { throttle } from "lodash";
 import {
-  Check,
   Copy,
   Flag,
   Layers,
+  LocateFixed,
+  LocateOff,
   Scissors,
   Trash2,
-  X,
 } from "lucide-react";
 import {
   memo,
@@ -37,6 +38,7 @@ import { useEditorPlayer } from "@/app/components/editor/player/remotion/EditorP
 import { useCurrentPlayerFrame } from "@/app/components/editor/player/remotion/useCurrentPlayerFrame";
 import GlobalKeyHandlerProps from "../../../components/editor/keys/GlobalKeyHandlerProps";
 import Header from "./Header";
+import { TimelineToolButton } from "./TimelineToolButton";
 import MediaTimelineTrack from "./elements-timeline/MediaTimelineTrack";
 import TextTimeline from "./elements-timeline/TextTimeline";
 import { computeRipplePlacement } from "./ops";
@@ -71,9 +73,28 @@ export const Timeline = () => {
   const [draggingTimelineMarkerId, setDraggingTimelineMarkerId] = useState<
     string | null
   >(null);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+  const [layerInsertPreview, setLayerInsertPreview] = useState<
+    "top" | "bottom" | null
+  >(null);
 
   const zoom = isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
   const safeDuration = isFiniteNumber(duration) && duration > 0 ? duration : 0;
+
+  const markerSnapSeconds = Math.max(0.04, 1 / safeFps);
+  const markerAtPlayhead = useMemo(() => {
+    const t = playheadTime;
+    let nearest: (typeof markers)[number] | null = null;
+    let nearestDist = Number.POSITIVE_INFINITY;
+    for (const marker of markers) {
+      const dist = Math.abs(marker.time - t);
+      if (dist <= markerSnapSeconds && dist < nearestDist) {
+        nearest = marker;
+        nearestDist = dist;
+      }
+    }
+    return nearest;
+  }, [markerSnapSeconds, markers, playheadTime]);
 
   const maxMarkerTime =
     markers.length > 0 ? Math.max(...markers.map((m) => m.time)) : 0;
@@ -98,6 +119,16 @@ export const Timeline = () => {
   const fallbackTextTrackId = overlayTrackId ?? baseTrackId;
 
   const displayTracks = useMemo(() => [...tracks].reverse(), [tracks]);
+
+  const handleDragHoverTrackId = useCallback((trackId: string | null) => {
+    const next =
+      trackId === "__new-layer-top"
+        ? "top"
+        : trackId === "__new-layer-bottom"
+          ? "bottom"
+          : null;
+    setLayerInsertPreview((prev) => (prev === next ? prev : next));
+  }, []);
 
   const getTrackBounds = useCallback(
     (targetTrackId: string) => {
@@ -158,7 +189,7 @@ export const Timeline = () => {
       const { positionStart, positionEnd } = element;
 
       if (playheadTime <= positionStart || playheadTime >= positionEnd) {
-        toast.error("Marker is outside the selected element bounds.");
+        toast.error("Playhead is outside the selected element bounds.");
         return;
       }
 
@@ -202,7 +233,7 @@ export const Timeline = () => {
       const { positionStart, positionEnd } = element;
 
       if (playheadTime <= positionStart || playheadTime >= positionEnd) {
-        toast.error("Marker is outside the selected element.");
+        toast.error("Playhead is outside the selected element.");
         return;
       }
 
@@ -370,10 +401,19 @@ export const Timeline = () => {
   };
 
   const handleDelete = () => {
-    // @ts-ignore
-    let element = null;
-    let elements = null;
-    let setElements = null;
+    if (!activeElement) {
+      if (markerAtPlayhead) {
+        dispatch(deleteMarker(markerAtPlayhead.id));
+        setSelectedMarkerId(null);
+        return;
+      }
+      toast.error("No element selected.");
+      return;
+    }
+
+    let element: any = null;
+    let elements: any[] | null = null;
+    let setElements: ((payload: any) => any) | null = null;
 
     if (activeElement === "media") {
       elements = [...mediaFiles];
@@ -391,7 +431,6 @@ export const Timeline = () => {
     }
 
     if (elements) {
-      // @ts-ignore
       elements = elements.filter((ele) => ele.id !== element.id);
     }
 
@@ -429,11 +468,13 @@ export const Timeline = () => {
   const handleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
     setTimeFromClientX(e.clientX);
+    setSelectedMarkerId(null);
   };
 
   const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
     const time = setTimeFromClientX(e.clientX) ?? 0;
+    setSelectedMarkerId(null);
     const resolvedTrackId = fallbackTextTrackId ?? null;
     if (!resolvedTrackId) {
       toast.error("Unable to place text without a layer.");
@@ -580,85 +621,219 @@ export const Timeline = () => {
     throttledMarkerUpdate,
   ]);
 
-  const handleAddMarker = useCallback(() => {
+  const handleToggleMarker = useCallback(() => {
+    if (markerAtPlayhead) {
+      dispatch(deleteMarker(markerAtPlayhead.id));
+      setSelectedMarkerId(null);
+      return;
+    }
     dispatch(addMarker({ time: playheadTime }));
-  }, [dispatch, playheadTime]);
+  }, [dispatch, markerAtPlayhead, playheadTime]);
 
   return (
     <div className="flex h-full w-full flex-col gap-2">
       <div className="flex w-full flex-row items-center justify-between gap-6">
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleAddMarker}
-            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
-          >
-            <Flag className="h-4 w-4" aria-hidden="true" />
-            <span className="ml-2">
-              Marker <span className="text-xs">(T)</span>
-            </span>
-          </button>
+          <TimelineToolButton
+            icon={<Flag className="h-4 w-4" aria-hidden="true" />}
+            label={markerAtPlayhead ? "Delete marker" : "Add marker"}
+            shortcut="M"
+            tooltip={
+              markerAtPlayhead
+                ? "Remove the marker at the current playhead time."
+                : "Add a marker at the playhead to bookmark a moment on the timeline."
+            }
+            helpTitle="Markers"
+            help={
+              <>
+                <p>
+                  Markers are timeline bookmarks. Use them to flag moments to
+                  review (beats, cuts, sync points) and jump around quickly.
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>
+                    <span className="font-medium text-foreground">
+                      Add / delete at playhead:
+                    </span>{" "}
+                    Press <kbd className="rounded bg-muted px-1">M</kbd>. If the
+                    playhead is already on a marker, the same action deletes it.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">Jump:</span>{" "}
+                    Click a marker triangle on the ruler to move the playhead to
+                    that time.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">Move:</span>{" "}
+                    Drag a marker left/right to adjust its timestamp.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">Delete:</span>{" "}
+                    With no clip selected, press{" "}
+                    <kbd className="rounded bg-muted px-1">Delete</kbd> or{" "}
+                    <kbd className="rounded bg-muted px-1">Backspace</kbd> while
+                    the playhead is on the marker.
+                  </li>
+                </ul>
+              </>
+            }
+            onClick={handleToggleMarker}
+            className={
+              markerAtPlayhead
+                ? "border-amber-500/30 bg-amber-500/10 text-white hover:bg-amber-500/15"
+                : undefined
+            }
+          />
 
-          <button
-            onClick={() => dispatch(setMarkerTrack(!enableMarkerTracking))}
-            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 sm:text-base"
-          >
-            <span className="inline-flex h-5 w-5 items-center justify-center">
-              {enableMarkerTracking ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <X className="h-4 w-4" />
-              )}
-            </span>
-            <span className="ml-2">
-              Follow <span className="text-xs">(F)</span>
-            </span>
-          </button>
-
-          <button
+          <TimelineToolButton
+            icon={<Scissors className="h-4 w-4" aria-hidden="true" />}
+            label="Split"
+            shortcut="S"
+            tooltip="Split the selected clip at the playhead."
+            helpTitle="Split"
+            help={
+              <>
+                <p>
+                  Split cuts the currently selected clip into two clips at the
+                  playhead time.
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>
+                    Select a clip on the timeline, then press{" "}
+                    <kbd className="rounded bg-muted px-1">S</kbd>.
+                  </li>
+                  <li>
+                    The playhead must be inside the clip (not at the very start
+                    or end).
+                  </li>
+                  <li>
+                    For video/audio, the source trim is split so playback stays
+                    continuous.
+                  </li>
+                </ul>
+              </>
+            }
             onClick={handleSplit}
-            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
-          >
-            <Scissors className="h-4 w-4" />
-            <span className="ml-2">
-              Split <span className="text-xs">(S)</span>
-            </span>
-          </button>
+          />
 
-          <button
+          <TimelineToolButton
+            icon={<Copy className="h-4 w-4" aria-hidden="true" />}
+            label="Duplicate"
+            shortcut="D"
+            tooltip="Duplicate the selected clip (ripple insert)."
+            helpTitle="Duplicate"
+            help={
+              <>
+                <p>
+                  Duplicate creates a copy of the selected clip on the same
+                  layer and places it after the original.
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>
+                    Press <kbd className="rounded bg-muted px-1">D</kbd> to
+                    duplicate the selected clip.
+                  </li>
+                  <li>
+                    The timeline uses ripple insert: if the copy would overlap
+                    other clips on that layer, downstream clips shift right to
+                    make room.
+                  </li>
+                </ul>
+              </>
+            }
             onClick={handleDuplicate}
-            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
-          >
-            <Copy className="h-4 w-4" />
-            <span className="ml-2">
-              Duplicate <span className="text-xs">(D)</span>
-            </span>
-          </button>
+          />
 
-          <button
+          <TimelineToolButton
+            icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
+            label="Delete"
+            shortcut="Del"
+            tooltip="Delete the selected clip."
+            helpTitle="Delete"
+            help={
+              <>
+                <p>Delete removes the selected clip from the timeline.</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>
+                    Press{" "}
+                    <kbd className="rounded bg-muted px-1">Delete</kbd> or{" "}
+                    <kbd className="rounded bg-muted px-1">Backspace</kbd>.
+                  </li>
+                  <li>
+                    If no clip is selected and the playhead is on a marker, the
+                    same shortcut deletes that marker.
+                  </li>
+                  <li>
+                    This removes the timeline instance only — the original media
+                    stays in your library.
+                  </li>
+                </ul>
+              </>
+            }
             onClick={handleDelete}
-            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
-          >
-            <Trash2 className="h-4 w-4" />
-            <span className="ml-2">
-              Delete <span className="text-xs">(Del)</span>
-            </span>
-          </button>
-
+            className="border-red-500/20 bg-red-500/10 text-red-50 hover:bg-red-500/15"
+          />
         </div>
 
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-white text-lg">-</span>
-          <input
-            type="range"
-            min={30}
-            max={150}
-            step="1"
-            value={zoom}
-            onChange={(e) => throttledZoom(Number(e.target.value))}
-            className="w-[120px] rounded border border-white border-opacity-10 bg-darkSurfacePrimary text-white shadow-md focus:border-white-500 focus:outline-none"
-            aria-label="Timeline zoom"
+        <div className="flex items-center gap-3">
+          <TimelineToolButton
+            icon={
+              enableMarkerTracking ? (
+                <LocateFixed className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <LocateOff className="h-4 w-4" aria-hidden="true" />
+              )
+            }
+            label="Follow playhead"
+            shortcut="F"
+            tooltip="Auto-scroll the timeline viewport to keep the playhead visible while time changes."
+            helpTitle="Follow playhead"
+            help={
+              <>
+                <p>
+                  Follow playhead controls whether the timeline viewport
+                  auto-scrolls to keep the red playhead in view as time changes.
+                </p>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>
+                    <span className="font-medium text-foreground">On:</span> the
+                    timeline scrolls as the playhead moves, so it stays visible
+                    while playing or scrubbing.
+                  </li>
+                  <li>
+                    <span className="font-medium text-foreground">Off:</span>{" "}
+                    the timeline stays where you left it; you can scroll
+                    manually.
+                  </li>
+                  <li>
+                    This changes the viewport only — it does not affect your
+                    export.
+                  </li>
+                </ul>
+              </>
+            }
+            onClick={() => dispatch(setMarkerTrack(!enableMarkerTracking))}
+            className={
+              enableMarkerTracking
+                ? "border-blue-500/25 bg-blue-500/15 text-white hover:bg-blue-500/20"
+                : undefined
+            }
           />
-          <span className="text-white text-lg">+</span>
+
+          <div className="flex items-center gap-2">
+            <span className="select-none text-lg text-white/70">-</span>
+            <input
+              type="range"
+              min={30}
+              max={150}
+              step="1"
+              value={zoom}
+              onChange={(e) => throttledZoom(Number(e.target.value))}
+              className="w-[140px] rounded border border-white/10 bg-black/30 text-white shadow-sm focus:border-white/20 focus:outline-none"
+              aria-label="Timeline zoom"
+            />
+            <span className="select-none text-lg text-white/70">+</span>
+          </div>
         </div>
       </div>
 
@@ -683,7 +858,13 @@ export const Timeline = () => {
                 left: `${TRACK_LABEL_WIDTH_PX + marker.time * zoom}px`,
               }}
             >
-              <div className="absolute top-0 bottom-0 w-px bg-amber-400/25" />
+              <div
+                className={`absolute top-0 bottom-0 w-px ${
+                  selectedMarkerId === marker.id
+                    ? "bg-amber-400/40"
+                    : "bg-amber-400/25"
+                }`}
+              />
               <button
                 type="button"
                 title={
@@ -691,20 +872,31 @@ export const Timeline = () => {
                     ? marker.label
                     : `${marker.time.toFixed(2)}s`
                 }
-                className="absolute top-0 -translate-x-1/2 h-12 w-6 cursor-ew-resize"
+                className={`absolute top-0 -translate-x-1/2 h-12 w-6 cursor-ew-resize focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 ${
+                  selectedMarkerId === marker.id ? "drop-shadow" : ""
+                }`}
                 style={{ left: 0 }}
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   dispatch(setIsPlaying(false));
+                  setSelectedMarkerId(marker.id);
                   setDraggingTimelineMarkerId(marker.id);
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  setSelectedMarkerId(marker.id);
                   dispatch(setCurrentTime(marker.time));
                   player?.seekTo(Math.round(marker.time * safeFps));
                 }}
+                aria-label={`Marker at ${marker.time.toFixed(2)} seconds`}
               >
-                <div className="mx-auto mt-1 h-0 w-0 border-x-[6px] border-x-transparent border-t-[10px] border-t-amber-400/90" />
+                <div
+                  className={`mx-auto mt-1 h-0 w-0 border-x-[6px] border-x-transparent border-t-[10px] ${
+                    selectedMarkerId === marker.id
+                      ? "border-t-amber-300"
+                      : "border-t-amber-400/90"
+                  }`}
+                />
               </button>
             </div>
           ))}
@@ -728,16 +920,39 @@ export const Timeline = () => {
               }}
             >
               <div
-                className="sticky left-0 z-20 h-8 border-r border-white/10 bg-[#1E1D21]"
+                className={`sticky left-0 z-20 flex h-8 items-center gap-2 border-r bg-[#1E1D21] px-3 ${
+                  layerInsertPreview === "top"
+                    ? "border-blue-500/20 text-blue-200/90"
+                    : "border-white/10"
+                }`}
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
-              />
+              >
+                {layerInsertPreview === "top" ? (
+                  <>
+                    <Layers className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-[10px] font-semibold tracking-wide uppercase">
+                      New layer
+                    </span>
+                  </>
+                ) : null}
+              </div>
               <div
-                className="relative h-8 bg-[#16151A]"
+                className={`relative h-8 ${
+                  layerInsertPreview === "top" ? "bg-blue-500/10" : "bg-[#16151A]"
+                }`}
                 data-timeline-track-id="__new-layer-top"
               >
-                <div className="flex h-full items-center justify-center border-b border-dashed border-white/10 text-[10px] text-white/35">
-                  Drop to create a new layer
+                <div
+                  className={`flex h-full items-center justify-center border-b border-dashed text-[10px] ${
+                    layerInsertPreview === "top"
+                      ? "border-blue-500/30 text-blue-200/90"
+                      : "border-white/10 text-white/35"
+                  }`}
+                >
+                  {layerInsertPreview === "top"
+                    ? "Release to create a new layer above"
+                    : "Drop to create a new layer"}
                 </div>
               </div>
             </div>
@@ -770,10 +985,12 @@ export const Timeline = () => {
                     mediaTypes={["video", "image", "audio"]}
                     fallbackTrackIdForType={fallbackTrackIdForType}
                     fallbackTextTrackId={fallbackTextTrackId}
+                    onDragHoverTrackId={handleDragHoverTrackId}
                   />
                   <TextTimeline
                     trackId={track.id}
                     fallbackTrackId={fallbackTextTrackId}
+                    onDragHoverTrackId={handleDragHoverTrackId}
                   />
                 </div>
               </div>
@@ -786,16 +1003,41 @@ export const Timeline = () => {
               }}
             >
               <div
-                className="sticky left-0 z-20 h-8 border-r border-white/10 bg-[#1E1D21]"
+                className={`sticky left-0 z-20 flex h-8 items-center gap-2 border-r bg-[#1E1D21] px-3 ${
+                  layerInsertPreview === "bottom"
+                    ? "border-blue-500/20 text-blue-200/90"
+                    : "border-white/10"
+                }`}
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
-              />
+              >
+                {layerInsertPreview === "bottom" ? (
+                  <>
+                    <Layers className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-[10px] font-semibold tracking-wide uppercase">
+                      New layer
+                    </span>
+                  </>
+                ) : null}
+              </div>
               <div
-                className="relative h-8 bg-[#16151A]"
+                className={`relative h-8 ${
+                  layerInsertPreview === "bottom"
+                    ? "bg-blue-500/10"
+                    : "bg-[#16151A]"
+                }`}
                 data-timeline-track-id="__new-layer-bottom"
               >
-                <div className="flex h-full items-center justify-center border-t border-dashed border-white/10 text-[10px] text-white/35">
-                  Drop to create a new layer
+                <div
+                  className={`flex h-full items-center justify-center border-t border-dashed text-[10px] ${
+                    layerInsertPreview === "bottom"
+                      ? "border-blue-500/30 text-blue-200/90"
+                      : "border-white/10 text-white/35"
+                  }`}
+                >
+                  {layerInsertPreview === "bottom"
+                    ? "Release to create a new layer below"
+                    : "Drop to create a new layer"}
                 </div>
               </div>
             </div>

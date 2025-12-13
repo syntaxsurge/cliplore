@@ -84,3 +84,14 @@ export function findNeighborLimits(params: {
   return { minStart, maxEnd };
 }
 
+export function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  if (!Array.isArray(items) || items.length === 0) return items;
+  const from = Math.max(0, Math.min(items.length - 1, Math.floor(fromIndex)));
+  const next = items.slice();
+  const [item] = next.splice(from, 1);
+  if (typeof item === "undefined") return items;
+
+  const insertAt = Math.max(0, Math.min(next.length, Math.floor(toIndex)));
+  next.splice(insertAt, 0, item);
+  return next;
+}

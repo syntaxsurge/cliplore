@@ -3,6 +3,7 @@ import { useAppSelector } from "@/app/store";
 import { useEffect, useRef, useState } from "react";
 import {
   addMarker,
+  deleteMarker,
   setIsPlaying,
   setIsMuted,
   setCurrentTime,
@@ -37,12 +38,14 @@ const GlobalKeyHandler = ({
   const isMutedRef = useRef(projectState.isMuted);
   const currentTimeRef = useRef(projectState.currentTime);
   const enableMarkerTrackingRef = useRef(projectState.enableMarkerTracking);
+  const markersRef = useRef(projectState.markers);
 
   useEffect(() => {
     isPlayingRef.current = projectState.isPlaying;
     isMutedRef.current = projectState.isMuted;
     currentTimeRef.current = projectState.currentTime;
     enableMarkerTrackingRef.current = projectState.enableMarkerTracking;
+    markersRef.current = projectState.markers;
   }, [projectState]);
 
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -70,9 +73,24 @@ const GlobalKeyHandler = ({
           e.preventDefault();
           dispatch(setIsPlaying(!isPlayingRef.current));
           break;
-        case "KeyM":
+        case "KeyU":
           e.preventDefault();
           dispatch(setIsMuted(!isMutedRef.current));
+          break;
+        case "KeyM":
+          e.preventDefault();
+          {
+            const frame =
+              player?.getCurrentFrame() ??
+              Math.round(currentTimeRef.current * safeFps);
+            const time = frame / safeFps;
+            const eps = Math.max(0.04, 1 / safeFps);
+            const marker =
+              (markersRef.current ?? []).find((m) => Math.abs(m.time - time) <= eps) ??
+              null;
+            if (marker) dispatch(deleteMarker(marker.id));
+            else dispatch(addMarker({ time }));
+          }
           break;
         case "KeyZ":
           if (e.metaKey || e.ctrlKey) {
@@ -96,15 +114,6 @@ const GlobalKeyHandler = ({
         case "Backspace":
           e.preventDefault();
           handleDelete();
-          break;
-        case "KeyT":
-          e.preventDefault();
-          {
-            const frame =
-              player?.getCurrentFrame() ??
-              Math.round(currentTimeRef.current * safeFps);
-            dispatch(addMarker({ time: frame / safeFps }));
-          }
           break;
         case "KeyF":
           e.preventDefault();

@@ -16,6 +16,7 @@ import { Image as ImageIcon, Music, Video } from "lucide-react";
 import {
   computeRipplePlacement,
   findNeighborLimits,
+  moveArrayItem,
 } from "@/app/components/editor/timeline/ops";
 
 type Props = {
@@ -23,6 +24,7 @@ type Props = {
   mediaTypes: Array<Exclude<MediaType, "unknown">>;
   fallbackTrackIdForType: Record<MediaType, string | null>;
   fallbackTextTrackId: string | null;
+  onDragHoverTrackId?: (trackId: string | null) => void;
 };
 
 const isFiniteNumber = (value: unknown): value is number =>
@@ -33,9 +35,11 @@ export function MediaTimelineTrack({
   mediaTypes,
   fallbackTrackIdForType,
   fallbackTextTrackId,
+  onDragHoverTrackId,
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const moveableRef = useRef<Record<string, Moveable | null>>({});
+  const lastHoverTrackIdRef = useRef<string | null>(null);
   const { mediaFiles, textElements, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
@@ -99,6 +103,13 @@ export function MediaTimelineTrack({
       (el) => el?.dataset?.timelineTrackId !== undefined,
     );
     return trackEl?.dataset?.timelineTrackId ?? null;
+  };
+
+  const reportHoverTrackId = (next: string | null) => {
+    if (!onDragHoverTrackId) return;
+    if (lastHoverTrackIdRef.current === next) return;
+    lastHoverTrackIdRef.current = next;
+    onDragHoverTrackId(next);
   };
 
   const getTrackBounds = (targetTrackId: string) => {
@@ -299,11 +310,13 @@ export function MediaTimelineTrack({
               throttleResize={0}
               linePadding={4}
               controlPadding={6}
-              onDrag={({ target, left, top }: OnDrag) => {
+              onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
                 handleClick(clip.id);
                 handleDrag(clip, target as HTMLElement, left, top);
+                reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
               }}
               onDragEnd={({ target, clientX, clientY }) => {
+                reportHoverTrackId(null);
                 if (!target) return;
                 onUpdateMedia.cancel();
                 (target as HTMLElement).style.top = "";
@@ -327,18 +340,41 @@ export function MediaTimelineTrack({
                     dropTarget === "__new-layer-bottom"
                       ? Math.min(2, tracks.length)
                       : tracks.length;
-                  const nextId = crypto.randomUUID();
-                  const newTrack: TimelineTrack = {
-                    id: nextId,
-                    kind: "layer",
-                    name: `Layer ${insertAt + 1}`,
-                  };
-                  nextTracks = [
-                    ...tracks.slice(0, insertAt),
-                    newTrack,
-                    ...tracks.slice(insertAt),
-                  ];
-                  targetTrackId = nextId;
+
+                  const originIndex = tracks.findIndex((t) => t.id === currentTrackId);
+                  const originHasOtherItems =
+                    mediaFilesRef.current.some(
+                      (m) =>
+                        m.id !== current.id &&
+                        (m.trackId ?? fallbackTrackIdForType[m.type]) === currentTrackId,
+                    ) ||
+                    textElementsRef.current.some(
+                      (t) => (t.trackId ?? fallbackTextTrackId) === currentTrackId,
+                    );
+
+                  const reuseOriginTrack = originIndex >= 2 && !originHasOtherItems;
+
+                  if (reuseOriginTrack) {
+                    const desiredIndex =
+                      dropTarget === "__new-layer-top" ? tracks.length - 1 : insertAt;
+                    if (originIndex !== desiredIndex) {
+                      nextTracks = moveArrayItem(tracks, originIndex, insertAt);
+                    }
+                    targetTrackId = currentTrackId;
+                  } else {
+                    const nextId = crypto.randomUUID();
+                    const newTrack: TimelineTrack = {
+                      id: nextId,
+                      kind: "layer",
+                      name: `Layer ${insertAt + 1}`,
+                    };
+                    nextTracks = [
+                      ...tracks.slice(0, insertAt),
+                      newTrack,
+                      ...tracks.slice(insertAt),
+                    ];
+                    targetTrackId = nextId;
+                  }
                 }
 
                 if (!targetTrackId) return;
