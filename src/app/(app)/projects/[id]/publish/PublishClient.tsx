@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useAccount } from "wagmi";
 import { PILFlavor } from "@story-protocol/core-sdk";
 import { parseEther, zeroAddress } from "viem";
@@ -81,6 +81,9 @@ export default function PublishClient({
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(
     null,
   );
+  const [thumbnailScrubPreviewUrl, setThumbnailScrubPreviewUrl] = useState<string | null>(
+    null,
+  );
 
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -98,6 +101,8 @@ export default function PublishClient({
   const [thumbnailTimestamp, setThumbnailTimestamp] = useState(0.1);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const scrubCaptureInFlightRef = useRef(false);
+  const scrubCaptureScheduledRef = useRef(false);
 
   const exportDurationSeconds = useMemo(() => {
     const fromExport =
@@ -114,6 +119,68 @@ export default function PublishClient({
         : 0;
     return Math.max(fromExport, fromVideo);
   }, [selectedExport]);
+
+  const updateThumbnailScrubPreview = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video || !exportPreviewUrl) return;
+    if (scrubCaptureInFlightRef.current) return;
+
+    scrubCaptureInFlightRef.current = true;
+    try {
+      if (video.readyState < 2) return;
+      const width = video.videoWidth;
+      const height = video.videoHeight;
+      if (!width || !height) return;
+
+      const maxWidth = 420;
+      const scale = Math.min(1, maxWidth / width);
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob((b) => resolve(b), "image/jpeg", 0.86);
+      });
+      if (!blob) return;
+
+      const url = URL.createObjectURL(blob);
+      setThumbnailScrubPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } finally {
+      scrubCaptureInFlightRef.current = false;
+    }
+  }, [exportPreviewUrl]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !exportPreviewUrl) return;
+
+    const schedule = () => {
+      if (scrubCaptureScheduledRef.current) return;
+      scrubCaptureScheduledRef.current = true;
+      requestAnimationFrame(() => {
+        scrubCaptureScheduledRef.current = false;
+        void updateThumbnailScrubPreview();
+      });
+    };
+
+    video.addEventListener("seeked", schedule);
+    video.addEventListener("loadeddata", schedule);
+    video.addEventListener("loadedmetadata", schedule);
+    schedule();
+
+    return () => {
+      video.removeEventListener("seeked", schedule);
+      video.removeEventListener("loadeddata", schedule);
+      video.removeEventListener("loadedmetadata", schedule);
+    };
+  }, [exportPreviewUrl, updateThumbnailScrubPreview]);
 
   const isSpgConfigured =
     (clientEnv.NEXT_PUBLIC_SPG_NFT_CONTRACT_ADDRESS as string) !== zeroAddress;
@@ -182,6 +249,10 @@ export default function PublishClient({
       setThumbnailTimestamp(0.1);
       setThumbnailFile(null);
       setThumbnailPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setThumbnailScrubPreviewUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
         return null;
       });
@@ -626,7 +697,7 @@ export default function PublishClient({
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-12 space-y-8">
+    <div className="mx-auto max-w-6xl px-6 py-10 space-y-10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -688,175 +759,185 @@ export default function PublishClient({
             </Button>
           </CardContent>
         </Card>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-5">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Select an export</CardTitle>
-              <CardDescription>
-                Publishing always references a specific exported artifact.
-              </CardDescription>
-            </CardHeader>
-	            <CardContent className="space-y-3">
-	              {sortedExports.map((exp) => (
-	                <label
-	                  key={exp.id}
-	                  className={`flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${
-	                    exp.id === selectedExportId
-	                      ? "border-emerald-500/40 bg-emerald-500/10 ring-1 ring-emerald-500/20"
-	                      : "border-border bg-card hover:bg-muted/40"
-	                  }`}
-	                >
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">{exp.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(exp.createdAt).toLocaleString()} ·{" "}
-                      {Math.max(0, Math.round(exp.durationSeconds))}s ·{" "}
-                      {formatBytes(exp.fileSizeBytes)}
-                    </p>
-                    {exp.publish?.ipId ? (
-                      <Badge variant="success">Published</Badge>
-                    ) : null}
-                  </div>
-                  <input
-                    type="radio"
-                    name="export"
-                    className="mt-1 h-4 w-4"
-                    checked={exp.id === selectedExportId}
-                    onChange={() => {
-                      setSelectedExportId(exp.id);
-                      router.replace(`/projects/${projectId}/publish?exportId=${encodeURIComponent(exp.id)}`);
-                    }}
-                    aria-label={`Select export ${exp.name}`}
-                  />
-                </label>
-              ))}
-            </CardContent>
-          </Card>
+	      ) : (
+	        <div className="grid gap-6 lg:grid-cols-12">
+	          <Card className="lg:col-span-4 lg:sticky lg:top-6 h-fit">
+	            <CardHeader>
+	              <CardTitle>Exports</CardTitle>
+	              <CardDescription>
+	                Pick the exported cut you want to register.
+	              </CardDescription>
+	            </CardHeader>
+		            <CardContent className="space-y-3 max-h-[520px] overflow-auto pr-1">
+		              {sortedExports.map((exp) => (
+		                <label
+		                  key={exp.id}
+		                  className={`flex cursor-pointer items-start justify-between gap-3 rounded-lg border px-3 py-3 text-sm transition-colors ${
+		                    exp.id === selectedExportId
+		                      ? "border-emerald-500/40 bg-emerald-500/10 ring-1 ring-emerald-500/20"
+		                      : "border-border bg-card hover:bg-muted/40"
+		                  }`}
+		                >
+		                  <div className="space-y-1">
+		                    <p className="font-medium text-foreground">{exp.name}</p>
+		                    <p className="text-xs text-muted-foreground">
+		                      {new Date(exp.createdAt).toLocaleString()} ·{" "}
+		                      {Math.max(0, Math.round(exp.durationSeconds))}s ·{" "}
+		                      {formatBytes(exp.fileSizeBytes)}
+		                    </p>
+		                    {exp.publish?.ipId ? (
+		                      <Badge variant="success">Published</Badge>
+		                    ) : null}
+		                  </div>
+		                  <input
+		                    type="radio"
+		                    name="export"
+		                    className="mt-1 h-4 w-4"
+		                    checked={exp.id === selectedExportId}
+		                    onChange={() => {
+		                      setSelectedExportId(exp.id);
+		                      router.replace(`/projects/${projectId}/publish?exportId=${encodeURIComponent(exp.id)}`);
+		                    }}
+		                    aria-label={`Select export ${exp.name}`}
+		                  />
+		                </label>
+		              ))}
+		            </CardContent>
+	          </Card>
 
-          <div className="lg:col-span-3 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Export preview</CardTitle>
-                <CardDescription>
-                  Confirm this is the final cut you want to register.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {exportPreviewUrl ? (
-                  <video
-                    ref={videoRef}
-                    src={exportPreviewUrl}
-                    controls
-                    className="w-full rounded-xl border border-border bg-black"
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Select an export to preview it.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <form onSubmit={(e) => startTransition(() => handlePublish(e))}>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Publish details</CardTitle>
-                  <CardDescription>
-                    Upload to Backblaze B2, pin metadata to IPFS, attach license terms, and
-                    register on Story.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="title">Title</Label>
-                      <Input
-                        id="title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Neon courier edit"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="license">License preset</Label>
-                      <select
-                        id="license"
-                        className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        value={licensePreset}
-                        onChange={(e) =>
-                          setLicensePreset(e.target.value as LicensePreset)
-                        }
-                      >
-                        {LICENSE_PRESET_ORDER.map((preset) => (
-                          <option key={preset} value={preset} className="text-black">
-                            {LICENSE_PRESETS[preset].label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="summary">Description</Label>
-                    <Textarea
-                      id="summary"
-                      value={summary}
-                      onChange={(e) => setSummary(e.target.value)}
-                      placeholder="Short summary of this cut and what remixers can do."
-                      required
-                    />
-                  </div>
-
-	                  <div className="space-y-3">
-	                    <div className="flex flex-wrap items-center justify-between gap-2">
-	                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">
-                          Thumbnail (optional)
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Used for Story metadata and marketplace previews.
-                        </p>
-	                      </div>
-	                      <div className="flex flex-wrap gap-2">
-	                        <div className="w-full max-w-[260px] space-y-1">
-	                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-	                            <span>
-	                              {formatTime(Math.max(0, thumbnailTimestamp))} /{" "}
-	                              {formatTime(Math.max(0, exportDurationSeconds))}
+	          <div className="lg:col-span-8 space-y-6">
+	            <Card>
+	              <CardHeader>
+	                <CardTitle>Preview & thumbnail</CardTitle>
+	                <CardDescription>
+	                  Confirm the final cut and choose an optional cover frame.
+	                </CardDescription>
+	              </CardHeader>
+	              <CardContent className="space-y-4">
+	                {exportPreviewUrl ? (
+	                  <div className="grid gap-4 lg:grid-cols-5">
+	                    <div className="lg:col-span-3 space-y-3">
+	                      <video
+	                        ref={videoRef}
+	                        src={exportPreviewUrl}
+	                        controls
+	                        className="w-full rounded-xl border border-border bg-black"
+	                      />
+	                      {selectedExport ? (
+	                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+	                          <div className="flex flex-wrap items-center gap-2">
+	                            <span className="font-medium text-foreground">
+	                              {selectedExport.name}
 	                            </span>
-	                            <span>{Math.max(0, thumbnailTimestamp).toFixed(2)}s</span>
 	                          </div>
-	                          <input
-	                            type="range"
-	                            min={0}
-	                            max={Math.max(0.01, exportDurationSeconds)}
-	                            step={0.01}
-	                            value={Math.min(
-	                              Math.max(0, thumbnailTimestamp),
-	                              Math.max(0.01, exportDurationSeconds),
-	                            )}
-	                            onPointerDown={() => {
-	                              videoRef.current?.pause();
-	                            }}
-	                            onChange={(e) => {
-	                              const next = Number(e.target.value);
-	                              const clamped = Number.isFinite(next) ? Math.max(0, next) : 0;
-	                              setThumbnailTimestamp(clamped);
-	                              const video = videoRef.current;
-	                              if (!video) return;
-	                              if (!Number.isFinite(video.duration) || video.duration <= 0) return;
-	                              video.currentTime = Math.max(
-	                                0,
-	                                Math.min(clamped, video.duration),
-	                              );
-	                            }}
-	                            className="w-full accent-emerald-500"
-	                            aria-label="Thumbnail scrubber"
-	                            disabled={!exportPreviewUrl || exportDurationSeconds <= 0}
-	                          />
+	                          <div className="flex flex-wrap items-center gap-2">
+	                            <span>{formatBytes(selectedExport.fileSizeBytes)}</span>
+	                            <span aria-hidden="true">·</span>
+	                            <span>{formatTime(Math.max(0, selectedExport.durationSeconds))}</span>
+	                          </div>
 	                        </div>
+	                      ) : null}
+	                    </div>
+
+	                    <div className="lg:col-span-2 space-y-3">
+	                      <div className="flex items-start justify-between gap-2">
+	                        <div className="space-y-0.5">
+	                          <p className="text-sm font-medium text-foreground">
+	                            Thumbnail
+	                          </p>
+	                          <p className="text-xs text-muted-foreground">
+	                            Optional cover image for marketplace previews.
+	                          </p>
+	                        </div>
+	                        <Badge variant="outline">
+	                          {thumbnailFile ? "Selected" : "Optional"}
+	                        </Badge>
+	                      </div>
+
+	                      <div className="relative aspect-video overflow-hidden rounded-xl border border-border bg-muted/30">
+	                        {thumbnailPreviewUrl || thumbnailScrubPreviewUrl ? (
+	                          <Image
+	                            src={(thumbnailScrubPreviewUrl ?? thumbnailPreviewUrl) as string}
+	                            alt="Thumbnail preview"
+	                            fill
+	                            unoptimized
+	                            sizes="(max-width: 1024px) 100vw, 320px"
+	                            className="object-cover"
+	                          />
+	                        ) : (
+	                          <div className="flex h-full flex-col items-center justify-center gap-1 p-4 text-center text-xs text-muted-foreground">
+	                            <p className="font-medium text-foreground/80">
+	                              No thumbnail selected
+	                            </p>
+	                            <p>Scrub the slider to preview a frame, then capture it.</p>
+	                          </div>
+	                        )}
+
+	                        {thumbnailScrubPreviewUrl ? (
+	                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
+	                            Frame preview
+	                          </div>
+	                        ) : thumbnailPreviewUrl ? (
+	                          <div className="absolute left-2 top-2 rounded-full border border-border bg-background/80 px-2 py-1 text-[10px] font-medium text-foreground backdrop-blur">
+	                            Selected
+	                          </div>
+	                        ) : null}
+
+	                        {thumbnailPreviewUrl && thumbnailScrubPreviewUrl ? (
+	                          <div className="absolute bottom-2 right-2 overflow-hidden rounded-lg border border-border bg-background/70 backdrop-blur">
+	                            <div className="relative h-14 w-24">
+	                              <Image
+	                                src={thumbnailPreviewUrl}
+	                                alt="Selected thumbnail"
+	                                fill
+	                                unoptimized
+	                                sizes="96px"
+	                                className="object-cover"
+	                              />
+	                            </div>
+	                            <div className="px-2 py-1 text-[10px] font-medium text-foreground/80">
+	                              Current
+	                            </div>
+	                          </div>
+	                        ) : null}
+	                      </div>
+
+	                      <div className="space-y-2">
+	                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+	                          <span>
+	                            {formatTime(Math.max(0, thumbnailTimestamp))} /{" "}
+	                            {formatTime(Math.max(0, exportDurationSeconds))}
+	                          </span>
+	                          <span>{Math.max(0, thumbnailTimestamp).toFixed(2)}s</span>
+	                        </div>
+	                        <input
+	                          type="range"
+	                          min={0}
+	                          max={Math.max(0.01, exportDurationSeconds)}
+	                          step={0.01}
+	                          value={Math.min(
+	                            Math.max(0, thumbnailTimestamp),
+	                            Math.max(0.01, exportDurationSeconds),
+	                          )}
+	                          onPointerDown={() => {
+	                            videoRef.current?.pause();
+	                          }}
+	                          onChange={(e) => {
+	                            const next = Number(e.target.value);
+	                            const clamped = Number.isFinite(next) ? Math.max(0, next) : 0;
+	                            setThumbnailTimestamp(clamped);
+	                            const video = videoRef.current;
+	                            if (!video) return;
+	                            if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+	                            video.currentTime = Math.max(0, Math.min(clamped, video.duration));
+	                          }}
+	                          className="w-full accent-emerald-500"
+	                          aria-label="Thumbnail scrubber"
+	                          disabled={!exportPreviewUrl || exportDurationSeconds <= 0}
+	                        />
+	                      </div>
+
+	                      <div className="flex flex-wrap gap-2">
 	                        <Button
 	                          type="button"
 	                          size="sm"
@@ -886,306 +967,348 @@ export default function PublishClient({
 	                          type="button"
 	                          size="sm"
 	                          variant="outline"
-                          onClick={() => handleSelectThumbnailFile(null)}
-                          disabled={!thumbnailFile}
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
+	                          onClick={() => handleSelectThumbnailFile(null)}
+	                          disabled={!thumbnailFile}
+	                        >
+	                          Clear
+	                        </Button>
+	                      </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="thumbnailFile">Upload thumbnail</Label>
-                        <Input
-                          id="thumbnailFile"
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) =>
-                            handleSelectThumbnailFile(e.target.files?.[0] ?? null)
-                          }
-                        />
-                      </div>
+	                      <div className="space-y-2">
+	                        <Label htmlFor="thumbnailFile">Upload thumbnail</Label>
+	                        <Input
+	                          id="thumbnailFile"
+	                          type="file"
+	                          accept="image/*"
+	                          onChange={(e) =>
+	                            handleSelectThumbnailFile(e.target.files?.[0] ?? null)
+	                          }
+	                        />
+	                      </div>
+	                    </div>
+	                  </div>
+	                ) : (
+	                  <p className="text-sm text-muted-foreground">
+	                    Select an export to preview it.
+	                  </p>
+	                )}
+	              </CardContent>
+	            </Card>
 
-                      {thumbnailPreviewUrl ? (
-                        <div className="space-y-2">
-                          <Label>Preview</Label>
-                          <div className="relative h-24 w-full overflow-hidden rounded-lg border border-border">
-                            <Image
-                              src={thumbnailPreviewUrl}
-                              alt="Thumbnail preview"
-                              fill
-                              unoptimized
-                              sizes="(max-width: 640px) 100vw, 50vw"
-                              className="object-cover"
-                            />
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+	            <form
+	              onSubmit={(e) => startTransition(() => handlePublish(e))}
+	              className="space-y-6"
+	            >
+	              <Card>
+	                <CardHeader>
+	                  <CardTitle>Metadata</CardTitle>
+	                  <CardDescription>
+	                    This is what collectors and remixers see on Story.
+	                  </CardDescription>
+	                </CardHeader>
+	                <CardContent className="space-y-5">
+	                  <div className="grid gap-4 sm:grid-cols-2">
+	                    <div className="space-y-2">
+	                      <Label htmlFor="title">Title</Label>
+	                      <Input
+	                        id="title"
+	                        value={title}
+	                        onChange={(e) => setTitle(e.target.value)}
+	                        placeholder="Neon courier edit"
+	                        required
+	                      />
+	                    </div>
+	                    <div className="space-y-2">
+	                      <Label htmlFor="license">License preset</Label>
+	                      <select
+	                        id="license"
+	                        className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+	                        value={licensePreset}
+	                        onChange={(e) =>
+	                          setLicensePreset(e.target.value as LicensePreset)
+	                        }
+	                      >
+	                        {LICENSE_PRESET_ORDER.map((preset) => (
+	                          <option key={preset} value={preset} className="text-black">
+	                            {LICENSE_PRESETS[preset].label}
+	                          </option>
+	                        ))}
+	                      </select>
+	                    </div>
+	                  </div>
 
-                  <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-foreground">Storage</p>
-                      <Badge variant="outline">Backblaze B2</Badge>
-                    </div>
-                    {selectedExport?.upload ? (
-                      <div className="space-y-3">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="text-sm text-muted-foreground">Video URL</p>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleCopy(selectedExport.upload!.videoUrl)}
-                              >
-                                <Copy className="h-4 w-4" />
-                                Copy
-                              </Button>
-                              <Button size="sm" asChild>
-                                <a
-                                  href={selectedExport.upload.videoUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  <ExternalLink className="h-4 w-4" />
-                                  Open
-                                </a>
-                              </Button>
-                            </div>
-                          </div>
-                          <p className="break-all text-xs text-foreground/80">
-                            {selectedExport.upload.videoUrl}
-                          </p>
-                        </div>
+	                  <div className="space-y-2">
+	                    <Label htmlFor="summary">Description</Label>
+	                    <Textarea
+	                      id="summary"
+	                      value={summary}
+	                      onChange={(e) => setSummary(e.target.value)}
+	                      placeholder="Short summary of this cut and what remixers can do."
+	                      required
+	                    />
+	                  </div>
+	                </CardContent>
+	              </Card>
 
-                        {selectedExport.upload.thumbnailUrl ? (
-                          <div className="space-y-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <p className="text-sm text-muted-foreground">
-                                Thumbnail URL
-                              </p>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    void handleCopy(selectedExport.upload!.thumbnailUrl!)
-                                  }
-                                >
-                                  <Copy className="h-4 w-4" />
-                                  Copy
-                                </Button>
-                                <Button size="sm" variant="secondary" asChild>
-                                  <a
-                                    href={selectedExport.upload.thumbnailUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    <ExternalLink className="h-4 w-4" />
-                                    Open
-                                  </a>
-                                </Button>
-                              </div>
-                            </div>
-                            <p className="break-all text-xs text-foreground/80">
-                              {selectedExport.upload.thumbnailUrl}
-                            </p>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        URLs are generated when you publish. Large exports upload via resumable
-                        multipart to avoid timeouts.
-                      </p>
-                    )}
-                  </div>
+	              <Card>
+	                <CardHeader>
+	                  <CardTitle>Upload & register</CardTitle>
+	                  <CardDescription>
+	                    Upload to Backblaze B2, pin metadata to IPFS, and register on Story.
+	                  </CardDescription>
+	                </CardHeader>
+	                <CardContent className="space-y-5">
+	                  <div className="grid gap-4 lg:grid-cols-2">
+	                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+	                      <p className="text-sm font-medium text-foreground">
+	                        Readiness checks
+	                      </p>
+	                      <ul className="space-y-1 text-sm text-muted-foreground">
+	                        <li>
+	                          Wallet:{" "}
+	                          <span className="text-foreground">
+	                            {isConnected && address ? "Connected" : "Not connected"}
+	                          </span>
+	                        </li>
+	                        <li>
+	                          SPG NFT contract:{" "}
+	                          <span className="text-foreground">
+	                            {isSpgConfigured ? "Configured" : "Missing"}
+	                          </span>
+	                        </li>
+	                        <li>
+	                          WIP token address:{" "}
+	                          <span className="text-foreground">
+	                            {isWipConfigured ? "Configured" : "Missing"}
+	                          </span>
+	                        </li>
+	                      </ul>
+	                    </div>
 
-                  <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
-                    <p className="text-sm font-medium text-foreground">
-                      Readiness checks
-                    </p>
-                    <ul className="space-y-1 text-sm text-muted-foreground">
-                      <li>
-                        Wallet:{" "}
-                        <span className="text-foreground">
-                          {isConnected && address ? "Connected" : "Not connected"}
-                        </span>
-                      </li>
-                      <li>
-                        SPG NFT contract:{" "}
-                        <span className="text-foreground">
-                          {isSpgConfigured ? "Configured" : "Missing"}
-                        </span>
-                      </li>
-                      <li>
-                        WIP token address:{" "}
-                        <span className="text-foreground">
-                          {isWipConfigured ? "Configured" : "Missing"}
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
+	                    <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+	                      <p className="text-sm font-medium text-foreground">
+	                        Status
+	                      </p>
+	                      <p className="text-sm text-muted-foreground">
+	                        <span className="font-semibold text-foreground">
+	                          {status === "idle" && "Ready"}
+	                          {status === "uploading" && "Uploading"}
+	                          {status === "registering" && "Registering"}
+	                          {status === "success" && "Published"}
+	                          {status === "error" && "Error"}
+	                        </span>
+	                      </p>
+	                      {message ? (
+	                        <p
+	                          className={`text-sm ${
+	                            status === "error"
+	                              ? "text-destructive"
+	                              : "text-emerald-600 dark:text-emerald-300"
+	                          }`}
+	                        >
+	                          {message}
+	                        </p>
+	                      ) : null}
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground">
-                        Status:{" "}
-                        <span className="font-semibold text-foreground">
-                          {status === "idle" && "Ready"}
-                          {status === "uploading" && "Uploading"}
-                          {status === "registering" && "Registering"}
-                          {status === "success" && "Published"}
-                          {status === "error" && "Error"}
-                        </span>
-                      </p>
-                      {message ? (
-                        <p
-                          className={`text-sm ${
-                            status === "error"
-                              ? "text-destructive"
-                              : "text-emerald-600 dark:text-emerald-300"
-                          }`}
-                        >
-                          {message}
-                        </p>
-                      ) : null}
-                      {status === "uploading" && uploadProgress ? (
-                        <div className="space-y-2 pt-1">
-                          <p className="text-xs text-muted-foreground">
-                            Uploading {uploadProgress.stage} ·{" "}
-                            {formatBytes(uploadProgress.uploadedBytes)} /{" "}
-                            {formatBytes(uploadProgress.totalBytes)} · Part{" "}
-                            {uploadProgress.partNumber} / {uploadProgress.totalParts}
-                          </p>
-                          <div
-                            className="h-2 w-full rounded-full bg-muted"
-                            aria-label="Upload progress"
-                            role="progressbar"
-                            aria-valuenow={Math.round(
-                              (uploadProgress.uploadedBytes /
-                                Math.max(1, uploadProgress.totalBytes)) *
-                                100,
-                            )}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          >
-                            <div
-                              className="h-2 rounded-full bg-emerald-500"
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  (uploadProgress.uploadedBytes /
-                                    Math.max(1, uploadProgress.totalBytes)) *
-                                    100,
-                                )}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ) : null}
-                      {published?.ipId ? (
-                        <p className="text-xs text-muted-foreground">
-                          Video URL:{" "}
-                          <a
-                            className="underline"
-                            href={ipfsUriToGatewayUrl(published.videoUrl)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Open
-                          </a>
-                        </p>
-                      ) : null}
-                    </div>
+	                      {status === "uploading" && uploadProgress ? (
+	                        <div className="space-y-2 pt-1">
+	                          <p className="text-xs text-muted-foreground">
+	                            Uploading {uploadProgress.stage} ·{" "}
+	                            {formatBytes(uploadProgress.uploadedBytes)} /{" "}
+	                            {formatBytes(uploadProgress.totalBytes)} · Part{" "}
+	                            {uploadProgress.partNumber} / {uploadProgress.totalParts}
+	                          </p>
+	                          <div
+	                            className="h-2 w-full rounded-full bg-muted"
+	                            aria-label="Upload progress"
+	                            role="progressbar"
+	                            aria-valuenow={Math.round(
+	                              (uploadProgress.uploadedBytes /
+	                                Math.max(1, uploadProgress.totalBytes)) *
+	                                100,
+	                            )}
+	                            aria-valuemin={0}
+	                            aria-valuemax={100}
+	                          >
+	                            <div
+	                              className="h-2 rounded-full bg-emerald-500"
+	                              style={{
+	                                width: `${Math.min(
+	                                  100,
+	                                  (uploadProgress.uploadedBytes /
+	                                    Math.max(1, uploadProgress.totalBytes)) *
+	                                    100,
+	                                )}%`,
+	                              }}
+	                            />
+	                          </div>
+	                        </div>
+	                      ) : null}
+	                    </div>
+	                  </div>
 
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={
-                          isPending ||
-                          status === "uploading" ||
-                          status === "registering" ||
-                          !selectedExport ||
-                          !exportFile ||
-                          !!published?.ipId
-                        }
-                        onClick={() => startTransition(() => handleUploadOnly())}
-                      >
-                        Upload only
-                      </Button>
-                      <Button
-                        type="submit"
-                        className="min-w-[220px]"
-                        disabled={
-                          isPending ||
-                          status === "uploading" ||
-                          status === "registering" ||
-                          !selectedExport ||
-                          !exportFile ||
-                          !!published?.ipId
-                        }
-                      >
-                        <Upload className="h-4 w-4" />
-                        {status === "uploading"
-                          ? "Uploading…"
-                          : status === "registering"
-                            ? "Registering…"
-                            : published?.ipId
-                              ? "Published"
-                              : selectedExport?.upload?.videoUrl
-                                ? "Register on Story"
-                                : "Upload & Register"}
-                      </Button>
-                    </div>
-                  </div>
+	                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+	                    <Button
+	                      type="button"
+	                      variant="outline"
+	                      disabled={
+	                        isPending ||
+	                        status === "uploading" ||
+	                        status === "registering" ||
+	                        !selectedExport ||
+	                        !exportFile ||
+	                        !!published?.ipId
+	                      }
+	                      onClick={() => startTransition(() => handleUploadOnly())}
+	                    >
+	                      Upload only
+	                    </Button>
+	                    <Button
+	                      type="submit"
+	                      className="min-w-[220px]"
+	                      disabled={
+	                        isPending ||
+	                        status === "uploading" ||
+	                        status === "registering" ||
+	                        !selectedExport ||
+	                        !exportFile ||
+	                        !!published?.ipId
+	                      }
+	                    >
+	                      <Upload className="h-4 w-4" />
+	                      {status === "uploading"
+	                        ? "Uploading…"
+	                        : status === "registering"
+	                          ? "Registering…"
+	                          : published?.ipId
+	                            ? "Published"
+	                            : selectedExport?.upload?.videoUrl
+	                              ? "Register on Story"
+	                              : "Upload & Register"}
+	                    </Button>
+	                  </div>
 
-                  {published?.ipId ? (
-                    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-                      <p className="text-sm font-medium text-foreground">
-                        Next steps
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <Button size="sm" variant="secondary" asChild>
-                          <Link href={`/ip/${published.ipId}`}>
-                            View marketplace page
-                          </Link>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCopy(published.ipId)}
-                        >
-                          <Copy className="h-4 w-4" />
-                          Copy IP ID
-                        </Button>
-                        <Button size="sm" asChild>
-                          <a
-                            href={`https://explorer.story.foundation/ip-assets/${published.ipId}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Story Explorer
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </form>
+	                  <div className="space-y-2 rounded-xl border border-border bg-muted/40 p-4">
+	                    <div className="flex items-center justify-between gap-2">
+	                      <p className="text-sm font-medium text-foreground">Storage</p>
+	                      <Badge variant="outline">Backblaze B2</Badge>
+	                    </div>
+	                    {selectedExport?.upload ? (
+	                      <div className="space-y-3">
+	                        <div className="space-y-2">
+	                          <div className="flex flex-wrap items-center justify-between gap-2">
+	                            <p className="text-sm text-muted-foreground">Video URL</p>
+	                            <div className="flex items-center gap-2">
+	                              <Button
+	                                type="button"
+	                                size="sm"
+	                                variant="outline"
+	                                onClick={() => void handleCopy(selectedExport.upload!.videoUrl)}
+	                              >
+	                                <Copy className="h-4 w-4" />
+	                                Copy
+	                              </Button>
+	                              <Button size="sm" asChild>
+	                                <a
+	                                  href={selectedExport.upload.videoUrl}
+	                                  target="_blank"
+	                                  rel="noreferrer"
+	                                >
+	                                  <ExternalLink className="h-4 w-4" />
+	                                  Open
+	                                </a>
+	                              </Button>
+	                            </div>
+	                          </div>
+	                          <p className="break-all text-xs text-foreground/80">
+	                            {selectedExport.upload.videoUrl}
+	                          </p>
+	                        </div>
 
-            {published?.ipId ? <RoyaltiesPanel ipId={published.ipId} /> : null}
-          </div>
-        </div>
-      )}
+	                        {selectedExport.upload.thumbnailUrl ? (
+	                          <div className="space-y-2">
+	                            <div className="flex flex-wrap items-center justify-between gap-2">
+	                              <p className="text-sm text-muted-foreground">
+	                                Thumbnail URL
+	                              </p>
+	                              <div className="flex items-center gap-2">
+	                                <Button
+	                                  type="button"
+	                                  size="sm"
+	                                  variant="outline"
+	                                  onClick={() =>
+	                                    void handleCopy(selectedExport.upload!.thumbnailUrl!)
+	                                  }
+	                                >
+	                                  <Copy className="h-4 w-4" />
+	                                  Copy
+	                                </Button>
+	                                <Button size="sm" variant="secondary" asChild>
+	                                  <a
+	                                    href={selectedExport.upload.thumbnailUrl}
+	                                    target="_blank"
+	                                    rel="noreferrer"
+	                                  >
+	                                    <ExternalLink className="h-4 w-4" />
+	                                    Open
+	                                  </a>
+	                                </Button>
+	                              </div>
+	                            </div>
+	                            <p className="break-all text-xs text-foreground/80">
+	                              {selectedExport.upload.thumbnailUrl}
+	                            </p>
+	                          </div>
+	                        ) : null}
+	                      </div>
+	                    ) : (
+	                      <p className="text-sm text-muted-foreground">
+	                        URLs are generated when you publish. Large exports upload via resumable
+	                        multipart to avoid timeouts.
+	                      </p>
+	                    )}
+	                  </div>
+
+	                  {published?.ipId ? (
+	                    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+	                      <p className="text-sm font-medium text-foreground">
+	                        Next steps
+	                      </p>
+	                      <div className="flex flex-wrap gap-2">
+	                        <Button size="sm" variant="secondary" asChild>
+	                          <Link href={`/ip/${published.ipId}`}>
+	                            View marketplace page
+	                          </Link>
+	                        </Button>
+	                        <Button
+	                          size="sm"
+	                          variant="outline"
+	                          onClick={() => handleCopy(published.ipId)}
+	                        >
+	                          <Copy className="h-4 w-4" />
+	                          Copy IP ID
+	                        </Button>
+	                        <Button size="sm" asChild>
+	                          <a
+	                            href={`https://explorer.story.foundation/ip-assets/${published.ipId}`}
+	                            target="_blank"
+	                            rel="noreferrer"
+	                          >
+	                            <ExternalLink className="h-4 w-4" />
+	                            Story Explorer
+	                          </a>
+	                        </Button>
+	                      </div>
+	                    </div>
+	                  ) : null}
+	                </CardContent>
+	              </Card>
+	            </form>
+
+	            {published?.ipId ? <RoyaltiesPanel ipId={published.ipId} /> : null}
+	          </div>
+	        </div>
+	      )}
     </div>
   );
 }
