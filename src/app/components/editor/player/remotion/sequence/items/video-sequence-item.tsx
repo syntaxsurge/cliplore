@@ -1,6 +1,7 @@
 import React from "react";
 import { AbsoluteFill, OffthreadVideo, Sequence } from "remotion";
 import { MediaFile } from "@/app/types";
+import { useAppSelector } from "@/app/store";
 
 const REMOTION_SAFE_FRAME = 0;
 
@@ -31,6 +32,16 @@ export const VideoSequenceItem: React.FC<VideoSequenceItemProps> = ({
   options,
 }) => {
   const { fps } = options;
+  const tracks = useAppSelector((state) => state.projectState.tracks);
+
+  const videoTrackIndex = (() => {
+    if (!item.trackId) return 0;
+    const videoTracks = tracks.filter((t) => t.kind === "video");
+    const idx = videoTracks.findIndex((t) => t.id === item.trackId);
+    return idx >= 0 ? idx : 0;
+  })();
+
+  const effectiveZIndex = videoTrackIndex * 100 + (item.zIndex ?? 0);
 
   const playbackRate = item.playbackSpeed || 1;
   const { from, durationInFrames } = calculateFrames(
@@ -70,7 +81,7 @@ export const VideoSequenceItem: React.FC<VideoSequenceItemProps> = ({
           width: crop.width || item.width || "100%",
           height: crop.height || item.height || "auto",
           transform: "none",
-          zIndex: item.zIndex,
+          zIndex: effectiveZIndex,
           opacity: item?.opacity !== undefined ? item.opacity / 100 : 1,
           borderRadius: `10px`, // Default border radius
           overflow: "hidden",

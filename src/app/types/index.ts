@@ -1,5 +1,16 @@
 export type MediaType = "video" | "audio" | "image" | "unknown";
 
+export type TrackKind = "video" | "audio";
+
+export interface TimelineTrack {
+  id: string;
+  kind: TrackKind;
+  name: string; // e.g. "V1", "A1"
+  muted?: boolean;
+  locked?: boolean;
+  hidden?: boolean;
+}
+
 export interface UploadedFile {
   id: string;
   file: File;
@@ -12,6 +23,7 @@ export interface MediaFile {
   fileName: string;
   fileId: string;
   type: MediaType;
+  trackId?: string;
   startTime: number; // within the source video
   src?: string;
   endTime: number;
@@ -39,6 +51,7 @@ export interface TextElement {
   id: string;
   text: string; // The actual text content
   includeInMerge?: boolean;
+  trackId?: string;
 
   // Timing
   positionStart: number; // When text appears in final video
@@ -126,6 +139,7 @@ export interface ProjectState {
   id: string;
   mediaFiles: MediaFile[];
   textElements: TextElement[];
+  tracks: TimelineTrack[];
   filesID?: string[];
   exports: ProjectExport[];
   currentTime: number;

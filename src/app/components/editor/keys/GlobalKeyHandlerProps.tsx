@@ -88,6 +88,7 @@ const GlobalKeyHandler = ({
           handleSplit();
           break;
         case "Delete":
+        case "Backspace":
           e.preventDefault();
           handleDelete();
           break;

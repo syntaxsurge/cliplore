@@ -11,16 +11,22 @@ import Moveable, { OnDrag, OnResize } from "react-moveable";
 import { throttle } from "lodash";
 import { useDispatch } from "react-redux";
 import React, { useEffect, useMemo, useRef } from "react";
+import { Image as ImageIcon, Music, Video } from "lucide-react";
 
 type Props = {
-  mediaType: Exclude<MediaType, "unknown">;
-  icon: React.ReactNode;
+  trackId: string;
+  mediaTypes: Array<Exclude<MediaType, "unknown">>;
+  fallbackTrackIdForType: Record<MediaType, string | null>;
 };
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
-export function MediaTimelineTrack({ mediaType, icon }: Props) {
+export function MediaTimelineTrack({
+  trackId,
+  mediaTypes,
+  fallbackTrackIdForType,
+}: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const moveableRef = useRef<Record<string, Moveable | null>>({});
   const { mediaFiles, activeElement, activeElementIndex, timelineZoom } =
@@ -52,7 +58,12 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
     dispatch(setActiveElementIndex(actualIndex));
   };
 
-  const handleDrag = (clip: MediaFile, target: HTMLElement, left: number) => {
+  const handleDrag = (
+    clip: MediaFile,
+    target: HTMLElement,
+    left: number,
+    top?: number,
+  ) => {
     const constrainedLeft = Math.max(left, 0);
     const newPositionStart = constrainedLeft / zoom;
     const deltaSeconds = newPositionStart - clip.positionStart;
@@ -72,6 +83,20 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
     }
 
     target.style.left = `${constrainedLeft}px`;
+    if (isFiniteNumber(top)) {
+      target.style.top = `${top}px`;
+    }
+  };
+
+  const findTrackIdAtPoint = (clientX: number, clientY: number) => {
+    const elements = document.elementsFromPoint(
+      clientX,
+      clientY,
+    ) as HTMLElement[];
+    const trackEl = elements.find(
+      (el) => el?.dataset?.timelineTrackId !== undefined,
+    );
+    return trackEl?.dataset?.timelineTrackId ?? null;
   };
 
   const handleRightResize = (
@@ -134,10 +159,27 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
     }
   }, [timelineZoom, mediaFiles]);
 
+  const getClipIcon = (type: MediaType) => {
+    switch (type) {
+      case "video":
+        return <Video className="h-4 w-4" aria-hidden="true" />;
+      case "audio":
+        return <Music className="h-4 w-4" aria-hidden="true" />;
+      case "image":
+        return <ImageIcon className="h-4 w-4" aria-hidden="true" />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <div>
       {mediaFiles
-        .filter((clip) => clip.type === mediaType)
+        .filter(
+          (clip) =>
+            mediaTypes.includes(clip.type as Exclude<MediaType, "unknown">) &&
+            (clip.trackId ?? fallbackTrackIdForType[clip.type]) === trackId,
+        )
         .map((clip) => (
           <div key={clip.id}>
             {(() => {
@@ -179,7 +221,7 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
                   }}
                 >
                   <span className="mr-2 inline-flex h-7 w-7 min-w-6 items-center justify-center text-white/80">
-                    {icon}
+                    {getClipIcon(clip.type)}
                   </span>
                   <span className="truncate text-x">{clip.fileName}</span>
                 </div>
@@ -207,9 +249,20 @@ export function MediaTimelineTrack({ mediaType, icon }: Props) {
               throttleResize={0}
               linePadding={4}
               controlPadding={6}
-              onDrag={({ target, left }: OnDrag) => {
+              onDrag={({ target, left, top }: OnDrag) => {
                 handleClick(clip.id);
-                handleDrag(clip, target as HTMLElement, left);
+                handleDrag(clip, target as HTMLElement, left, top);
+              }}
+              onDragEnd={({ target, clientX, clientY }) => {
+                if (!target) return;
+                target.style.top = "";
+                if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
+                const nextTrackId = findTrackIdAtPoint(clientX, clientY);
+                if (!nextTrackId) return;
+                const currentTrackId =
+                  clip.trackId ?? fallbackTrackIdForType[clip.type];
+                if (nextTrackId === currentTrackId) return;
+                onUpdateMedia(clip.id, { trackId: nextTrackId });
               }}
               onResize={({ target, width, delta, direction }: OnResize) => {
                 if (!isFiniteNumber(width)) return;

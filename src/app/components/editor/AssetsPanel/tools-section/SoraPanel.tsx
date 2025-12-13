@@ -3,7 +3,6 @@
 import { useState, useCallback } from "react";
 import { useAppDispatch, useAppSelector, storeFile } from "@/app/store";
 import { setFilesID, setMediaFiles } from "@/app/store/slices/projectSlice";
-import { categorizeFile } from "@/app/utils/utils";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import { createMediaFileFromFile } from "@/lib/media/ingest";
@@ -24,7 +23,7 @@ type Props = {
 
 export function SoraPanel({ onGenerated, hideHeader = false, className }: Props) {
   const dispatch = useAppDispatch();
-  const { mediaFiles, filesID = [], resolution } = useAppSelector(
+  const { mediaFiles, filesID = [], resolution, tracks } = useAppSelector(
     (state) => state.projectState,
   );
   const [prompt, setPrompt] = useState("");
@@ -38,8 +37,11 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
   const addMediaFromFile = useCallback(
     async (file: File, fileId: string) => {
       const updatedMedia = [...mediaFiles];
+      const videoTracks = tracks.filter((t) => t.kind === "video");
+      const mainVideoTrackId = videoTracks[0]?.id ?? null;
+
       const relevantClips = mediaFiles.filter(
-        (clip) => clip.type === categorizeFile(file.type),
+        (clip) => (clip.trackId ?? null) === mainVideoTrackId,
       );
       const lastEnd =
         relevantClips.length > 0
@@ -56,6 +58,7 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
           width: resolution?.width ?? 1920,
           height: resolution?.height ?? 1080,
         },
+        trackId: mainVideoTrackId ?? undefined,
         defaultDurationSeconds: 30,
       });
       updatedMedia.push(mediaClip);
@@ -63,7 +66,7 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
       dispatch(setFilesID([...filesID, fileId]));
       dispatch(setMediaFiles(updatedMedia));
     },
-    [dispatch, filesID, mediaFiles, resolution],
+    [dispatch, filesID, mediaFiles, resolution, tracks],
   );
 
   const pollJob = useCallback(async (jobId: string) => {

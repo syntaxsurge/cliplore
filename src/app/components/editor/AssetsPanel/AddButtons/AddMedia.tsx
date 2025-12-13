@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 import { createMediaFileFromFile } from "@/lib/media/ingest";
 
 export default function AddMedia({ fileId }: { fileId: string }) {
-  const { mediaFiles, resolution } = useAppSelector(
+  const { mediaFiles, resolution, tracks } = useAppSelector(
     (state) => state.projectState,
   );
   const dispatch = useAppDispatch();
@@ -24,13 +24,29 @@ export default function AddMedia({ fileId }: { fileId: string }) {
 
     if (fileId) {
       const type = categorizeFile(file.type);
-      const relevantClips = mediaFiles.filter((clip) => clip.type === type);
+      const videoTracks = tracks.filter((t) => t.kind === "video");
+      const audioTracks = tracks.filter((t) => t.kind === "audio");
+      const mainVideoTrackId = videoTracks[0]?.id ?? null;
+      const overlayVideoTrackId = videoTracks[1]?.id ?? mainVideoTrackId;
+      const mainAudioTrackId = audioTracks[0]?.id ?? mainVideoTrackId;
+
+      const targetTrackId =
+        type === "audio"
+          ? mainAudioTrackId
+          : type === "image"
+            ? overlayVideoTrackId
+            : mainVideoTrackId;
+
+      const relevantClips = mediaFiles.filter(
+        (clip) => (clip.trackId ?? null) === targetTrackId,
+      );
       const lastEnd =
         relevantClips.length > 0
           ? Math.max(...relevantClips.map((f) => f.positionEnd))
           : 0;
 
       const src = URL.createObjectURL(file);
+      const defaultDurationSeconds = type === "image" ? 5 : 30;
       const mediaClip = await createMediaFileFromFile({
         file,
         fileId,
@@ -40,7 +56,8 @@ export default function AddMedia({ fileId }: { fileId: string }) {
           width: resolution?.width ?? 1920,
           height: resolution?.height ?? 1080,
         },
-        defaultDurationSeconds: 30,
+        trackId: targetTrackId ?? undefined,
+        defaultDurationSeconds,
       });
 
       updatedMedia.push(mediaClip);

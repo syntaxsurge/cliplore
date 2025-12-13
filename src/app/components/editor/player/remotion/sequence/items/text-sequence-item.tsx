@@ -34,11 +34,20 @@ export const TextSequenceItem: React.FC<{
 }> = ({ item, options }) => {
   const { handleTextChange, fps, editableTextId } = options;
   const dispatch = useAppDispatch();
-  const { textElements, resolution } = useAppSelector(
+  const { textElements, resolution, tracks } = useAppSelector(
     (state) => state.projectState,
   );
   const frame = useCurrentFrame();
   const videoConfig = useVideoConfig();
+
+  const videoTrackIndex = (() => {
+    if (!item.trackId) return 0;
+    const videoTracks = tracks.filter((t) => t.kind === "video");
+    const idx = videoTracks.findIndex((t) => t.id === item.trackId);
+    return idx >= 0 ? idx : 0;
+  })();
+
+  const effectiveZIndex = 1000 + videoTrackIndex * 10 + (item.zIndex ?? 0);
 
   const { from, durationInFrames } = calculateFrames(
     {
@@ -168,7 +177,7 @@ export const TextSequenceItem: React.FC<{
         top: item.y,
         left: item.x,
         color: item.color || "#000000",
-        zIndex: 1000,
+        zIndex: effectiveZIndex,
         // backgroundColor: item.backgroundColor || "transparent",
         opacity: ((item.opacity ?? 100) / 100) * opacity,
         fontFamily: item.font || "Arial",

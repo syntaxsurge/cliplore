@@ -16,7 +16,7 @@ const DEFAULT_DURATION_SECONDS = 8;
 
 export default function AddTextPanel() {
   const dispatch = useAppDispatch();
-  const { textElements, currentTime, duration, resolution } = useAppSelector(
+  const { textElements, currentTime, duration, resolution, tracks } = useAppSelector(
     (state) => state.projectState,
   );
 
@@ -32,6 +32,10 @@ export default function AddTextPanel() {
   const frameWidth = resolution?.width ?? 1920;
   const frameHeight = resolution?.height ?? 1080;
   const insetX = Math.round(frameWidth * 0.08);
+  const overlayVideoTrackId =
+    tracks.filter((t) => t.kind === "video")[1]?.id ??
+    tracks.find((t) => t.kind === "video")?.id ??
+    undefined;
 
   const addPreset = (preset: Preset) => {
     const start = baseStart;
@@ -94,6 +98,7 @@ export default function AddTextPanel() {
     const nextElement: TextElement = {
       ...common,
       ...presetFields,
+      trackId: overlayVideoTrackId,
     };
 
     dispatch(setTextElements([...textElements, nextElement]));
@@ -109,6 +114,7 @@ export default function AddTextPanel() {
       text: "",
       positionStart: start,
       positionEnd: end,
+      trackId: overlayVideoTrackId,
       x: Math.round(frameWidth * 0.2),
       y: Math.round(frameHeight * 0.35),
       width: Math.round(frameWidth * 0.6),

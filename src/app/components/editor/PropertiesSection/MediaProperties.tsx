@@ -1,25 +1,111 @@
 "use client";
 
-import { useAppSelector, getFile, storeFile } from "../../../store";
-import {
-  setActiveElement,
-  setMediaFiles,
-  setTextElements,
-} from "../../../store/slices/projectSlice";
-import { MediaFile } from "../../../types";
-import { useAppDispatch } from "../../../store";
-import { useState } from "react";
-import toast from "react-hot-toast";
-import { createLoadedFfmpeg } from "@/lib/media/ffmpeg";
+import { getFile, storeFile, useAppDispatch, useAppSelector } from "@/app/store";
+import { setMediaFiles } from "@/app/store/slices/projectSlice";
+import type { MediaFile } from "@/app/types";
 import { mimeToExt } from "@/app/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { createLoadedFfmpeg } from "@/lib/media/ffmpeg";
+import { cn } from "@/lib/utils";
+import { useMemo, useState, type ReactNode } from "react";
+import toast from "react-hot-toast";
+
+function PropertySection(props: {
+  title: string;
+  description?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const { title, description, defaultOpen = true, children } = props;
+  return (
+    <details
+      open={defaultOpen}
+      className="rounded-xl border border-white/10 bg-black/20"
+    >
+      <summary className="cursor-pointer select-none px-4 py-3">
+        <div className="space-y-0.5">
+          <div className="text-sm font-semibold text-white">{title}</div>
+          {description ? (
+            <div className="text-xs text-white/50">{description}</div>
+          ) : null}
+        </div>
+      </summary>
+      <div className="border-t border-white/10 p-4">{children}</div>
+    </details>
+  );
+}
+
+function NumberField(props: {
+  id: string;
+  label: string;
+  value: number;
+  onChange?: (next: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  readOnly?: boolean;
+}) {
+  const { id, label, value, onChange, min, max, step, readOnly } = props;
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id} className="text-xs text-white/70">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        type="number"
+        value={Number.isFinite(value) ? value : 0}
+        onChange={
+          onChange
+            ? (e) => onChange(Number(e.target.value))
+            : undefined
+        }
+        min={min}
+        max={max}
+        step={step}
+        readOnly={readOnly}
+        className={cn(
+          "border-white/10 bg-black/30 text-white focus-visible:ring-white/30 focus-visible:ring-offset-0",
+          readOnly ? "opacity-80" : null,
+        )}
+      />
+    </div>
+  );
+}
 
 export default function MediaProperties() {
-  const { mediaFiles, activeElementIndex } = useAppSelector(
+  const { mediaFiles, activeElementIndex, tracks } = useAppSelector(
     (state) => state.projectState,
   );
   const mediaFile = mediaFiles[activeElementIndex];
   const dispatch = useAppDispatch();
   const [isExtracting, setIsExtracting] = useState(false);
+
+  const ids = useMemo(() => {
+    const base = mediaFile?.id ?? "none";
+    return {
+      start: `media-${base}-start`,
+      end: `media-${base}-end`,
+      sourceStart: `media-${base}-source-start`,
+      sourceEnd: `media-${base}-source-end`,
+      x: `media-${base}-x`,
+      y: `media-${base}-y`,
+      width: `media-${base}-w`,
+      height: `media-${base}-h`,
+      zIndex: `media-${base}-z`,
+      opacity: `media-${base}-opacity`,
+      blur: `media-${base}-blur`,
+      cropX: `media-${base}-crop-x`,
+      cropY: `media-${base}-crop-y`,
+      cropW: `media-${base}-crop-w`,
+      cropH: `media-${base}-crop-h`,
+      volume: `media-${base}-volume`,
+      speed: `media-${base}-speed`,
+    };
+  }, [mediaFile?.id]);
+
   const onUpdateMedia = (id: string, updates: Partial<MediaFile>) => {
     dispatch(
       setMediaFiles(
@@ -60,19 +146,26 @@ export default function MediaProperties() {
       ]);
       const data = (await ffmpeg.readFile(outputName)) as Uint8Array;
       ffmpeg.terminate();
+
       const audioFile = new File(
         [data.buffer],
         `${mediaFile.fileName}-audio.m4a`,
         { type: "audio/mp4" },
       );
+
       const audioId = crypto.randomUUID();
       await storeFile(audioFile, audioId);
+
+      const audioTrackId =
+        tracks.find((track) => track.kind === "audio")?.id ?? undefined;
+
       const newAudio: MediaFile = {
         ...mediaFile,
         id: crypto.randomUUID(),
         fileId: audioId,
         src: URL.createObjectURL(audioFile),
         type: "audio",
+        trackId: audioTrackId,
         playbackSpeed: mediaFile.playbackSpeed || 1,
         volume: mediaFile.volume ?? 100,
         positionStart: mediaFile.positionStart,
@@ -80,6 +173,7 @@ export default function MediaProperties() {
         startTime: mediaFile.startTime,
         endTime: mediaFile.endTime,
       };
+
       dispatch(setMediaFiles([...mediaFiles, newAudio]));
       toast.success("Audio track created");
     } catch (error) {
@@ -91,314 +185,275 @@ export default function MediaProperties() {
   };
 
   if (!mediaFile) return null;
-  const baseCrop = mediaFile.crop ?? {
+
+  const isVisual = mediaFile.type === "video" || mediaFile.type === "image";
+  const isAudio = mediaFile.type === "video" || mediaFile.type === "audio";
+
+  const crop = mediaFile.crop ?? {
     x: 0,
     y: 0,
     width: mediaFile.width ?? 0,
     height: mediaFile.height ?? 0,
   };
 
+  const timelineDuration = Math.max(0, mediaFile.positionEnd - mediaFile.positionStart);
+  const sourceDuration = Math.max(0, mediaFile.endTime - mediaFile.startTime);
+
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-8">
-        {/* Source Video */}
-        <div className="space-y-2">
-          <h4 className="font-semibold">Source Video</h4>
-          <div className="flex items-center space-x-4">
-            <div>
-              <label className="block text-sm">Start (s)</label>
-              <input
-                type="number"
-                readOnly={true}
-                value={mediaFile.startTime}
-                min={0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    startTime: Number(e.target.value),
-                    endTime: mediaFile.endTime,
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">End (s)</label>
-              <input
-                type="number"
-                readOnly={true}
-                value={mediaFile.endTime}
-                min={mediaFile.startTime}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    startTime: mediaFile.startTime,
-                    endTime: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="space-y-1">
+          <div className="text-sm font-semibold text-white">
+            {mediaFile.fileName}
+          </div>
+          <div className="text-xs text-white/50">
+            {mediaFile.type.toUpperCase()} · {timelineDuration.toFixed(2)}s on
+            timeline · {sourceDuration.toFixed(2)}s source
           </div>
         </div>
-        {/* Timing Position */}
-        <div className="space-y-2">
-          <h4 className="font-semibold">Timing Position</h4>
-          <div className="flex items-center space-x-4">
-            <div>
-              <label className="block text-sm">Start (s)</label>
-              <input
-                type="number"
-                readOnly={true}
-                value={mediaFile.positionStart}
-                min={0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    positionStart: Number(e.target.value),
-                    positionEnd:
-                      Number(e.target.value) +
-                      (mediaFile.positionEnd - mediaFile.positionStart),
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">End (s)</label>
-              <input
-                type="number"
-                readOnly={true}
-                value={mediaFile.positionEnd}
-                min={mediaFile.positionStart}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    positionEnd: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-          </div>
+      </div>
+
+      <PropertySection
+        title="Timing"
+        description="Timeline placement and source trim."
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <NumberField
+            id={ids.start}
+            label="Start (s)"
+            value={mediaFile.positionStart}
+            min={0}
+            step={0.1}
+            onChange={(next) =>
+              onUpdateMedia(mediaFile.id, {
+                positionStart: next,
+                positionEnd: next + timelineDuration,
+              })
+            }
+          />
+          <NumberField
+            id={ids.end}
+            label="End (s)"
+            value={mediaFile.positionEnd}
+            readOnly
+          />
+          <NumberField
+            id={ids.sourceStart}
+            label="Source in (s)"
+            value={mediaFile.startTime}
+            readOnly
+          />
+          <NumberField
+            id={ids.sourceEnd}
+            label="Source out (s)"
+            value={mediaFile.endTime}
+            readOnly
+          />
         </div>
-        {/* Visual Properties */}
-        <div className="space-y-6">
-          <h4 className="font-semibold">Visual Properties</h4>
+      </PropertySection>
+
+      {isVisual ? (
+        <PropertySection title="Transform" description="Position and size.">
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm">X Position</label>
+            <NumberField
+              id={ids.x}
+              label="X"
+              value={mediaFile.x ?? 0}
+              step={10}
+              onChange={(next) => onUpdateMedia(mediaFile.id, { x: next })}
+            />
+            <NumberField
+              id={ids.y}
+              label="Y"
+              value={mediaFile.y ?? 0}
+              step={10}
+              onChange={(next) => onUpdateMedia(mediaFile.id, { y: next })}
+            />
+            <NumberField
+              id={ids.width}
+              label="Width"
+              value={mediaFile.width ?? 0}
+              step={10}
+              onChange={(next) => onUpdateMedia(mediaFile.id, { width: next })}
+            />
+            <NumberField
+              id={ids.height}
+              label="Height"
+              value={mediaFile.height ?? 0}
+              step={10}
+              onChange={(next) => onUpdateMedia(mediaFile.id, { height: next })}
+            />
+            <NumberField
+              id={ids.zIndex}
+              label="Layer (z-index)"
+              value={mediaFile.zIndex ?? 0}
+              step={1}
+              onChange={(next) => onUpdateMedia(mediaFile.id, { zIndex: next })}
+            />
+          </div>
+        </PropertySection>
+      ) : null}
+
+      {isVisual ? (
+        <PropertySection title="Crop" description="Visible bounds of the frame.">
+          <div className="grid grid-cols-2 gap-4">
+            <NumberField
+              id={ids.cropX}
+              label="Crop X"
+              value={crop.x ?? 0}
+              step={10}
+              onChange={(next) =>
+                onUpdateMedia(mediaFile.id, { crop: { ...crop, x: next } })
+              }
+            />
+            <NumberField
+              id={ids.cropY}
+              label="Crop Y"
+              value={crop.y ?? 0}
+              step={10}
+              onChange={(next) =>
+                onUpdateMedia(mediaFile.id, { crop: { ...crop, y: next } })
+              }
+            />
+            <NumberField
+              id={ids.cropW}
+              label="Crop width"
+              value={crop.width ?? mediaFile.width ?? 0}
+              step={10}
+              onChange={(next) =>
+                onUpdateMedia(mediaFile.id, { crop: { ...crop, width: next } })
+              }
+            />
+            <NumberField
+              id={ids.cropH}
+              label="Crop height"
+              value={crop.height ?? mediaFile.height ?? 0}
+              step={10}
+              onChange={(next) =>
+                onUpdateMedia(mediaFile.id, { crop: { ...crop, height: next } })
+              }
+            />
+          </div>
+        </PropertySection>
+      ) : null}
+
+      {isVisual ? (
+        <PropertySection title="Effects" description="Opacity and blur.">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor={ids.opacity} className="text-xs text-white/70">
+                  Opacity
+                </Label>
+                <div className="text-xs tabular-nums text-white/60">
+                  {(mediaFile.opacity ?? 100).toFixed(0)}%
+                </div>
+              </div>
               <input
-                type="number"
-                step="10"
-                value={mediaFile.x || 0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, { x: Number(e.target.value) })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Y Position</label>
-              <input
-                type="number"
-                step="10"
-                value={mediaFile.y || 0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, { y: Number(e.target.value) })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Width</label>
-              <input
-                type="number"
-                step="10"
-                value={mediaFile.width || 100}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, { width: Number(e.target.value) })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Height</label>
-              <input
-                type="number"
-                step="10"
-                value={mediaFile.height || 100}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    height: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Zindex</label>
-              <input
-                type="number"
-                value={mediaFile.zIndex || 0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    zIndex: Number(e.target.value),
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Opacity</label>
-              <input
+                id={ids.opacity}
                 type="range"
-                min="0"
-                max="100"
-                value={mediaFile.opacity}
+                min={0}
+                max={100}
+                step={1}
+                value={mediaFile.opacity ?? 100}
                 onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    opacity: Number(e.target.value),
-                  })
+                  onUpdateMedia(mediaFile.id, { opacity: Number(e.target.value) })
                 }
-                className="w-full bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:border-white-500"
+                className="w-full accent-white"
               />
             </div>
-            <div>
-              <label className="block text-sm">Blur</label>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor={ids.blur} className="text-xs text-white/70">
+                  Blur
+                </Label>
+                <div className="text-xs tabular-nums text-white/60">
+                  {(mediaFile.blur ?? 0).toFixed(0)}px
+                </div>
+              </div>
               <input
+                id={ids.blur}
                 type="range"
-                min="0"
-                max="20"
-                step="1"
-                value={mediaFile.blur || 0}
+                min={0}
+                max={20}
+                step={1}
+                value={mediaFile.blur ?? 0}
                 onChange={(e) =>
                   onUpdateMedia(mediaFile.id, { blur: Number(e.target.value) })
                 }
-                className="w-full bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Crop X</label>
-              <input
-                type="number"
-                value={mediaFile.crop?.x ?? 0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    crop: {
-                      ...baseCrop,
-                      x: Number(e.target.value),
-                    },
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Crop Y</label>
-              <input
-                type="number"
-                value={mediaFile.crop?.y ?? 0}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    crop: {
-                      ...baseCrop,
-                      y: Number(e.target.value),
-                    },
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Crop Width</label>
-              <input
-                type="number"
-                value={mediaFile.crop?.width ?? mediaFile.width}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    crop: {
-                      ...baseCrop,
-                      width: Number(e.target.value),
-                    },
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm">Crop Height</label>
-              <input
-                type="number"
-                value={mediaFile.crop?.height ?? mediaFile.height}
-                onChange={(e) =>
-                  onUpdateMedia(mediaFile.id, {
-                    crop: {
-                      ...baseCrop,
-                      height: Number(e.target.value),
-                    },
-                  })
-                }
-                className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
+                className="w-full accent-white"
               />
             </div>
           </div>
-        </div>
-        {/* Audio Properties */}
-        {(mediaFile.type === "video" || mediaFile.type === "audio") && (
-          <div className="space-y-2">
-            <h4 className="font-semibold">Audio Properties</h4>
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm mb-2 text-white">Volume</label>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={mediaFile.volume}
-                  onChange={(e) =>
-                    onUpdateMedia(mediaFile.id, {
-                      volume: Number(e.target.value),
-                    })
-                  }
-                  className="w-full bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:border-white-500"
-                />
+        </PropertySection>
+      ) : null}
+
+      {isAudio ? (
+        <PropertySection title="Audio" description="Volume and speed.">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor={ids.volume} className="text-xs text-white/70">
+                  Volume
+                </Label>
+                <div className="text-xs tabular-nums text-white/60">
+                  {(mediaFile.volume ?? 100).toFixed(0)}%
+                </div>
               </div>
-              <div>
-                <label className="block text-sm mb-1 text-white">
+              <input
+                id={ids.volume}
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={mediaFile.volume ?? 100}
+                onChange={(e) =>
+                  onUpdateMedia(mediaFile.id, { volume: Number(e.target.value) })
+                }
+                className="w-full accent-white"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor={ids.speed} className="text-xs text-white/70">
                   Playback speed
-                </label>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={mediaFile.playbackSpeed || 1}
-                  onChange={(e) =>
-                    onUpdateMedia(mediaFile.id, {
-                      playbackSpeed: Number(e.target.value),
-                    })
-                  }
-                  className="w-full bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:border-white-500"
-                />
-                <p className="text-xs text-white/60 mt-1">
-                  {`${(mediaFile.playbackSpeed || 1).toFixed(1)}x`}
-                </p>
+                </Label>
+                <div className="text-xs tabular-nums text-white/60">
+                  {(mediaFile.playbackSpeed ?? 1).toFixed(1)}x
+                </div>
               </div>
-              {mediaFile.type === "video" && (
-                <button
-                  type="button"
-                  disabled={isExtracting}
-                  onClick={handleSeparateAudio}
-                  className="w-full rounded-md bg-white text-black py-2 text-sm font-semibold hover:bg-[#dcdcdc] disabled:opacity-60"
-                >
-                  {isExtracting
-                    ? "Extracting audio..."
-                    : "Separate audio track"}
-                </button>
-              )}
+              <input
+                id={ids.speed}
+                type="range"
+                min={0.5}
+                max={2}
+                step={0.1}
+                value={mediaFile.playbackSpeed ?? 1}
+                onChange={(e) =>
+                  onUpdateMedia(mediaFile.id, {
+                    playbackSpeed: Number(e.target.value),
+                  })
+                }
+                className="w-full accent-white"
+              />
             </div>
+
+            {mediaFile.type === "video" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={isExtracting}
+                onClick={handleSeparateAudio}
+                className="w-full"
+              >
+                {isExtracting ? "Extracting audio…" : "Separate audio track"}
+              </Button>
+            ) : null}
           </div>
-        )}
-        <div></div>
-      </div>
+        </PropertySection>
+      ) : null}
     </div>
   );
 }

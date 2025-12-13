@@ -14,7 +14,12 @@ import { Type } from "lucide-react";
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
-export default function TextTimeline() {
+type Props = {
+  trackId: string;
+  fallbackTrackId: string | null;
+};
+
+export default function TextTimeline({ trackId, fallbackTrackId }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const { textElements, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
@@ -72,6 +77,29 @@ export default function TextTimeline() {
     target.style.left = `${constrainedLeft}px`;
   };
 
+  const handleDragWithDrop = (
+    clip: TextElement,
+    target: HTMLElement,
+    left: number,
+    top?: number,
+  ) => {
+    handleDrag(clip, target, left);
+    if (isFiniteNumber(top)) {
+      target.style.top = `${top}px`;
+    }
+  };
+
+  const findTrackIdAtPoint = (clientX: number, clientY: number) => {
+    const elements = document.elementsFromPoint(
+      clientX,
+      clientY,
+    ) as HTMLElement[];
+    const trackEl = elements.find(
+      (el) => el?.dataset?.timelineTrackId !== undefined,
+    );
+    return trackEl?.dataset?.timelineTrackId ?? null;
+  };
+
   const handleResize = (
     clip: TextElement,
     target: HTMLElement,
@@ -104,7 +132,9 @@ export default function TextTimeline() {
 
   return (
     <>
-      {textElements.map((clip) => (
+      {textElements
+        .filter((clip) => (clip.trackId ?? fallbackTrackId) === trackId)
+        .map((clip) => (
         <React.Fragment key={clip.id}>
           <div
             ref={(el: HTMLDivElement | null) => {
@@ -164,11 +194,20 @@ export default function TextTimeline() {
             linePadding={4}
             controlPadding={6}
             onDragStart={({ target, clientX, clientY }) => {}}
-            onDrag={({ target, left }: OnDrag) => {
+            onDrag={({ target, left, top }: OnDrag) => {
               handleClick("text", clip.id);
-              handleDrag(clip, target as HTMLElement, left);
+              handleDragWithDrop(clip, target as HTMLElement, left, top);
             }}
-            onDragEnd={({ target, isDrag, clientX, clientY }) => {}}
+            onDragEnd={({ target, clientX, clientY }) => {
+              if (!target) return;
+              (target as HTMLElement).style.top = "";
+              if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
+              const nextTrackId = findTrackIdAtPoint(clientX, clientY);
+              if (!nextTrackId) return;
+              const currentTrackId = clip.trackId ?? fallbackTrackId;
+              if (nextTrackId === currentTrackId) return;
+              onUpdateText(clip.id, { trackId: nextTrackId });
+            }}
             resizable={true}
             throttleResize={0}
             onResizeStart={({ target, clientX, clientY }) => {}}

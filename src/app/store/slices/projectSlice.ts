@@ -9,9 +9,52 @@ import {
   ProjectExport,
   ProjectPublishRecord,
   RenderEngine,
+  TimelineTrack,
+  TrackKind,
 } from "../../types";
 
 const MAX_HISTORY = 50;
+
+const createTrack = (kind: TrackKind, index: number): TimelineTrack => ({
+  id: crypto.randomUUID(),
+  kind,
+  name: `${kind === "video" ? "V" : "A"}${index}`,
+});
+
+const normalizeTracks = (value: unknown): TimelineTrack[] => {
+  const raw = Array.isArray(value) ? (value as TimelineTrack[]) : [];
+  const tracks = raw.filter(
+    (track) =>
+      track &&
+      typeof track === "object" &&
+      (track.kind === "video" || track.kind === "audio") &&
+      typeof track.id === "string" &&
+      typeof track.name === "string",
+  );
+
+  const videoTracks = tracks.filter((t) => t.kind === "video");
+  const audioTracks = tracks.filter((t) => t.kind === "audio");
+
+  const normalizedVideos =
+    videoTracks.length >= 2
+      ? videoTracks
+      : [...videoTracks, ...Array.from({ length: 2 - videoTracks.length }, (_, i) => createTrack("video", videoTracks.length + i + 1))];
+
+  const normalizedAudios =
+    audioTracks.length > 0 ? audioTracks : [createTrack("audio", 1)];
+
+  return [...normalizedVideos, ...normalizedAudios];
+};
+
+const pickDefaultTrackId = (tracks: TimelineTrack[], kind: TrackKind) => {
+  const track = tracks.find((t) => t.kind === kind);
+  return track?.id ?? null;
+};
+
+const pickOverlayVideoTrackId = (tracks: TimelineTrack[]) => {
+  const videoTracks = tracks.filter((t) => t.kind === "video");
+  return videoTracks[1]?.id ?? videoTracks[0]?.id ?? null;
+};
 
 const defaultExportSettings: ExportConfig = {
   resolution: "1080p",
@@ -29,13 +72,14 @@ export const createProjectState = (
   const { exportSettings: exportSettingsOverrides, ...restOverrides } =
     overrides;
   const now = new Date().toISOString();
-  return {
+  const next: ProjectState = {
     id: crypto.randomUUID(),
     projectName: "",
     createdAt: now,
     lastModified: now,
     mediaFiles: [],
     textElements: [],
+    tracks: normalizeTracks(undefined),
     exports: [],
     currentTime: 0,
     isPlaying: false,
@@ -59,6 +103,8 @@ export const createProjectState = (
       ...(exportSettingsOverrides ?? {}),
     },
   };
+  next.tracks = normalizeTracks(next.tracks);
+  return next;
 };
 
 const snapshotState = (state: ProjectState): ProjectHistoryEntry => {
@@ -96,6 +142,25 @@ const projectStateSlice = createSlice({
         state.mediaFiles,
         state.textElements,
       );
+    },
+    setTracks: (state, action: PayloadAction<TimelineTrack[]>) => {
+      pushHistory(state);
+      state.tracks = normalizeTracks(action.payload);
+    },
+    addTrack: (state, action: PayloadAction<{ kind: TrackKind }>) => {
+      pushHistory(state);
+      const { kind } = action.payload;
+      const existingOfKind = state.tracks.filter((t) => t.kind === kind);
+      const nextIndex = existingOfKind.length + 1;
+      const nextTrack = createTrack(kind, nextIndex);
+
+      if (kind === "video") {
+        const insertAt = state.tracks.filter((t) => t.kind === "video").length;
+        state.tracks.splice(insertAt, 0, nextTrack);
+        return;
+      }
+
+      state.tracks.push(nextTrack);
     },
     setProjectName: (state, action: PayloadAction<string>) => {
       pushHistory(state);
@@ -202,6 +267,31 @@ const projectStateSlice = createSlice({
         ...action.payload.exportSettings,
       };
 
+      next.tracks = normalizeTracks((action.payload as any).tracks);
+
+      const defaultVideoTrackId = pickDefaultTrackId(next.tracks, "video");
+      const overlayVideoTrackId = pickOverlayVideoTrackId(next.tracks);
+      const defaultAudioTrackId = pickDefaultTrackId(next.tracks, "audio");
+
+      if (defaultVideoTrackId) {
+        next.mediaFiles = next.mediaFiles.map((clip) => {
+          if (clip.trackId) return clip;
+          const trackId =
+            clip.type === "audio"
+              ? defaultAudioTrackId ?? defaultVideoTrackId
+              : clip.type === "image"
+                ? overlayVideoTrackId ?? defaultVideoTrackId
+                : defaultVideoTrackId;
+          return { ...clip, trackId };
+        });
+      }
+
+      if (overlayVideoTrackId) {
+        next.textElements = next.textElements.map((clip) =>
+          clip.trackId ? clip : { ...clip, trackId: overlayVideoTrackId },
+        );
+      }
+
       next.exports = next.exports.map((exp) => {
         const publish = exp.publish as any;
         if (!publish || typeof publish !== "object") return exp;
@@ -282,6 +372,8 @@ const projectStateSlice = createSlice({
 export const {
   setMediaFiles,
   setTextElements,
+  setTracks,
+  addTrack,
   setCurrentTime,
   setProjectName,
   setIsPlaying,

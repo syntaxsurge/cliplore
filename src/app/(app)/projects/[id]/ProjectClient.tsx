@@ -31,7 +31,6 @@ import { PreviewPlayer } from "../../../components/editor/player/remotion/Player
 import { MediaFile } from "@/app/types";
 import ExportList from "../../../components/editor/AssetsPanel/tools-section/ExportList";
 import EditorTopBar from "@/app/components/editor/EditorTopBar";
-import { Image as ImageIcon, Music, Type, Video } from "lucide-react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -258,22 +257,6 @@ export default function ProjectClient({ projectId }: Props) {
 
         <ResizablePanel defaultSize={30} minSize={18}>
           <div className="flex h-full overflow-hidden border-t border-white/10 bg-black">
-            <div className="w-[72px] shrink-0 border-r border-white/10 bg-black/60">
-              <div className="flex flex-col items-center py-2">
-                <div className="flex h-12 w-full items-center justify-center">
-                  <Video className="h-5 w-5 text-white/70" aria-hidden="true" />
-                </div>
-                <div className="flex h-12 w-full items-center justify-center">
-                  <Music className="h-5 w-5 text-white/70" aria-hidden="true" />
-                </div>
-                <div className="flex h-12 w-full items-center justify-center">
-                  <ImageIcon className="h-5 w-5 text-white/70" aria-hidden="true" />
-                </div>
-                <div className="flex h-12 w-full items-center justify-center">
-                  <Type className="h-5 w-5 text-white/70" aria-hidden="true" />
-                </div>
-              </div>
-            </div>
             <div className="flex-1 overflow-hidden">
               <Timeline />
             </div>

@@ -128,6 +128,7 @@ export async function createMediaFileFromFile(options: {
   frame: FrameSize;
   includeInMerge?: boolean;
   zIndex?: number;
+  trackId?: string;
   defaultDurationSeconds?: number;
 }): Promise<MediaFile> {
   const {
@@ -138,6 +139,7 @@ export async function createMediaFileFromFile(options: {
     frame,
     includeInMerge = true,
     zIndex = 0,
+    trackId,
     defaultDurationSeconds = 30,
   } = options;
 
@@ -198,6 +200,7 @@ export async function createMediaFileFromFile(options: {
     positionStart: safePositionStart,
     positionEnd,
     includeInMerge,
+    trackId,
     x: type === "image" || type === "video" ? Math.max(0, x) : undefined,
     y: type === "image" || type === "video" ? Math.max(0, y) : undefined,
     width,
@@ -211,4 +214,3 @@ export async function createMediaFileFromFile(options: {
     zIndex,
   };
 }
-

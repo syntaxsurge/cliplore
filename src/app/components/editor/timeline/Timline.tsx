@@ -1,36 +1,47 @@
 import { useAppSelector } from "@/app/store";
+import type { MediaType } from "@/app/types";
 import {
-  setMarkerTrack,
-  setTextElements,
-  setMediaFiles,
-  setTimelineZoom,
+  addTrack,
+  setActiveElement,
   setCurrentTime,
   setIsPlaying,
-  setActiveElement,
+  setMarkerTrack,
+  setMediaFiles,
+  setTextElements,
+  setTimelineZoom,
 } from "@/app/store/slices/projectSlice";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useDispatch } from "react-redux";
-import Header from "./Header";
-import VideoTimeline from "./elements-timeline/VideoTimeline";
-import ImageTimeline from "./elements-timeline/ImageTimeline";
-import AudioTimeline from "./elements-timeline/AudioTimeline";
-import TextTimeline from "./elements-timeline/TextTimeline";
 import { throttle } from "lodash";
-import GlobalKeyHandlerProps from "../../../components/editor/keys/GlobalKeyHandlerProps";
-import toast from "react-hot-toast";
 import {
   Check,
   Copy,
-  Image as ImageIcon,
   Music,
+  Plus,
   Scissors,
   Trash2,
-  Type,
   Video,
   X,
 } from "lucide-react";
+import {
+  memo,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import toast from "react-hot-toast";
+import { useDispatch } from "react-redux";
+import GlobalKeyHandlerProps from "../../../components/editor/keys/GlobalKeyHandlerProps";
+import Header from "./Header";
+import MediaTimelineTrack from "./elements-timeline/MediaTimelineTrack";
+import TextTimeline from "./elements-timeline/TextTimeline";
 
 const TRACK_LABEL_WIDTH_PX = 144;
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
 export const Timeline = () => {
   const {
     currentTime,
@@ -42,23 +53,51 @@ export const Timeline = () => {
     textElements,
     duration,
     isPlaying,
+    tracks,
   } = useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDraggingMarker, setIsDraggingMarker] = useState(false);
-  const zoom =
-    typeof timelineZoom === "number" &&
-    Number.isFinite(timelineZoom) &&
-    timelineZoom > 0
-      ? timelineZoom
-      : 60;
-  const safeDuration =
-    typeof duration === "number" && Number.isFinite(duration) && duration > 0
-      ? duration
-      : 0;
+
+  const zoom = isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
+  const safeDuration = isFiniteNumber(duration) && duration > 0 ? duration : 0;
+
   const totalSeconds = Math.max(safeDuration + 2, 61);
   const laneWidthPx = totalSeconds * zoom;
   const timelineCanvasWidthPx = TRACK_LABEL_WIDTH_PX + laneWidthPx;
+
+  const videoTracks = tracks.filter((t) => t.kind === "video");
+  const audioTracks = tracks.filter((t) => t.kind === "audio");
+
+  const mainVideoTrackId = videoTracks[0]?.id ?? null;
+  const overlayVideoTrackId = videoTracks[1]?.id ?? mainVideoTrackId;
+  const mainAudioTrackId = audioTracks[0]?.id ?? null;
+
+  const fallbackTrackIdForType = useMemo<Record<MediaType, string | null>>(
+    () => ({
+      video: mainVideoTrackId,
+      image: overlayVideoTrackId ?? mainVideoTrackId,
+      audio: mainAudioTrackId ?? mainVideoTrackId,
+      unknown: mainVideoTrackId,
+    }),
+    [mainAudioTrackId, mainVideoTrackId, overlayVideoTrackId],
+  );
+
+  const fallbackTextTrackId = overlayVideoTrackId ?? mainVideoTrackId;
+
+  const displayVideoTracks = useMemo(
+    () => [...videoTracks].reverse(),
+    [videoTracks],
+  );
+  const displayAudioTracks = useMemo(
+    () => [...audioTracks].reverse(),
+    [audioTracks],
+  );
+
+  const formatTrackLabel = (kind: "video" | "audio", name: string) => {
+    const suffix = name.replace(/^[VA]/, "");
+    return kind === "audio" ? `Audio ${suffix || name}` : `Video ${suffix || name}`;
+  };
 
   const throttledZoom = useMemo(
     () =>
@@ -238,8 +277,7 @@ export const Timeline = () => {
       dispatch(setIsPlaying(false));
       const rect = timelineRef.current.getBoundingClientRect();
       const scrollOffset = timelineRef.current.scrollLeft;
-      const offsetX =
-        clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
+      const offsetX = clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
       const seconds = Math.max(0, offsetX) / zoom;
       const clampedTime = Math.max(0, Math.min(safeDuration, seconds));
       dispatch(setCurrentTime(clampedTime));
@@ -248,18 +286,18 @@ export const Timeline = () => {
     [dispatch, safeDuration, zoom],
   );
 
-  const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
-
     setTimeFromClientX(e.clientX);
   };
 
-  const handleDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!timelineRef.current) return;
     const time = setTimeFromClientX(e.clientX) ?? 0;
     const newText = {
       id: crypto.randomUUID(),
       text: "New text",
+      trackId: fallbackTextTrackId ?? undefined,
       positionStart: time,
       positionEnd: time + 5,
       x: 600,
@@ -277,9 +315,29 @@ export const Timeline = () => {
       fadeInDuration: 0.3,
       fadeOutDuration: 0.3,
       animation: "fade" as const,
+      blur: 0,
     };
     dispatch(setTextElements([...textElements, newText]));
   };
+
+  useEffect(() => {
+    if (!enableMarkerTracking) return;
+    const el = timelineRef.current;
+    if (!el) return;
+    const safeCurrentTime = isFiniteNumber(currentTime) ? currentTime : 0;
+    const playheadX = TRACK_LABEL_WIDTH_PX + safeCurrentTime * zoom;
+
+    const margin = 160;
+    const left = el.scrollLeft;
+    const right = left + el.clientWidth;
+
+    if (playheadX < left + margin || playheadX > right - margin) {
+      el.scrollTo({
+        left: Math.max(0, playheadX - el.clientWidth / 2),
+        behavior: isPlaying ? "auto" : "smooth",
+      });
+    }
+  }, [currentTime, enableMarkerTracking, isPlaying, zoom]);
 
   useEffect(() => {
     if (!isDraggingMarker) return;
@@ -298,13 +356,12 @@ export const Timeline = () => {
   }, [isDraggingMarker, setTimeFromClientX]);
 
   return (
-    <div className="flex w-full flex-col gap-2">
-      <div className="flex flex-row items-center justify-between gap-12 w-full">
-        <div className="flex flex-row items-center gap-2">
-          {/* Track Marker */}
+    <div className="flex h-full w-full flex-col gap-2">
+      <div className="flex w-full flex-row items-center justify-between gap-6">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => dispatch(setMarkerTrack(!enableMarkerTracking))}
-            className="bg-white border rounded-md border-transparent transition-colors flex flex-row items-center justify-center text-gray-800 hover:bg-[#ccc] dark:hover:bg-[#ccc] mt-2 font-medium text-sm sm:text-base h-auto px-2 py-1 sm:w-auto"
+            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
           >
             <span className="inline-flex h-5 w-5 items-center justify-center">
               {enableMarkerTracking ? (
@@ -317,76 +374,92 @@ export const Timeline = () => {
               Track Marker <span className="text-xs">(T)</span>
             </span>
           </button>
-          {/* Split */}
+
           <button
             onClick={handleSplit}
-            className="bg-white border rounded-md border-transparent transition-colors flex flex-row items-center justify-center text-gray-800 hover:bg-[#ccc] dark:hover:bg-[#ccc] mt-2 font-medium text-sm sm:text-base h-auto px-2 py-1 sm:w-auto"
+            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
           >
             <Scissors className="h-4 w-4" />
             <span className="ml-2">
               Split <span className="text-xs">(S)</span>
             </span>
           </button>
-          {/* Duplicate */}
+
           <button
             onClick={handleDuplicate}
-            className="bg-white border rounded-md border-transparent transition-colors flex flex-row items-center justify-center text-gray-800 hover:bg-[#ccc] dark:hover:bg-[#ccc] mt-2 font-medium text-sm sm:text-base h-auto px-2 py-1 sm:w-auto"
+            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
           >
             <Copy className="h-4 w-4" />
             <span className="ml-2">
               Duplicate <span className="text-xs">(D)</span>
             </span>
           </button>
-          {/* Delete */}
+
           <button
             onClick={handleDelete}
-            className="bg-white border rounded-md border-transparent transition-colors flex flex-row items-center justify-center text-gray-800 hover:bg-[#ccc] dark:hover:bg-[#ccc] mt-2 font-medium text-sm sm:text-base h-auto px-2 py-1 sm:w-auto"
+            className="mt-2 flex h-auto flex-row items-center justify-center rounded-md border border-transparent bg-white px-2 py-1 text-sm font-medium text-gray-800 transition-colors hover:bg-[#ccc] sm:text-base"
           >
             <Trash2 className="h-4 w-4" />
             <span className="ml-2">
               Delete <span className="text-xs">(Del)</span>
             </span>
           </button>
+
+          <div className="ml-2 mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => dispatch(addTrack({ kind: "video" }))}
+              className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-white/80 hover:bg-white/10"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              <Video className="h-4 w-4" aria-hidden="true" />
+              <span className="text-xs font-medium">Video track</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => dispatch(addTrack({ kind: "audio" }))}
+              className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-sm text-white/80 hover:bg-white/10"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              <Music className="h-4 w-4" aria-hidden="true" />
+              <span className="text-xs font-medium">Audio track</span>
+            </button>
+          </div>
         </div>
 
-        {/* Timeline Zoom */}
-        <div className="flex flex-row justify-between items-center gap-2 mr-4">
-          <label className="block text-sm mt-1 font-semibold text-white">
-            Zoom
-          </label>
+        <div className="mt-2 flex items-center gap-2">
           <span className="text-white text-lg">-</span>
           <input
             type="range"
             min={30}
-            max={120}
+            max={150}
             step="1"
             value={zoom}
             onChange={(e) => throttledZoom(Number(e.target.value))}
-            className="w-[100px] bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:border-white-500"
+            className="w-[120px] rounded border border-white border-opacity-10 bg-darkSurfacePrimary text-white shadow-md focus:border-white-500 focus:outline-none"
+            aria-label="Timeline zoom"
           />
           <span className="text-white text-lg">+</span>
         </div>
       </div>
 
       <div
-        className="relative overflow-x-auto w-full border-t border-gray-800 bg-[#1E1D21] z-10"
+        className="relative min-h-0 w-full flex-1 overflow-auto border-t border-gray-800 bg-[#1E1D21] z-10"
         ref={timelineRef}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >
         <div className="relative" style={{ width: `${timelineCanvasWidthPx}px` }}>
-          {/* Timeline Header */}
           <Header
             labelWidth={TRACK_LABEL_WIDTH_PX}
             totalSeconds={totalSeconds}
             zoom={zoom}
           />
 
-          {/* Timeline cursor */}
           <div
-            className="absolute top-0 bottom-0 w-[2px] bg-red-500 z-50 cursor-ew-resize"
+            className="absolute top-0 bottom-0 z-50 w-[2px] cursor-ew-resize bg-red-500"
             style={{
-              left: `${TRACK_LABEL_WIDTH_PX + (typeof currentTime === "number" && Number.isFinite(currentTime) ? currentTime : 0) * zoom}px`,
+              left: `${TRACK_LABEL_WIDTH_PX + (isFiniteNumber(currentTime) ? currentTime : 0) * zoom}px`,
             }}
             onMouseDown={(e) => {
               e.stopPropagation();
@@ -394,97 +467,94 @@ export const Timeline = () => {
             }}
           />
 
-          {/* Timeline rows */}
           <div className="divide-y divide-white/10">
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
-              }}
-            >
+            {displayVideoTracks.map((track) => (
               <div
-                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
+                key={track.id}
+                className="grid"
+                style={{
+                  gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+                }}
               >
-                <Video className="h-4 w-4 text-white/60" aria-hidden="true" />
-                <span className="text-xs font-medium tracking-wide uppercase">
-                  Video
-                </span>
-              </div>
-              <div className="relative h-16 overflow-hidden bg-[#1B1A1E]">
-                <VideoTimeline />
-              </div>
-            </div>
+                <div
+                  className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                >
+                  <Video className="h-4 w-4 text-white/60" aria-hidden="true" />
+                  <span className="text-xs font-medium tracking-wide uppercase">
+                    {formatTrackLabel("video", track.name)}
+                  </span>
+                </div>
 
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
-              }}
-            >
-              <div
-                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
-              >
-                <Music className="h-4 w-4 text-white/60" aria-hidden="true" />
-                <span className="text-xs font-medium tracking-wide uppercase">
-                  Music
-                </span>
+                <div
+                  className="relative h-16 overflow-visible bg-[#1B1A1E]"
+                  data-timeline-track-id={track.id}
+                >
+                  <MediaTimelineTrack
+                    trackId={track.id}
+                    mediaTypes={["video", "image"]}
+                    fallbackTrackIdForType={fallbackTrackIdForType}
+                  />
+                  <TextTimeline
+                    trackId={track.id}
+                    fallbackTrackId={fallbackTextTrackId}
+                  />
+                </div>
               </div>
-              <div className="relative h-16 overflow-hidden bg-[#1E1D21]">
-                <AudioTimeline />
-              </div>
-            </div>
+            ))}
 
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
-              }}
-            >
+            {displayVideoTracks.length > 0 && displayAudioTracks.length > 0 ? (
               <div
-                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
+                className="grid bg-black/40"
+                style={{
+                  gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+                }}
               >
-                <ImageIcon
-                  className="h-4 w-4 text-white/60"
-                  aria-hidden="true"
+                <div
+                  className="sticky left-0 z-20 h-2 border-r border-white/10 bg-black/40"
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
                 />
-                <span className="text-xs font-medium tracking-wide uppercase">
-                  Image
-                </span>
+                <div className="h-2 bg-black/40" />
               </div>
-              <div className="relative h-16 overflow-hidden bg-[#1B1A1E]">
-                <ImageTimeline />
-              </div>
-            </div>
+            ) : null}
 
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
-              }}
-            >
+            {displayAudioTracks.map((track) => (
               <div
-                className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
-                onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => e.stopPropagation()}
+                key={track.id}
+                className="grid"
+                style={{
+                  gridTemplateColumns: `${TRACK_LABEL_WIDTH_PX}px 1fr`,
+                }}
               >
-                <Type className="h-4 w-4 text-white/60" aria-hidden="true" />
-                <span className="text-xs font-medium tracking-wide uppercase">
-                  Text
-                </span>
+                <div
+                  className="sticky left-0 z-20 flex h-16 items-center gap-2 border-r border-white/10 bg-[#1E1D21] px-3 text-white/80"
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                >
+                  <Music className="h-4 w-4 text-white/60" aria-hidden="true" />
+                  <span className="text-xs font-medium tracking-wide uppercase">
+                    {formatTrackLabel("audio", track.name)}
+                  </span>
+                </div>
+
+                <div
+                  className="relative h-16 overflow-visible bg-[#1E1D21]"
+                  data-timeline-track-id={track.id}
+                >
+                  <MediaTimelineTrack
+                    trackId={track.id}
+                    mediaTypes={["audio"]}
+                    fallbackTrackIdForType={fallbackTrackIdForType}
+                  />
+                </div>
               </div>
-              <div className="relative h-16 overflow-hidden bg-[#1E1D21]">
-                <TextTimeline />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
+
       <GlobalKeyHandlerProps
         handleDuplicate={handleDuplicate}
         handleSplit={handleSplit}

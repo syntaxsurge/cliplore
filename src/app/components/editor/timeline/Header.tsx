@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
-import { useAppSelector } from "../../../store";
+import React, { useMemo } from "react";
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
@@ -11,9 +10,6 @@ type HeaderProps = {
 };
 
 export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
-  const { currentTime, enableMarkerTracking } = useAppSelector(
-    (state) => state.projectState,
-  );
   const secondInterval = 0.2; // Every 0.2s
   const safeTotalSeconds =
     isFiniteNumber(totalSeconds) && totalSeconds > 0
@@ -23,34 +19,18 @@ export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
   const laneWidthPx = safeTotalSeconds * safeZoom;
 
   const tickMarkers = useMemo(() => {
-    return Array.from(
-      { length: safeTotalSeconds / secondInterval },
-      (_, i) => i * secondInterval,
-    );
+    const ticksPerSecond = Math.round(1 / secondInterval);
+    const totalTicks = Math.ceil(safeTotalSeconds * ticksPerSecond);
+    return Array.from({ length: totalTicks + 1 }, (_, i) => ({
+      index: i,
+      seconds: i / ticksPerSecond,
+      isWholeSecond: i % ticksPerSecond === 0 && i !== 0,
+    }));
   }, [safeTotalSeconds]);
-
-  // to track the marker when time changes
-  const markerRefs = useRef<HTMLDivElement[]>([]);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const safeCurrentTime =
-      isFiniteNumber(currentTime) && currentTime > 0 ? currentTime : 0;
-    const roundedTime = Math.floor(safeCurrentTime);
-    const el = markerRefs.current[roundedTime];
-    if (el && el.scrollIntoView && enableMarkerTracking) {
-      el.scrollIntoView({
-        behavior: "smooth",
-        inline: "center",
-        block: "nearest",
-      });
-    }
-  }, [currentTime, enableMarkerTracking]);
 
   return (
     <div
       className="flex h-12 items-end border-b border-white/10 bg-[#1E1D21]"
-      ref={containerRef}
       style={{ width: `${labelWidth + laneWidthPx}px` }}
     >
       <div
@@ -64,31 +44,27 @@ export const Header = ({ labelWidth, totalSeconds, zoom }: HeaderProps) => {
 
       <div className="relative h-full" style={{ width: `${laneWidthPx}px` }}>
         {tickMarkers.map((marker) => {
-          const isWholeSecond = Number.isInteger(marker) && marker !== 0;
           return (
             <div
-              ref={(el) => {
-                if (el) markerRefs.current[marker] = el;
-              }}
-              key={marker}
+              key={marker.index}
               className="absolute bottom-0 flex flex-col items-center"
               style={{
-                left: `${marker * safeZoom}px`,
+                left: `${marker.seconds * safeZoom}px`,
                 width: `1px`,
                 height: "100%",
               }}
             >
               <div
                 className={`w-px ${
-                  isWholeSecond
+                  marker.isWholeSecond
                     ? "h-8 bg-white/35"
                     : "h-3 bg-white/20"
                 }`}
               />
 
-              {isWholeSecond && (
+              {marker.isWholeSecond && (
                 <span className="mt-1 select-none text-[10px] text-white/50">
-                  {marker}s
+                  {marker.seconds}s
                 </span>
               )}
             </div>

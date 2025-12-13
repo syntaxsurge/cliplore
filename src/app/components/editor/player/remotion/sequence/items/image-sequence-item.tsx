@@ -1,6 +1,7 @@
 import React from "react";
 import { AbsoluteFill, Img, Sequence } from "remotion";
 import { MediaFile } from "@/app/types";
+import { useAppSelector } from "@/app/store";
 
 const REMOTION_SAFE_FRAME = 0;
 
@@ -31,6 +32,16 @@ export const ImageSequenceItem: React.FC<ImageSequenceItemProps> = ({
   options,
 }) => {
   const { fps } = options;
+  const tracks = useAppSelector((state) => state.projectState.tracks);
+
+  const videoTrackIndex = (() => {
+    if (!item.trackId) return 0;
+    const videoTracks = tracks.filter((t) => t.kind === "video");
+    const idx = videoTracks.findIndex((t) => t.id === item.trackId);
+    return idx >= 0 ? idx : 0;
+  })();
+
+  const effectiveZIndex = videoTrackIndex * 100 + (item.zIndex ?? 0);
 
   const { from, durationInFrames } = calculateFrames(
     {
@@ -65,6 +76,7 @@ export const ImageSequenceItem: React.FC<ImageSequenceItemProps> = ({
           height: crop.height || item.height || "auto",
           // transform: item?.transform || "none",
           opacity: item?.opacity !== undefined ? item.opacity / 100 : 1,
+          zIndex: effectiveZIndex,
           overflow: "hidden",
         }}
       >
@@ -77,17 +89,16 @@ export const ImageSequenceItem: React.FC<ImageSequenceItemProps> = ({
             pointerEvents: "none",
           }}
         >
-          <Img
-            style={{
-              pointerEvents: "none",
-              top: -crop.y || 0,
-              left: -crop.x || 0,
-              width: item.width || "100%",
-              height: item.height || "auto",
-              position: "absolute",
-              zIndex: item.zIndex || 0,
-              filter: item.blur ? `blur(${item.blur}px)` : "none",
-            }}
+            <Img
+              style={{
+                pointerEvents: "none",
+                top: -crop.y || 0,
+                left: -crop.x || 0,
+                width: item.width || "100%",
+                height: item.height || "auto",
+                position: "absolute",
+                filter: item.blur ? `blur(${item.blur}px)` : "none",
+              }}
             data-id={item.id}
             src={item.src || ""}
           />
