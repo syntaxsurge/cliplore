@@ -20,19 +20,16 @@ import {
   setActiveSection,
 } from "../../../store/slices/projectSlice";
 import AddText from "../../../components/editor/AssetsPanel/tools-section/AddText";
-import AddMedia from "../../../components/editor/AssetsPanel/AddButtons/UploadMedia";
-import MediaList from "../../../components/editor/AssetsPanel/tools-section/MediaList";
+import LibraryPanel from "../../../components/editor/AssetsPanel/tools-section/LibraryPanel";
 import TextButton from "@/app/components/editor/AssetsPanel/SidebarButtons/TextButton";
 import LibraryButton from "@/app/components/editor/AssetsPanel/SidebarButtons/LibraryButton";
 import ExportButton from "@/app/components/editor/AssetsPanel/SidebarButtons/ExportButton";
-import HomeButton from "@/app/components/editor/AssetsPanel/SidebarButtons/HomeButton";
 import MediaProperties from "../../../components/editor/PropertiesSection/MediaProperties";
 import TextProperties from "../../../components/editor/PropertiesSection/TextProperties";
 import { Timeline } from "../../../components/editor/timeline/Timline";
 import { PreviewPlayer } from "../../../components/editor/player/remotion/Player";
 import { MediaFile } from "@/app/types";
 import ExportList from "../../../components/editor/AssetsPanel/tools-section/ExportList";
-import { SoraPanel } from "../../../components/editor/AssetsPanel/tools-section/SoraPanel";
 import EditorTopBar from "@/app/components/editor/EditorTopBar";
 import { Image as ImageIcon, Music, Type, Video } from "lucide-react";
 import {
@@ -165,14 +162,13 @@ export default function ProjectClient({ projectId }: Props) {
               <div className="flex h-full overflow-hidden border-r border-white/10 bg-black/40">
                 <div className="w-[72px] shrink-0 border-r border-white/10 bg-black/60 p-2">
                   <div className="flex flex-col gap-2">
-                    <HomeButton />
-                    <TextButton
-                      active={activeSection === "text"}
-                      onClick={() => handleFocus("text")}
-                    />
                     <LibraryButton
                       active={activeSection === "media"}
                       onClick={() => handleFocus("media")}
+                    />
+                    <TextButton
+                      active={activeSection === "text"}
+                      onClick={() => handleFocus("text")}
                     />
                     <ExportButton
                       active={activeSection === "export"}
@@ -183,13 +179,7 @@ export default function ProjectClient({ projectId }: Props) {
 
                 <div className="flex-1 overflow-y-auto p-4">
                   {activeSection === "media" ? (
-                    <div className="space-y-3">
-                      <SoraPanel />
-                      <div className="flex items-center justify-center">
-                        <AddMedia />
-                      </div>
-                      <MediaList />
-                    </div>
+                    <LibraryPanel />
                   ) : null}
 
                   {activeSection === "text" ? (
@@ -200,9 +190,14 @@ export default function ProjectClient({ projectId }: Props) {
 
                   {activeSection === "export" ? (
                     <div className="space-y-4">
-                      <h2 className="text-lg font-semibold text-foreground">
-                        Export
-                      </h2>
+                      <div className="space-y-1">
+                        <h2 className="text-sm font-semibold text-white">
+                          Export
+                        </h2>
+                        <p className="text-xs text-white/50">
+                          Render a cut, then download or publish it.
+                        </p>
+                      </div>
                       <ExportList projectId={projectId} />
                     </div>
                   ) : null}

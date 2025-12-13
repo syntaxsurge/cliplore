@@ -185,6 +185,7 @@ export const TextSequenceItem: React.FC<{
           outline: "none",
           whiteSpace: "normal",
           backgroundColor: item.backgroundColor || "transparent",
+          textAlign: item.align ?? "left",
           position: "relative",
           width: "100%",
           cursor: "move",

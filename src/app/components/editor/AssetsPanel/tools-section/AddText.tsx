@@ -1,319 +1,220 @@
 "use client";
 
-import { useState } from "react";
-import { TextElement } from "../../../../types";
-import { useAppDispatch, useAppSelector } from "../../../../store";
-import {
-  setResolution,
-  setTextElements,
-} from "../../../../store/slices/projectSlice";
+import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useAppDispatch, useAppSelector } from "@/app/store";
+import { setTextElements } from "@/app/store/slices/projectSlice";
+import type { TextElement } from "@/app/types";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
-export default function AddTextButton() {
-  const [textConfig, setTextConfig] = useState<Partial<TextElement>>({
-    text: "Example",
-    positionStart: 0,
-    positionEnd: 10,
-    x: 600,
-    y: 500,
-    fontSize: 200,
-    color: "#ff0000",
-    backgroundColor: "transparent",
-    align: "center",
-    zIndex: 0,
-    opacity: 100,
-    rotation: 0,
-    animation: "none",
-  });
-  const { textElements } = useAppSelector((state) => state.projectState);
+type PlacementMode = "playhead" | "append";
+type Preset = "title" | "lower-third" | "caption";
+
+const DEFAULT_DURATION_SECONDS = 8;
+
+export default function AddTextPanel() {
   const dispatch = useAppDispatch();
+  const { textElements, currentTime, duration, resolution } = useAppSelector(
+    (state) => state.projectState,
+  );
 
-  const onAddText = (textElement: TextElement) => {
-    dispatch(setTextElements([...textElements, textElement]));
-  };
+  const [text, setText] = useState("New text");
+  const [placement, setPlacement] = useState<PlacementMode>("playhead");
 
-  const handleAddText = () => {
-    const lastEnd =
-      textElements.length > 0
-        ? Math.max(...textElements.map((f) => f.positionEnd))
-        : 0;
+  const baseStart = useMemo(() => {
+    const playhead = Number.isFinite(currentTime) ? currentTime : 0;
+    const append = Number.isFinite(duration) ? duration : 0;
+    return Math.max(0, placement === "append" ? append : playhead);
+  }, [currentTime, duration, placement]);
 
-    const newTextElement: TextElement = {
+  const frameWidth = resolution?.width ?? 1920;
+  const frameHeight = resolution?.height ?? 1080;
+  const insetX = Math.round(frameWidth * 0.08);
+
+  const addPreset = (preset: Preset) => {
+    const start = baseStart;
+    const end = start + DEFAULT_DURATION_SECONDS;
+    const nextText = text.trim() || "New text";
+
+    const common: Omit<TextElement, "x" | "y"> = {
       id: crypto.randomUUID(),
-      text: textConfig.text || "",
-      positionStart: lastEnd || 0,
-      positionEnd: lastEnd + 10 || 10,
-      x: textConfig.x || 0,
-      y: textConfig.y || 0,
-      width: textConfig.width,
-      height: textConfig.height,
-      font: textConfig.font || "Arial",
-      fontSize: textConfig.fontSize || 24,
-      color: textConfig.color || "#ffffff",
-      backgroundColor: textConfig.backgroundColor || "transparent",
-      align: textConfig.align || "center",
-      zIndex: textConfig.zIndex || 0,
-      opacity: textConfig.opacity || 100,
-      rotation: textConfig.rotation || 0,
-      fadeInDuration: textConfig.fadeInDuration,
-      fadeOutDuration: textConfig.fadeOutDuration,
-      animation: textConfig.animation || "none",
-      blur: textConfig.blur ?? 0,
-    };
-
-    onAddText(newTextElement);
-    // Reset form
-    setTextConfig({
-      text: "Example",
-      positionStart: lastEnd,
-      positionEnd: lastEnd + 10,
-      x: 500,
-      y: 600,
-      fontSize: 200,
-      color: "#ff0000",
+      text: nextText,
+      positionStart: start,
+      positionEnd: end,
+      width: frameWidth - insetX * 2,
+      height: 240,
+      font: "Inter",
+      fontSize: 96,
+      color: "#ffffff",
       backgroundColor: "transparent",
       align: "center",
       zIndex: 0,
       opacity: 100,
       rotation: 0,
-      animation: "none",
+      fadeInDuration: 0.25,
+      fadeOutDuration: 0.25,
+      animation: "fade",
       blur: 0,
-    });
-    toast.success("Text added successfully.");
+      includeInMerge: true,
+    };
+
+    const presetFields = (() => {
+      switch (preset) {
+        case "lower-third":
+          return {
+            x: insetX,
+            y: Math.round(frameHeight * 0.72),
+            width: Math.round(frameWidth * 0.52),
+            height: 220,
+            fontSize: 64,
+            align: "left" as const,
+          };
+        case "caption":
+          return {
+            x: insetX,
+            y: Math.round(frameHeight * 0.82),
+            height: 220,
+            fontSize: 52,
+            align: "center" as const,
+          };
+        case "title":
+        default:
+          return {
+            x: insetX,
+            y: Math.round(frameHeight * 0.18),
+            height: 260,
+            fontSize: 96,
+            align: "center" as const,
+          };
+      }
+    })();
+
+    const nextElement: TextElement = {
+      ...common,
+      ...presetFields,
+    };
+
+    dispatch(setTextElements([...textElements, nextElement]));
+    toast.success("Text added to timeline.");
+  };
+
+  const addShape = () => {
+    const start = baseStart;
+    const end = start + DEFAULT_DURATION_SECONDS;
+
+    const shape: TextElement = {
+      id: crypto.randomUUID(),
+      text: "",
+      positionStart: start,
+      positionEnd: end,
+      x: Math.round(frameWidth * 0.2),
+      y: Math.round(frameHeight * 0.35),
+      width: Math.round(frameWidth * 0.6),
+      height: Math.round(frameHeight * 0.25),
+      font: "Inter",
+      fontSize: 1,
+      color: "#00000000",
+      backgroundColor: "#ffffff",
+      align: "center",
+      zIndex: 0,
+      opacity: 100,
+      rotation: 0,
+      fadeInDuration: 0.25,
+      fadeOutDuration: 0.25,
+      animation: "fade",
+      blur: 0,
+      includeInMerge: true,
+    };
+
+    dispatch(setTextElements([...textElements, shape]));
+    toast.success("Shape added to timeline.");
   };
 
   return (
-    <div className="relative">
-      {
-        <div className="flex items-center justify-center z-50">
-          <div className="p-6 rounded-lg w-full max-w-md">
-            <div className="space-y-8">
-              {/* Text Content */}
-              <div>
-                <label className="text-xl font-bold mb-2 text-white">
-                  Text Content
-                </label>
-                <textarea
-                  value={textConfig.text}
-                  onChange={(e) =>
-                    setTextConfig({ ...textConfig, text: e.target.value })
-                  }
-                  className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                />
-              </div>
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-sm font-semibold text-white">Text</h2>
+        <p className="text-xs text-white/50">
+          Add titles and captions. Fine-tune styles in Properties.
+        </p>
+      </div>
 
-              {/* Start and End Time */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Start Time (s)
-                  </label>
-                  <input
-                    type="number"
-                    value={textConfig.positionStart}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        positionStart: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                    min={0}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    End Time (s)
-                  </label>
-                  <input
-                    type="number"
-                    value={textConfig.positionEnd}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        positionEnd: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                    min={0}
-                  />
-                </div>
-              </div>
+      <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-4">
+        <div className="space-y-2">
+          <label className="text-xs font-medium text-white/70">
+            Default text
+          </label>
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="New text…"
+            className="border-white/10 bg-black/30 text-white placeholder:text-white/40 focus-visible:ring-white/30 focus-visible:ring-offset-0"
+            aria-label="Text to insert"
+          />
+        </div>
 
-              {/* Position */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    X Position
-                  </label>
-                  <input
-                    type="number"
-                    value={textConfig.x}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        x: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Y Position
-                  </label>
-                  <input
-                    type="number"
-                    value={textConfig.y}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        y: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                  />
-                </div>
-              </div>
-
-              {/* Font Size and Z-Index */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Font Size
-                  </label>
-                  <input
-                    type="number"
-                    value={textConfig.fontSize}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        fontSize: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                    min={0}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Z-Index
-                  </label>
-                  <input
-                    type="number"
-                    value={textConfig.zIndex}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        zIndex: Number(e.target.value),
-                      })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                    min={0}
-                  />
-                </div>
-              </div>
-
-              {/* Font Type */}
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Font Type
-                  </label>
-                  <select
-                    value={textConfig.font}
-                    onChange={(e) =>
-                      setTextConfig({ ...textConfig, font: e.target.value })
-                    }
-                    className="w-full p-2 bg-darkSurfacePrimary border border-white border-opacity-10 shadow-md text-white rounded focus:outline-none focus:ring-2 focus:ring-white-500 focus:border-white-500"
-                  >
-                    <option value="Arial">Arial</option>
-                    <option value="Inter">Inter</option>
-                    <option value="Lato">Lato</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Text Color and Add Text Button */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Text Color
-                  </label>
-                  <input
-                    type="color"
-                    value={textConfig.color}
-                    onChange={(e) =>
-                      setTextConfig({ ...textConfig, color: e.target.value })
-                    }
-                    className="mt-1 block w-full bg-darkSurfacePrimary rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white">
-                    Background
-                  </label>
-                  <input
-                    type="color"
-                    value={textConfig.backgroundColor ?? "#00000000"}
-                    onChange={(e) =>
-                      setTextConfig({
-                        ...textConfig,
-                        backgroundColor: e.target.value,
-                      })
-                    }
-                    className="mt-1 block w-full bg-darkSurfacePrimary rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="col-span-2 mt-2 flex flex-wrap justify-end gap-3">
-                  <button
-                    onClick={handleAddText}
-                    className="px-4 py-2 bg-white text-black hover:bg-[#ccc] rounded"
-                  >
-                    Add Text
-                  </button>
-                  <button
-                    onClick={() => {
-                      const lastEnd =
-                        textElements.length > 0
-                          ? Math.max(...textElements.map((f) => f.positionEnd))
-                          : 0;
-                      const shape: TextElement = {
-                        id: crypto.randomUUID(),
-                        text: "",
-                        positionStart: lastEnd,
-                        positionEnd: lastEnd + 8,
-                        x: 400,
-                        y: 400,
-                        width: 600,
-                        height: 300,
-                        font: "Arial",
-                        fontSize: 1,
-                        color: "#00000000",
-                        backgroundColor: "#ffffff",
-                        align: "center",
-                        zIndex: 0,
-                        opacity: 100,
-                        rotation: 0,
-                        fadeInDuration: 0.2,
-                        fadeOutDuration: 0.2,
-                        animation: "fade",
-                        blur: 0,
-                      };
-                      onAddText(shape);
-                      toast.success("Shape added to timeline.");
-                    }}
-                    className="px-4 py-2 bg-black border border-white/20 text-white hover:bg-[#111] rounded"
-                  >
-                    Add Shape
-                  </button>
-                </div>
-              </div>
-            </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={placement === "playhead" ? "secondary" : "ghost"}
+            onClick={() => setPlacement("playhead")}
+            className={cn(
+              "h-8 rounded-full px-3",
+              placement === "playhead" ? null : "text-white/70 hover:text-white",
+            )}
+          >
+            At playhead
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={placement === "append" ? "secondary" : "ghost"}
+            onClick={() => setPlacement("append")}
+            className={cn(
+              "h-8 rounded-full px-3",
+              placement === "append" ? null : "text-white/70 hover:text-white",
+            )}
+          >
+            Append
+          </Button>
+          <div className="ml-auto text-xs text-white/50">
+            Start: {baseStart.toFixed(1)}s
           </div>
         </div>
-      }
+
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" variant="secondary" onClick={() => addPreset("title")}>
+            Title
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => addPreset("lower-third")}
+          >
+            Lower third
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => addPreset("caption")}
+          >
+            Caption
+          </Button>
+          <Button type="button" variant="outline" onClick={addShape}>
+            Shape
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+        <p className="text-xs text-white/60">
+          Tip: select a text clip on the timeline to edit font, color, and
+          animation.
+        </p>
+      </div>
     </div>
   );
 }

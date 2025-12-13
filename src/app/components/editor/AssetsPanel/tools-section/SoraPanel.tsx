@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector, storeFile } from "@/app/store";
 import { setFilesID, setMediaFiles } from "@/app/store/slices/projectSlice";
 import { categorizeFile } from "@/app/utils/utils";
 import toast from "react-hot-toast";
+import { cn } from "@/lib/utils";
 
 type SoraStatus =
   | "idle"
@@ -14,7 +15,13 @@ type SoraStatus =
   | "success"
   | "error";
 
-export function SoraPanel() {
+type Props = {
+  onGenerated?: () => void;
+  hideHeader?: boolean;
+  className?: string;
+};
+
+export function SoraPanel({ onGenerated, hideHeader = false, className }: Props) {
   const dispatch = useAppDispatch();
   const { mediaFiles, filesID = [] } = useAppSelector(
     (state) => state.projectState,
@@ -130,6 +137,7 @@ export function SoraPanel() {
       await downloadAndStore(contentUrl);
       setStatus("success");
       setMessage("Sora clip added to your media list.");
+      onGenerated?.();
     } catch (err: any) {
       console.error(err);
       setStatus("error");
@@ -139,17 +147,24 @@ export function SoraPanel() {
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-white/10 bg-white/5 p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-white">
-            Generate with Sora
-          </h3>
-          <p className="text-sm text-white/60">
-            Create a clip and drop it straight into your timeline.
-          </p>
+    <div
+      className={cn(
+        "space-y-3 rounded-lg border border-white/10 bg-white/5 p-4",
+        className,
+      )}
+    >
+      {!hideHeader ? (
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-white">
+              Generate with Sora
+            </h3>
+            <p className="text-sm text-white/60">
+              Create a clip and drop it straight into your timeline.
+            </p>
+          </div>
         </div>
-      </div>
+      ) : null}
       <form className="space-y-3" onSubmit={handleSubmit}>
         <textarea
           className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm text-white placeholder:text-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
