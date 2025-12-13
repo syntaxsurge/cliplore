@@ -5,16 +5,7 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
-
-async function getUserByWallet(
-  db: QueryCtx["db"] | MutationCtx["db"],
-  wallet: string,
-) {
-  return db
-    .query("users")
-    .withIndex("by_wallet", (q: any) => q.eq("wallet", wallet))
-    .unique();
-}
+import { getUserByWallet } from "./_helpers";
 
 export const create = mutation({
   args: {

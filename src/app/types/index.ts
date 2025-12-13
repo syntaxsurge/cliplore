@@ -118,6 +118,8 @@ export type ProjectPublishRecord = {
   thumbnailUrl?: string;
   videoKey?: string;
   thumbnailKey?: string;
+  videoSha256?: string;
+  thumbnailSha256?: string;
   ipMetadataUri: string;
   ipMetadataHash?: string;
   nftMetadataUri: string;

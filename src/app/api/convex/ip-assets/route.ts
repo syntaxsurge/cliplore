@@ -5,9 +5,16 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const wallet = searchParams.get("wallet");
   const ipId = searchParams.get("ipId");
+  const sha256 = searchParams.get("sha256");
 
   try {
     const client = getConvexClient();
+    if (sha256) {
+      const matches = await (client as any).query("functions/ipAssets:findBySha256", {
+        sha256,
+      });
+      return NextResponse.json({ matches });
+    }
     if (ipId) {
       const ipAsset = await (client as any).query("functions/ipAssets:getByIpId", {
         ipId: ipId.toLowerCase(),
@@ -46,6 +53,8 @@ export async function POST(req: Request) {
     terms,
     videoUrl,
     thumbnailUrl,
+    videoSha256,
+    thumbnailSha256,
     licenseTermsId,
     txHash,
     chainId,
@@ -65,6 +74,8 @@ export async function POST(req: Request) {
     terms?: string;
     videoUrl?: string;
     thumbnailUrl?: string;
+    videoSha256?: string;
+    thumbnailSha256?: string;
     licenseTermsId?: string;
     txHash?: string;
     chainId?: number;
@@ -100,6 +111,8 @@ export async function POST(req: Request) {
         terms,
         videoUrl,
         thumbnailUrl,
+        videoSha256,
+        thumbnailSha256,
         licenseTermsId,
         txHash,
         chainId,

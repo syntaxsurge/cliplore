@@ -35,6 +35,8 @@ export default defineSchema({
     terms: v.string(),
     videoUrl: v.string(),
     thumbnailUrl: v.optional(v.string()),
+    videoSha256: v.optional(v.string()),
+    thumbnailSha256: v.optional(v.string()),
     licensorWallet: v.string(),
     licenseTermsId: v.optional(v.string()),
     txHash: v.optional(v.string()),
@@ -50,7 +52,29 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_ipId", ["ipId"])
-    .index("by_licensorWallet", ["licensorWallet"]),
+    .index("by_licensorWallet", ["licensorWallet"])
+    .index("by_videoSha256", ["videoSha256"])
+    .index("by_thumbnailSha256", ["thumbnailSha256"]),
+  enforcementReports: defineTable({
+    reporterWallet: v.string(),
+    targetIpId: v.string(),
+    protectedIpId: v.optional(v.string()),
+    targetTag: v.string(),
+    liveness: v.number(),
+    bond: v.optional(v.string()),
+    suspectUrl: v.optional(v.string()),
+    suspectSha256: v.optional(v.string()),
+    suspectFileName: v.optional(v.string()),
+    suspectFileType: v.optional(v.string()),
+    evidenceCid: v.string(),
+    evidenceUri: v.string(),
+    disputeId: v.optional(v.string()),
+    disputeTxHash: v.optional(v.string()),
+    chainId: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_reporterWallet", ["reporterWallet"])
+    .index("by_targetIpId", ["targetIpId"]),
   soraJobs: defineTable({
     projectId: v.id("projects"),
     jobId: v.string(),

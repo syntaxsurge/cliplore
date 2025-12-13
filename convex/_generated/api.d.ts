@@ -9,6 +9,8 @@
  */
 
 import type * as admin from "../admin.js";
+import type * as functions__helpers from "../functions/_helpers.js";
+import type * as functions_enforcementReports from "../functions/enforcementReports.js";
 import type * as functions_ipAssets from "../functions/ipAssets.js";
 import type * as functions_projects from "../functions/projects.js";
 import type * as functions_users from "../functions/users.js";
@@ -21,6 +23,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   admin: typeof admin;
+  "functions/_helpers": typeof functions__helpers;
+  "functions/enforcementReports": typeof functions_enforcementReports;
   "functions/ipAssets": typeof functions_ipAssets;
   "functions/projects": typeof functions_projects;
   "functions/users": typeof functions_users;

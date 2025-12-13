@@ -21,6 +21,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.948.0",
     "@aws-sdk/s3-request-presigner": "^3.948.0",
+    "@contentauth/c2pa-web": "^0.5.4",
     "@diffusionstudio/core": "^4.0.3",
     "@ffmpeg/ffmpeg": "^0.12.13",
     "@ffmpeg/util": "^0.12.1",

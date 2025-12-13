@@ -31,6 +31,7 @@ export default function Header() {
   const appItems = [
     { href: "/projects", label: "Studio" },
     { href: "/assets", label: "Assets" },
+    { href: "/enforcement", label: "Enforcement" },
     { href: "/settings", label: "Settings" },
   ] as const;
 

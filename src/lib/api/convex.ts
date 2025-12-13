@@ -92,6 +92,14 @@ export async function fetchConvexIpAssetByIpId(ipId: string) {
   return handleResponse<{ ipAsset: any | null }>(res);
 }
 
+export async function fetchConvexIpAssetsBySha256(sha256: string) {
+  const res = await fetch(
+    `/api/convex/ip-assets?sha256=${encodeURIComponent(sha256)}`,
+    { method: "GET", cache: "no-store" },
+  );
+  return handleResponse<{ matches: Array<any> }>(res);
+}
+
 export async function createConvexIpAsset(input: {
   wallet: string;
   localProjectId?: string;
@@ -111,6 +119,8 @@ export async function createConvexIpAsset(input: {
   nftMetadataHash?: string;
   videoKey?: string;
   thumbnailKey?: string;
+  videoSha256?: string;
+  thumbnailSha256?: string;
 }) {
   const res = await fetch("/api/convex/ip-assets", {
     method: "POST",
@@ -118,4 +128,44 @@ export async function createConvexIpAsset(input: {
     body: JSON.stringify(input),
   });
   return handleResponse<{ ipAsset: { id: string } }>(res);
+}
+
+export async function fetchConvexEnforcementReports(params: {
+  wallet?: string;
+  targetIpId?: string;
+}) {
+  const url =
+    params.wallet
+      ? `/api/convex/enforcement-reports?wallet=${encodeURIComponent(params.wallet)}`
+      : params.targetIpId
+        ? `/api/convex/enforcement-reports?targetIpId=${encodeURIComponent(params.targetIpId)}`
+        : "/api/convex/enforcement-reports";
+
+  const res = await fetch(url, { method: "GET", cache: "no-store" });
+  return handleResponse<{ reports: Array<any> }>(res);
+}
+
+export async function createConvexEnforcementReport(input: {
+  wallet: string;
+  targetIpId: string;
+  protectedIpId?: string;
+  targetTag: string;
+  liveness: number;
+  bond?: string;
+  suspectUrl?: string;
+  suspectSha256?: string;
+  suspectFileName?: string;
+  suspectFileType?: string;
+  evidenceCid: string;
+  evidenceUri: string;
+  disputeId?: string;
+  disputeTxHash?: string;
+  chainId?: number;
+}) {
+  const res = await fetch("/api/convex/enforcement-reports", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<{ report: { id: string } }>(res);
 }

@@ -5,15 +5,31 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import { v } from "convex/values";
+import { getUserByWallet } from "./_helpers";
 
-async function getUserByWallet(
-  db: QueryCtx["db"] | MutationCtx["db"],
-  wallet: string,
-) {
-  return db
-    .query("users")
-    .withIndex("by_wallet", (q: any) => q.eq("wallet", wallet))
-    .unique();
+function toIpAssetResponse(record: any) {
+  return {
+    ipId: record.ipId,
+    title: record.title,
+    summary: record.summary,
+    terms: record.terms,
+    videoUrl: record.videoUrl,
+    thumbnailUrl: record.thumbnailUrl ?? null,
+    videoSha256: record.videoSha256 ?? null,
+    thumbnailSha256: record.thumbnailSha256 ?? null,
+    licenseTermsId: record.licenseTermsId ?? null,
+    txHash: record.txHash ?? null,
+    chainId: record.chainId ?? null,
+    ipMetadataUri: record.ipMetadataUri ?? null,
+    ipMetadataHash: record.ipMetadataHash ?? null,
+    nftMetadataUri: record.nftMetadataUri ?? null,
+    nftMetadataHash: record.nftMetadataHash ?? null,
+    videoKey: record.videoKey ?? null,
+    thumbnailKey: record.thumbnailKey ?? null,
+    licensorWallet: record.licensorWallet,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt ?? record.createdAt,
+  };
 }
 
 export const create = mutation({
@@ -27,6 +43,8 @@ export const create = mutation({
     terms: v.string(),
     videoUrl: v.string(),
     thumbnailUrl: v.optional(v.string()),
+    videoSha256: v.optional(v.string()),
+    thumbnailSha256: v.optional(v.string()),
     licenseTermsId: v.optional(v.string()),
     txHash: v.optional(v.string()),
     chainId: v.optional(v.number()),
@@ -49,6 +67,8 @@ export const create = mutation({
       terms,
       videoUrl,
       thumbnailUrl,
+      videoSha256,
+      thumbnailSha256,
       licenseTermsId,
       txHash,
       chainId,
@@ -68,6 +88,8 @@ export const create = mutation({
       terms: string;
       videoUrl: string;
       thumbnailUrl?: string;
+      videoSha256?: string;
+      thumbnailSha256?: string;
       licenseTermsId?: string;
       txHash?: string;
       chainId?: number;
@@ -86,6 +108,8 @@ export const create = mutation({
 
     const now = Date.now();
     const normalizedIpId = ipId.toLowerCase();
+    const normalizedVideoSha256 = videoSha256?.toLowerCase();
+    const normalizedThumbnailSha256 = thumbnailSha256?.toLowerCase();
 
     const existing = await db
       .query("ipAssets")
@@ -93,24 +117,33 @@ export const create = mutation({
       .unique();
 
     if (existing) {
-      await db.patch(existing._id, {
+      const patch: any = {
         title,
         summary,
         terms,
         videoUrl,
-        thumbnailUrl,
         licensorWallet: wallet,
-        licenseTermsId,
-        txHash,
-        chainId,
-        ipMetadataUri,
-        ipMetadataHash,
-        nftMetadataUri,
-        nftMetadataHash,
-        videoKey,
-        thumbnailKey,
         updatedAt: now,
-      });
+      };
+
+      if (thumbnailUrl !== undefined) patch.thumbnailUrl = thumbnailUrl;
+      if (normalizedVideoSha256 !== undefined) {
+        patch.videoSha256 = normalizedVideoSha256;
+      }
+      if (normalizedThumbnailSha256 !== undefined) {
+        patch.thumbnailSha256 = normalizedThumbnailSha256;
+      }
+      if (licenseTermsId !== undefined) patch.licenseTermsId = licenseTermsId;
+      if (txHash !== undefined) patch.txHash = txHash;
+      if (chainId !== undefined) patch.chainId = chainId;
+      if (ipMetadataUri !== undefined) patch.ipMetadataUri = ipMetadataUri;
+      if (ipMetadataHash !== undefined) patch.ipMetadataHash = ipMetadataHash;
+      if (nftMetadataUri !== undefined) patch.nftMetadataUri = nftMetadataUri;
+      if (nftMetadataHash !== undefined) patch.nftMetadataHash = nftMetadataHash;
+      if (videoKey !== undefined) patch.videoKey = videoKey;
+      if (thumbnailKey !== undefined) patch.thumbnailKey = thumbnailKey;
+
+      await db.patch(existing._id, patch);
 
       return { id: existing._id };
     }
@@ -144,27 +177,36 @@ export const create = mutation({
       throw new Error("Project not found for this wallet.");
     }
 
-    const recordId = await db.insert("ipAssets", {
+    const insert: any = {
       projectId: project._id,
       ipId: normalizedIpId,
       title,
       summary,
       terms,
       videoUrl,
-      thumbnailUrl,
       licensorWallet: wallet,
-      licenseTermsId,
-      txHash,
-      chainId,
-      ipMetadataUri,
-      ipMetadataHash,
-      nftMetadataUri,
-      nftMetadataHash,
-      videoKey,
-      thumbnailKey,
       createdAt: now,
       updatedAt: now,
-    });
+    };
+
+    if (thumbnailUrl !== undefined) insert.thumbnailUrl = thumbnailUrl;
+    if (normalizedVideoSha256 !== undefined) {
+      insert.videoSha256 = normalizedVideoSha256;
+    }
+    if (normalizedThumbnailSha256 !== undefined) {
+      insert.thumbnailSha256 = normalizedThumbnailSha256;
+    }
+    if (licenseTermsId !== undefined) insert.licenseTermsId = licenseTermsId;
+    if (txHash !== undefined) insert.txHash = txHash;
+    if (chainId !== undefined) insert.chainId = chainId;
+    if (ipMetadataUri !== undefined) insert.ipMetadataUri = ipMetadataUri;
+    if (ipMetadataHash !== undefined) insert.ipMetadataHash = ipMetadataHash;
+    if (nftMetadataUri !== undefined) insert.nftMetadataUri = nftMetadataUri;
+    if (nftMetadataHash !== undefined) insert.nftMetadataHash = nftMetadataHash;
+    if (videoKey !== undefined) insert.videoKey = videoKey;
+    if (thumbnailKey !== undefined) insert.thumbnailKey = thumbnailKey;
+
+    const recordId = await db.insert("ipAssets", insert);
 
     return { id: recordId };
   },
@@ -174,26 +216,7 @@ export const listMarketplace = query({
   args: {},
   handler: async ({ db }: QueryCtx) => {
     const records = await db.query("ipAssets").order("desc").collect();
-    return records.map((record: any) => ({
-      ipId: record.ipId,
-      title: record.title,
-      summary: record.summary,
-      terms: record.terms,
-      videoUrl: record.videoUrl,
-      thumbnailUrl: record.thumbnailUrl ?? null,
-      licenseTermsId: record.licenseTermsId ?? null,
-      txHash: record.txHash ?? null,
-      chainId: record.chainId ?? null,
-      ipMetadataUri: record.ipMetadataUri ?? null,
-      ipMetadataHash: record.ipMetadataHash ?? null,
-      nftMetadataUri: record.nftMetadataUri ?? null,
-      nftMetadataHash: record.nftMetadataHash ?? null,
-      videoKey: record.videoKey ?? null,
-      thumbnailKey: record.thumbnailKey ?? null,
-      licensorWallet: record.licensorWallet,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt ?? record.createdAt,
-    }));
+    return records.map(toIpAssetResponse);
   },
 });
 
@@ -212,26 +235,7 @@ export const listByWallet = query({
         (a: any, b: any) =>
           (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt),
       )
-      .map((record: any) => ({
-        ipId: record.ipId,
-        title: record.title,
-        summary: record.summary,
-        terms: record.terms,
-        videoUrl: record.videoUrl,
-        thumbnailUrl: record.thumbnailUrl ?? null,
-        licenseTermsId: record.licenseTermsId ?? null,
-        txHash: record.txHash ?? null,
-        chainId: record.chainId ?? null,
-        ipMetadataUri: record.ipMetadataUri ?? null,
-        ipMetadataHash: record.ipMetadataHash ?? null,
-        nftMetadataUri: record.nftMetadataUri ?? null,
-        nftMetadataHash: record.nftMetadataHash ?? null,
-        videoKey: record.videoKey ?? null,
-        thumbnailKey: record.thumbnailKey ?? null,
-        licensorWallet: record.licensorWallet,
-        createdAt: record.createdAt,
-        updatedAt: record.updatedAt ?? record.createdAt,
-      }));
+      .map(toIpAssetResponse);
   },
 });
 
@@ -246,25 +250,42 @@ export const getByIpId = query({
 
     if (!record) return null;
 
-    return {
-      ipId: record.ipId,
-      title: record.title,
-      summary: record.summary,
-      terms: record.terms,
-      videoUrl: record.videoUrl,
-      thumbnailUrl: record.thumbnailUrl ?? null,
-      licenseTermsId: record.licenseTermsId ?? null,
-      txHash: record.txHash ?? null,
-      chainId: record.chainId ?? null,
-      ipMetadataUri: record.ipMetadataUri ?? null,
-      ipMetadataHash: record.ipMetadataHash ?? null,
-      nftMetadataUri: record.nftMetadataUri ?? null,
-      nftMetadataHash: record.nftMetadataHash ?? null,
-      videoKey: record.videoKey ?? null,
-      thumbnailKey: record.thumbnailKey ?? null,
-      licensorWallet: record.licensorWallet,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt ?? record.createdAt,
-    };
+    return toIpAssetResponse(record);
+  },
+});
+
+export const findBySha256 = query({
+  args: { sha256: v.string() },
+  handler: async ({ db }: QueryCtx, { sha256 }: { sha256: string }) => {
+    const normalized = sha256.toLowerCase();
+    const matches: Array<{ matchOn: "video" | "thumbnail" } & Record<string, unknown>> =
+      [];
+    const seenIpIds = new Set<string>();
+
+    const videoMatches = await db
+      .query("ipAssets")
+      .withIndex("by_videoSha256", (q: any) => q.eq("videoSha256", normalized))
+      .collect();
+
+    for (const record of videoMatches) {
+      if (seenIpIds.has(record.ipId)) continue;
+      seenIpIds.add(record.ipId);
+      matches.push({ matchOn: "video", ...toIpAssetResponse(record) });
+    }
+
+    const thumbnailMatches = await db
+      .query("ipAssets")
+      .withIndex("by_thumbnailSha256", (q: any) =>
+        q.eq("thumbnailSha256", normalized),
+      )
+      .collect();
+
+    for (const record of thumbnailMatches) {
+      if (seenIpIds.has(record.ipId)) continue;
+      seenIpIds.add(record.ipId);
+      matches.push({ matchOn: "thumbnail", ...toIpAssetResponse(record) });
+    }
+
+    return matches;
   },
 });

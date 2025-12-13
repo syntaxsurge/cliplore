@@ -352,6 +352,8 @@ export default function PublishClient({
         nftMetadataHash: selectedExport.publish.nftMetadataHash,
         videoKey: selectedExport.publish.videoKey,
         thumbnailKey: selectedExport.publish.thumbnailKey,
+        videoSha256: selectedExport.publish.videoSha256,
+        thumbnailSha256: selectedExport.publish.thumbnailSha256,
       });
       setMarketplaceSyncStatus("success");
       setMarketplaceSyncMessage(null);
@@ -607,6 +609,18 @@ export default function PublishClient({
         return;
       }
 
+      let mediaHash: `0x${string}` | undefined;
+      try {
+        mediaHash = sha256(new Uint8Array(await exportFile.arrayBuffer()));
+      } catch (hashErr) {
+        console.error(hashErr);
+        setStatus("error");
+        setMessage(
+          "Failed to compute video hash. Re-export the project and try again.",
+        );
+        return;
+      }
+
       let imageHash: `0x${string}` | undefined;
       try {
         if (thumbnailFile) {
@@ -634,6 +648,7 @@ export default function PublishClient({
         creatorAddress: address,
         creatorName: creatorName.trim() || undefined,
         videoUri: videoUpload.url,
+        mediaHash,
         thumbnailUri: thumbnailUpload.url,
         imageHash,
         videoMimeType: exportFile.type || "video/mp4",
@@ -700,6 +715,8 @@ export default function PublishClient({
         thumbnailUrl: thumbnailUpload?.url,
         videoKey: videoUpload.key,
         thumbnailKey: thumbnailUpload?.key,
+        videoSha256: mediaHash,
+        thumbnailSha256: imageHash,
         ipMetadataUri: meta.ipMetadataUri,
         ipMetadataHash: meta.ipMetadataHash,
         nftMetadataUri: meta.nftMetadataUri,
@@ -741,6 +758,8 @@ export default function PublishClient({
           nftMetadataHash: publishRecord.nftMetadataHash,
           videoKey: publishRecord.videoKey,
           thumbnailKey: publishRecord.thumbnailKey,
+          videoSha256: publishRecord.videoSha256,
+          thumbnailSha256: publishRecord.thumbnailSha256,
         });
         setMarketplaceSyncStatus("success");
         setMarketplaceSyncMessage(null);
