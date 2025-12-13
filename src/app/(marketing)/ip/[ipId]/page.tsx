@@ -36,7 +36,9 @@ export default async function IpDetailPage({ params }: Props) {
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">IP Asset ID: {asset.ipId}</Badge>
+          <Badge variant="outline" className="max-w-full break-all">
+            IP Asset ID: {asset.ipId}
+          </Badge>
         </div>
         <h1 className="text-4xl font-semibold text-foreground">
           {asset.title}
@@ -71,8 +73,8 @@ export default async function IpDetailPage({ params }: Props) {
           <CardHeader>
             <CardTitle>Mint & remix</CardTitle>
             <CardDescription>
-              Connect your wallet to mint a license token on Story testnet, then
-              start a remix project in Cliplore.
+              Step 1: mint a license token on Story testnet. Step 2: start a
+              remix project in Cliplore.
             </CardDescription>
           </CardHeader>
           <CardContent>
