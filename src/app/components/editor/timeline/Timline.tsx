@@ -1,10 +1,11 @@
-import { useAppSelector } from "@/app/store";
+import { getFile, useAppSelector } from "@/app/store";
 import type { MediaType } from "@/app/types";
 import {
   addMarker,
   applyTimelineEdit,
   deleteMarker,
   setActiveElement,
+  setActiveElementIndex,
   setCurrentTime,
   setIsPlaying,
   setMarkerTrack,
@@ -12,6 +13,8 @@ import {
   setTextElements,
   setTimelineZoom,
   updateMarker,
+  beginHistoryTransaction,
+  endHistoryTransaction,
 } from "@/app/store/slices/projectSlice";
 import { throttle } from "lodash";
 import {
@@ -42,8 +45,13 @@ import { TimelineToolButton } from "./TimelineToolButton";
 import MediaTimelineTrack from "./elements-timeline/MediaTimelineTrack";
 import TextTimeline from "./elements-timeline/TextTimeline";
 import { computeRipplePlacement } from "./ops";
+import { categorizeFile } from "@/app/utils/utils";
+import { createMediaFileFromFile } from "@/lib/media/ingest";
 
 const TRACK_LABEL_WIDTH_PX = 144;
+const LIBRARY_ASSET_MIME = "application/x-cliplore-library-asset";
+const TIMELINE_ZOOM_MIN = 30;
+const TIMELINE_ZOOM_MAX = 150;
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
@@ -61,6 +69,7 @@ export const Timeline = () => {
     tracks,
     markers,
     fps,
+    resolution,
   } = useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
   const { player } = useEditorPlayer();
@@ -77,6 +86,7 @@ export const Timeline = () => {
   const [layerInsertPreview, setLayerInsertPreview] = useState<
     "top" | "bottom" | null
   >(null);
+  const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
   const zoom = isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
   const safeDuration = isFiniteNumber(duration) && duration > 0 ? duration : 0;
@@ -121,6 +131,7 @@ export const Timeline = () => {
   const displayTracks = useMemo(() => [...tracks].reverse(), [tracks]);
 
   const handleDragHoverTrackId = useCallback((trackId: string | null) => {
+    setHoveredTrackId(trackId);
     const next =
       trackId === "__new-layer-top"
         ? "top"
@@ -164,6 +175,219 @@ export const Timeline = () => {
         dispatch(setTimelineZoom(value));
       }, 100),
     [dispatch],
+  );
+
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.altKey) return;
+      event.preventDefault();
+
+      const rect = el.getBoundingClientRect();
+      const scrollOffset = el.scrollLeft;
+      const offsetX =
+        event.clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
+      const secondsAtCursor = Math.max(0, offsetX) / zoom;
+
+      const normalized = Math.min(2, Math.max(0.3, Math.abs(event.deltaY) / 120));
+      const baseFactor = 1.12;
+      const factor = event.deltaY < 0 ? baseFactor : 1 / baseFactor;
+      const nextZoom = Math.max(
+        TIMELINE_ZOOM_MIN,
+        Math.min(
+          TIMELINE_ZOOM_MAX,
+          Math.round(zoom * Math.pow(factor, normalized)),
+        ),
+      );
+
+      if (nextZoom === zoom) return;
+
+      dispatch(setTimelineZoom(nextZoom));
+
+      const nextOffsetX = secondsAtCursor * nextZoom;
+      const nextScrollLeft =
+        nextOffsetX - (event.clientX - rect.left) + TRACK_LABEL_WIDTH_PX;
+      el.scrollLeft = Math.max(0, nextScrollLeft);
+    };
+
+    el.addEventListener("wheel", handleWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleWheel);
+  }, [dispatch, zoom]);
+
+  const getUnboundedTimeFromClientX = useCallback(
+    (clientX: number) => {
+      if (!timelineRef.current) return 0;
+      const rect = timelineRef.current.getBoundingClientRect();
+      const scrollOffset = timelineRef.current.scrollLeft;
+      const offsetX = clientX - rect.left + scrollOffset - TRACK_LABEL_WIDTH_PX;
+      const seconds = Math.max(0, offsetX) / zoom;
+      return Math.max(0, seconds);
+    },
+    [zoom],
+  );
+
+  const findTrackIdAtPoint = useCallback((clientX: number, clientY: number) => {
+    const elements = document.elementsFromPoint(clientX, clientY) as HTMLElement[];
+    const trackEl = elements.find((el) => el?.dataset?.timelineTrackId !== undefined);
+    return trackEl?.dataset?.timelineTrackId ?? null;
+  }, []);
+
+  const isLibraryAssetDrag = useCallback(
+    (dataTransfer: DataTransfer) =>
+      dataTransfer.types.includes(LIBRARY_ASSET_MIME) ||
+      (dataTransfer.types.includes("text/plain") &&
+        !dataTransfer.types.includes("Files")),
+    [],
+  );
+
+  const readLibraryAssetPayload = useCallback((dataTransfer: DataTransfer) => {
+    const raw =
+      dataTransfer.getData(LIBRARY_ASSET_MIME) || dataTransfer.getData("text/plain");
+    const parsed = (() => {
+      try {
+        return JSON.parse(raw) as { fileId?: string };
+      } catch {
+        return null;
+      }
+    })();
+    return typeof parsed?.fileId === "string" ? parsed.fileId : null;
+  }, []);
+
+  const handleLibraryDrop = useCallback(
+    async (e: React.DragEvent<HTMLDivElement>) => {
+      if (!isLibraryAssetDrag(e.dataTransfer)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleDragHoverTrackId(null);
+
+      const fileId = readLibraryAssetPayload(e.dataTransfer);
+      if (!fileId) return;
+
+      const file = await getFile(fileId);
+      if (!file) {
+        toast.error("File not found.");
+        return;
+      }
+
+      const type = categorizeFile(file.type);
+      const dropTarget = findTrackIdAtPoint(e.clientX, e.clientY);
+
+      let targetTrackId =
+        typeof dropTarget === "string" ? dropTarget : fallbackTrackIdForType[type];
+      let nextTracks: typeof tracks | undefined;
+
+      if (dropTarget === "__new-layer-top" || dropTarget === "__new-layer-bottom") {
+        const insertAt =
+          dropTarget === "__new-layer-bottom"
+            ? Math.min(2, tracks.length)
+            : tracks.length;
+        const nextId = crypto.randomUUID();
+        nextTracks = [
+          ...tracks.slice(0, insertAt),
+          {
+            id: nextId,
+            kind: "layer",
+            name: `Layer ${insertAt + 1}`,
+          },
+          ...tracks.slice(insertAt),
+        ];
+        targetTrackId = nextId;
+      }
+
+      if (!targetTrackId || targetTrackId.startsWith("__new-layer")) {
+        toast.error("Drop on a layer to place this clip.");
+        return;
+      }
+
+      const desiredStart = getUnboundedTimeFromClientX(e.clientX);
+      const src = URL.createObjectURL(file);
+      const defaultDurationSeconds = type === "image" ? 5 : 30;
+      const nextClip = await createMediaFileFromFile({
+        file,
+        fileId,
+        src,
+        positionStart: desiredStart,
+        frame: {
+          width: resolution?.width ?? 1920,
+          height: resolution?.height ?? 1080,
+        },
+        trackId: targetTrackId,
+        defaultDurationSeconds,
+      });
+
+      const clipDuration = Math.max(
+        0,
+        nextClip.positionEnd - nextClip.positionStart,
+      );
+      const placement = computeRipplePlacement({
+        clips: getTrackBounds(targetTrackId),
+        movingId: nextClip.id,
+        desiredStart,
+        duration: clipDuration,
+      });
+
+      const shiftedMediaFiles = mediaFiles.map((clip) => {
+        const delta = placement.shifts[clip.id];
+        if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+          return clip;
+        }
+        return {
+          ...clip,
+          positionStart: clip.positionStart + delta,
+          positionEnd: clip.positionEnd + delta,
+        };
+      });
+
+      const shiftedTextElements = textElements.map((clip) => {
+        const delta = placement.shifts[clip.id];
+        if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
+          return clip;
+        }
+        return {
+          ...clip,
+          positionStart: clip.positionStart + delta,
+          positionEnd: clip.positionEnd + delta,
+        };
+      });
+
+      const placedClip = {
+        ...nextClip,
+        positionStart: placement.start,
+        positionEnd: placement.end,
+      };
+
+      const nextMediaFiles = [...shiftedMediaFiles, placedClip];
+
+      dispatch(
+        applyTimelineEdit({
+          ...(nextTracks ? { tracks: nextTracks } : {}),
+          mediaFiles: nextMediaFiles,
+          textElements: shiftedTextElements,
+        }),
+      );
+
+      dispatch(setActiveElement("media"));
+      const newIndex = nextMediaFiles.findIndex((m) => m.id === placedClip.id);
+      if (newIndex >= 0) dispatch(setActiveElementIndex(newIndex));
+
+      toast.success("Added to timeline.");
+    },
+    [
+      dispatch,
+      fallbackTrackIdForType,
+      findTrackIdAtPoint,
+      getTrackBounds,
+      getUnboundedTimeFromClientX,
+      handleDragHoverTrackId,
+      isLibraryAssetDrag,
+      mediaFiles,
+      readLibraryAssetPayload,
+      resolution,
+      textElements,
+      tracks,
+    ],
   );
 
   const handleSplit = () => {
@@ -605,7 +829,11 @@ export const Timeline = () => {
       dispatch(setCurrentTime(time));
       player?.seekTo(Math.round(time * safeFps));
     };
-    const handleUp = () => setDraggingTimelineMarkerId(null);
+    const handleUp = () => {
+      throttledMarkerUpdate.flush();
+      dispatch(endHistoryTransaction());
+      setDraggingTimelineMarkerId(null);
+    };
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
     return () => {
@@ -842,6 +1070,20 @@ export const Timeline = () => {
         ref={timelineRef}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
+        onDragOver={(e) => {
+          if (!isLibraryAssetDrag(e.dataTransfer)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "copy";
+          handleDragHoverTrackId(findTrackIdAtPoint(e.clientX, e.clientY));
+        }}
+        onDragLeave={(e) => {
+          if (!isLibraryAssetDrag(e.dataTransfer)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          handleDragHoverTrackId(null);
+        }}
+        onDrop={handleLibraryDrop}
       >
         <div className="relative" style={{ width: `${timelineCanvasWidthPx}px` }}>
           <Header
@@ -879,6 +1121,7 @@ export const Timeline = () => {
                 onMouseDown={(e) => {
                   e.stopPropagation();
                   dispatch(setIsPlaying(false));
+                  dispatch(beginHistoryTransaction());
                   setSelectedMarkerId(marker.id);
                   setDraggingTimelineMarkerId(marker.id);
                 }}
@@ -977,7 +1220,9 @@ export const Timeline = () => {
                 </div>
 
                 <div
-                  className="relative h-16 overflow-visible bg-[#1B1A1E]"
+                  className={`relative h-16 overflow-visible bg-[#1B1A1E] ${
+                    hoveredTrackId === track.id ? "bg-blue-500/10" : ""
+                  }`}
                   data-timeline-track-id={track.id}
                 >
                   <MediaTimelineTrack

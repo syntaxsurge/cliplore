@@ -1,19 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useAppDispatch, useAppSelector, storeFile } from "@/app/store";
-import { setFilesID, setMediaFiles } from "@/app/store/slices/projectSlice";
+import { useState } from "react";
+import { useAppDispatch } from "@/app/store";
+import { addSoraJob } from "@/app/store/slices/projectSlice";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
-import { createMediaFileFromFile } from "@/lib/media/ingest";
-
-type SoraStatus =
-  | "idle"
-  | "creating"
-  | "polling"
-  | "downloading"
-  | "success"
-  | "error";
+import type { SoraJob } from "@/app/types";
 
 type Props = {
   onGenerated?: () => void;
@@ -23,121 +15,35 @@ type Props = {
 
 export function SoraPanel({ onGenerated, hideHeader = false, className }: Props) {
   const dispatch = useAppDispatch();
-  const { mediaFiles, filesID = [], resolution, tracks } = useAppSelector(
-    (state) => state.projectState,
-  );
   const [prompt, setPrompt] = useState("");
   const [seconds, setSeconds] = useState<4 | 8 | 12>(8);
   const [size, setSize] = useState<
     "720x1280" | "1280x720" | "1024x1792" | "1792x1024"
   >("1280x720");
-  const [status, setStatus] = useState<SoraStatus>("idle");
-  const [message, setMessage] = useState<string | null>(null);
-
-  const addMediaFromFile = useCallback(
-    async (file: File, fileId: string) => {
-      const updatedMedia = [...mediaFiles];
-      const mainVideoTrackId = tracks[0]?.id ?? null;
-
-      const relevantClips = mediaFiles.filter(
-        (clip) => (clip.trackId ?? null) === mainVideoTrackId,
-      );
-      const lastEnd =
-        relevantClips.length > 0
-          ? Math.max(...relevantClips.map((f) => f.positionEnd))
-          : 0;
-
-      const src = URL.createObjectURL(file);
-      const mediaClip = await createMediaFileFromFile({
-        file,
-        fileId,
-        src,
-        positionStart: lastEnd,
-        frame: {
-          width: resolution?.width ?? 1920,
-          height: resolution?.height ?? 1080,
-        },
-        trackId: mainVideoTrackId ?? undefined,
-        defaultDurationSeconds: 30,
-      });
-      updatedMedia.push(mediaClip);
-
-      dispatch(setFilesID([...filesID, fileId]));
-      dispatch(setMediaFiles(updatedMedia));
-    },
-    [dispatch, filesID, mediaFiles, resolution, tracks],
-  );
-
-  const pollJob = useCallback(async (jobId: string) => {
-    setStatus("polling");
-    setMessage("Polling Sora job…");
-    for (let i = 0; i < 30; i++) {
-      const res = await fetch(`/api/sora?jobId=${jobId}`);
-      const data = (await res.json()) as {
-        status: string;
-        error?: string;
-        contentUrl?: string | null;
-      };
-
-      if (data.status === "completed") {
-        return data.contentUrl ?? `/api/sora/content?jobId=${jobId}`;
-      }
-      if (data.status === "failed") {
-        throw new Error(data.error ?? "Sora job failed");
-      }
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-    throw new Error("Sora job timed out");
-  }, []);
-
-  const downloadAndStore = useCallback(
-    async (url: string) => {
-      setStatus("downloading");
-      setMessage("Downloading Sora render…");
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const file = new File([blob], `sora-${Date.now()}.mp4`, {
-        type: blob.type || "video/mp4",
-      });
-      const fileId = crypto.randomUUID();
-      await storeFile(file, fileId);
-      await addMediaFromFile(file, fileId);
-    },
-    [addMediaFromFile],
-  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prompt.trim()) {
-      setMessage("Enter a prompt to generate a Sora clip.");
-      setStatus("error");
+      toast.error("Enter a prompt to generate a Sora clip.");
       return;
     }
 
-    try {
-      setStatus("creating");
-      setMessage("Creating Sora job…");
-      const res = await fetch("/api/sora", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, seconds, size }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.jobId) {
-        throw new Error(data.error ?? "Failed to start Sora job");
-      }
+    const now = new Date().toISOString();
+    const job: SoraJob = {
+      id: crypto.randomUUID(),
+      prompt: prompt.trim(),
+      seconds,
+      size,
+      status: "queued",
+      createdAt: now,
+      updatedAt: now,
+      message: "Queued.",
+    };
 
-      const contentUrl = await pollJob(data.jobId);
-      await downloadAndStore(contentUrl);
-      setStatus("success");
-      setMessage("Sora clip added to your media list.");
-      onGenerated?.();
-    } catch (err: any) {
-      console.error(err);
-      setStatus("error");
-      setMessage(err?.message ?? "Sora generation failed.");
-      toast.error("Sora generation failed");
-    }
+    dispatch(addSoraJob(job));
+    toast.success("Sora job queued. Track it in History.");
+    setPrompt("");
+    onGenerated?.();
   };
 
   return (
@@ -154,7 +60,7 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
               Generate with Sora
             </h3>
             <p className="text-sm text-white/60">
-              Create a clip and drop it straight into your timeline.
+              Generate a clip in the background, then review it in History.
             </p>
           </div>
         </div>
@@ -210,29 +116,16 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
         </div>
         <button
           type="submit"
-          disabled={
-            status === "creating" ||
-            status === "polling" ||
-            status === "downloading"
-          }
+          disabled={false}
           className="w-full rounded-md bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {status === "creating"
-            ? "Starting..."
-            : status === "polling"
-              ? "Waiting for render..."
-              : status === "downloading"
-                ? "Saving clip..."
-                : "Generate clip"}
+          Generate clip
         </button>
       </form>
-      {message && (
-        <p
-          className={`text-sm ${status === "error" ? "text-red-300" : "text-white/70"}`}
-        >
-          {message}
-        </p>
-      )}
+      <p className="text-xs text-white/55">
+        Tip: You can close this dialog — generation continues and stays visible in
+        History.
+      </p>
     </div>
   );
 }

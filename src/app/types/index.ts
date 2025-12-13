@@ -149,6 +149,7 @@ export interface ProjectState {
   tracks: TimelineTrack[];
   markers: TimelineMarker[];
   filesID?: string[];
+  soraJobs: SoraJob[];
   exports: ProjectExport[];
   currentTime: number;
   isPlaying: boolean;
@@ -160,7 +161,7 @@ export interface ProjectState {
   projectName: string;
   createdAt: string;
   lastModified: string;
-  activeSection: ActiveElement;
+  activeSection: ActiveElement | null;
   activeElement: ActiveElement | null;
   activeElementIndex: number;
 
@@ -169,10 +170,38 @@ export interface ProjectState {
   aspectRatio: string;
   history: ProjectHistoryEntry[]; // stack for undo
   future: ProjectHistoryEntry[]; // stack for redo
+  historyLockDepth: number; // internal: groups gesture edits
   exportSettings: ExportConfig;
 }
 
 export type ProjectHistoryEntry = Omit<ProjectState, "history" | "future">;
+
+export type SoraModel = "sora-2" | "sora-2-pro";
+
+export type SoraJobStatus =
+  | "queued"
+  | "creating"
+  | "polling"
+  | "downloading"
+  | "completed"
+  | "failed";
+
+export interface SoraJob {
+  id: string; // local id
+  jobId?: string; // Sora job id from API
+  model?: SoraModel;
+  prompt: string;
+  seconds: 4 | 8 | 12;
+  size: "720x1280" | "1280x720" | "1024x1792" | "1792x1024";
+  status: SoraJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  message?: string;
+  error?: string;
+  contentUrl?: string | null;
+  fileId?: string;
+  mediaId?: string;
+}
 
 export const mimeToExt = {
   "video/mp4": "mp4",

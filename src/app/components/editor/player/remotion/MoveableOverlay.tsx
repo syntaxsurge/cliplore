@@ -3,10 +3,12 @@
 import Moveable, { OnDrag, OnResize, OnRotate } from "react-moveable";
 import { useAppDispatch, useAppSelector } from "@/app/store";
 import {
+  beginHistoryTransaction,
+  endHistoryTransaction,
   setMediaFiles,
   setTextElements,
 } from "@/app/store/slices/projectSlice";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle } from "lodash";
 import type { MediaFile, TextElement } from "@/app/types";
 import { createPortal } from "react-dom";
@@ -25,6 +27,11 @@ export default function MoveableOverlay() {
   );
   const [containerScale, setContainerScale] = useState(1);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [centerGuides, setCenterGuides] = useState({
+    vertical: false,
+    horizontal: false,
+  });
+  const hideGuidesTimerRef = useRef<number | null>(null);
 
   const selected = useMemo<MediaFile | TextElement | null>(() => {
     if (activeElement === "media") {
@@ -55,6 +62,14 @@ export default function MoveableOverlay() {
     ) as HTMLElement | null;
     setPortalContainer(container);
   }, []);
+
+  useEffect(() => {
+    if (!portalContainer) return;
+    const computed = window.getComputedStyle(portalContainer);
+    if (computed.position === "static") {
+      portalContainer.style.position = "relative";
+    }
+  }, [portalContainer]);
 
   useEffect(() => {
     if (!portalContainer) return;
@@ -108,15 +123,17 @@ export default function MoveableOverlay() {
     ],
   );
 
-  if (!selected || !target || !portalContainer || editingTextId) return null;
+  const canRender = Boolean(selected && target && portalContainer && !editingTextId);
 
   const isFiniteNumber = (value: unknown): value is number =>
     typeof value === "number" && Number.isFinite(value);
 
   const keepRatio =
     activeElement === "media" &&
+    selected !== null &&
     (selected as MediaFile).type !== undefined &&
-    ((selected as MediaFile).type === "image" || (selected as MediaFile).type === "video");
+    ((selected as MediaFile).type === "image" ||
+      (selected as MediaFile).type === "video");
 
   const snapWidth =
     canvasSize.width > 0
@@ -143,114 +160,231 @@ export default function MoveableOverlay() {
     return `${value} ${nextRotation}`;
   };
 
+  const clearGuideTimer = useCallback(() => {
+    if (hideGuidesTimerRef.current) {
+      window.clearTimeout(hideGuidesTimerRef.current);
+      hideGuidesTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleHideGuides = useCallback(
+    (delayMs: number) => {
+      clearGuideTimer();
+      hideGuidesTimerRef.current = window.setTimeout(() => {
+        setCenterGuides({ vertical: false, horizontal: false });
+        hideGuidesTimerRef.current = null;
+      }, delayMs);
+    },
+    [clearGuideTimer],
+  );
+
+  useEffect(() => {
+    return () => clearGuideTimer();
+  }, [clearGuideTimer]);
+
+  const updateCenterGuides = useCallback(
+    (next: { vertical: boolean; horizontal: boolean }) => {
+      clearGuideTimer();
+      setCenterGuides((prev) =>
+        prev.vertical === next.vertical && prev.horizontal === next.horizontal
+          ? prev
+          : next,
+      );
+    },
+    [clearGuideTimer],
+  );
+
+  if (!canRender) return null;
+
   return createPortal(
-    <Moveable
-      target={target}
-      container={portalContainer}
-      origin={false}
-      draggable
-      throttleDrag={0}
-      resizable
-      throttleResize={0}
-      rotatable
-      throttleRotate={0}
-      keepRatio={keepRatio}
-      renderDirections={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
-      linePadding={6}
-      controlPadding={8}
-      zoom={containerScale > 0 ? 1 / containerScale : 1}
-      className="moveable-canvas"
-      snappable
-      snapGap={false}
-      snapDirections={{
-        left: false,
-        top: false,
-        right: false,
-        bottom: false,
-        center: true,
-        middle: true,
-      }}
-      elementSnapDirections={false}
-      snapHorizontalThreshold={8}
-      snapVerticalThreshold={8}
-      snapRenderThreshold={8}
-      isDisplaySnapDigit={false}
-      verticalGuidelines={[centerX]}
-      horizontalGuidelines={[centerY]}
-      onDrag={({ target, left, top }: OnDrag) => {
-        if (!target) return;
-        target.style.left = `${left}px`;
-        target.style.top = `${top}px`;
-        updateSelected({ x: left, y: top } as any);
-      }}
-      onResize={({ target, width, height, drag, delta }: OnResize) => {
-        if (!target) return;
+    <>
+      <div className="pointer-events-none absolute inset-0 z-40">
+        {centerGuides.vertical ? (
+          <div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2 bg-cyan-300/70" />
+        ) : null}
+        {centerGuides.horizontal ? (
+          <div className="absolute top-1/2 left-0 right-0 h-px -translate-y-1/2 bg-cyan-300/70" />
+        ) : null}
+      </div>
 
-        if (delta[0] && isFiniteNumber(width)) target.style.width = `${width}px`;
-        if (delta[1] && isFiniteNumber(height))
-          target.style.height = `${height}px`;
-        if (drag) {
-          if (isFiniteNumber(drag.left)) target.style.left = `${drag.left}px`;
-          if (isFiniteNumber(drag.top)) target.style.top = `${drag.top}px`;
-        }
+      <Moveable
+        target={target}
+        container={portalContainer}
+        origin={false}
+        draggable
+        throttleDrag={0}
+        resizable
+        throttleResize={0}
+        rotatable
+        throttleRotate={0}
+        keepRatio={keepRatio}
+        renderDirections={["nw", "n", "ne", "e", "se", "s", "sw", "w"]}
+        linePadding={6}
+        controlPadding={8}
+        zoom={containerScale > 0 ? 1 / containerScale : 1}
+        className="moveable-canvas"
+        snappable
+        snapGap={false}
+        snapDirections={{
+          left: false,
+          top: false,
+          right: false,
+          bottom: false,
+          center: true,
+          middle: true,
+        }}
+        elementSnapDirections={false}
+        snapHorizontalThreshold={8}
+        snapVerticalThreshold={8}
+        snapRenderThreshold={8}
+        isDisplaySnapDigit={false}
+        verticalGuidelines={[centerX]}
+        horizontalGuidelines={[centerY]}
+        onDragStart={() => {
+          clearGuideTimer();
+          dispatch(beginHistoryTransaction());
+        }}
+        onDrag={({ target, left, top }: OnDrag) => {
+          if (!target) return;
+          target.style.left = `${left}px`;
+          target.style.top = `${top}px`;
+          updateSelected({ x: left, y: top } as any);
 
-        if (activeElement === "media") {
-          const media = selected as MediaFile;
-          const prevCrop = media.crop ?? {
-            x: 0,
-            y: 0,
-            width: media.width ?? 1,
-            height: media.height ?? 1,
-          };
-          const prevBoundsWidth = prevCrop.width || media.width || 1;
-          const prevBoundsHeight = prevCrop.height || media.height || 1;
+          const htmlTarget = target as HTMLElement;
+          const width = htmlTarget.offsetWidth;
+          const height = htmlTarget.offsetHeight;
+          const nearVertical =
+            isFiniteNumber(width) && width > 0
+              ? Math.abs(left + width / 2 - centerX) <= 8
+              : false;
+          const nearHorizontal =
+            isFiniteNumber(height) && height > 0
+              ? Math.abs(top + height / 2 - centerY) <= 8
+              : false;
+          updateCenterGuides({ vertical: nearVertical, horizontal: nearHorizontal });
+        }}
+        onDragEnd={() => {
+          scheduleHideGuides(1000);
+          updateSelected.flush();
+          dispatch(endHistoryTransaction());
+        }}
+        onResizeStart={() => {
+          clearGuideTimer();
+          dispatch(beginHistoryTransaction());
+        }}
+        onResize={({ target, width, height, drag, delta }: OnResize) => {
+          if (!target) return;
 
-          const nextBoundsWidth = isFiniteNumber(width) ? Math.max(1, width) : prevBoundsWidth;
-          const nextBoundsHeight = isFiniteNumber(height) ? Math.max(1, height) : prevBoundsHeight;
+          if (delta[0] && isFiniteNumber(width)) target.style.width = `${width}px`;
+          if (delta[1] && isFiniteNumber(height))
+            target.style.height = `${height}px`;
+          if (drag) {
+            if (isFiniteNumber(drag.left)) target.style.left = `${drag.left}px`;
+            if (isFiniteNumber(drag.top)) target.style.top = `${drag.top}px`;
+          }
 
-          const scaleX =
-            prevBoundsWidth > 0 ? nextBoundsWidth / prevBoundsWidth : 1;
-          const scaleY =
-            prevBoundsHeight > 0 ? nextBoundsHeight / prevBoundsHeight : 1;
+          const nextLeft = isFiniteNumber(drag?.left)
+            ? drag.left
+            : isFiniteNumber(selected?.x)
+              ? selected.x
+              : 0;
+          const nextTop = isFiniteNumber(drag?.top)
+            ? drag.top
+            : isFiniteNumber(selected?.y)
+              ? selected.y
+              : 0;
+          const htmlTarget = target as HTMLElement;
+          const nextWidth = isFiniteNumber(width) ? width : htmlTarget.offsetWidth;
+          const nextHeight = isFiniteNumber(height) ? height : htmlTarget.offsetHeight;
 
-          const nextWidth = Math.round((media.width ?? prevBoundsWidth) * scaleX);
-          const nextHeight = Math.round((media.height ?? prevBoundsHeight) * scaleY);
+          const nearVertical =
+            isFiniteNumber(nextWidth) && nextWidth > 0
+              ? Math.abs(nextLeft + nextWidth / 2 - centerX) <= 8
+              : false;
+          const nearHorizontal =
+            isFiniteNumber(nextHeight) && nextHeight > 0
+              ? Math.abs(nextTop + nextHeight / 2 - centerY) <= 8
+              : false;
+          updateCenterGuides({ vertical: nearVertical, horizontal: nearHorizontal });
+
+          if (activeElement === "media") {
+            const media = selected as MediaFile;
+            const prevCrop = media.crop ?? {
+              x: 0,
+              y: 0,
+              width: media.width ?? 1,
+              height: media.height ?? 1,
+            };
+            const prevBoundsWidth = prevCrop.width || media.width || 1;
+            const prevBoundsHeight = prevCrop.height || media.height || 1;
+
+            const nextBoundsWidth = isFiniteNumber(width)
+              ? Math.max(1, width)
+              : prevBoundsWidth;
+            const nextBoundsHeight = isFiniteNumber(height)
+              ? Math.max(1, height)
+              : prevBoundsHeight;
+
+            const scaleX =
+              prevBoundsWidth > 0 ? nextBoundsWidth / prevBoundsWidth : 1;
+            const scaleY =
+              prevBoundsHeight > 0 ? nextBoundsHeight / prevBoundsHeight : 1;
+
+            const nextWidth = Math.round((media.width ?? prevBoundsWidth) * scaleX);
+            const nextHeight = Math.round(
+              (media.height ?? prevBoundsHeight) * scaleY,
+            );
+
+            updateSelected({
+              width: nextWidth,
+              height: nextHeight,
+              crop: {
+                x: Math.round((prevCrop.x || 0) * scaleX),
+                y: Math.round((prevCrop.y || 0) * scaleY),
+                width: Math.round(nextBoundsWidth),
+                height: Math.round(nextBoundsHeight),
+              },
+              ...(isFiniteNumber(drag?.left) ? { x: drag.left } : {}),
+              ...(isFiniteNumber(drag?.top) ? { y: drag.top } : {}),
+            } as any);
+            return;
+          }
 
           updateSelected({
-            width: nextWidth,
-            height: nextHeight,
-            crop: {
-              x: Math.round((prevCrop.x || 0) * scaleX),
-              y: Math.round((prevCrop.y || 0) * scaleY),
-              width: Math.round(nextBoundsWidth),
-              height: Math.round(nextBoundsHeight),
-            },
+            ...(isFiniteNumber(width) ? { width } : {}),
+            ...(isFiniteNumber(height) ? { height } : {}),
             ...(isFiniteNumber(drag?.left) ? { x: drag.left } : {}),
             ...(isFiniteNumber(drag?.top) ? { y: drag.top } : {}),
           } as any);
-          return;
-        }
-
-        updateSelected({
-          ...(isFiniteNumber(width) ? { width } : {}),
-          ...(isFiniteNumber(height) ? { height } : {}),
-          ...(isFiniteNumber(drag?.left) ? { x: drag.left } : {}),
-          ...(isFiniteNumber(drag?.top) ? { y: drag.top } : {}),
-        } as any);
-      }}
-      onRotate={({ target, beforeRotate }: OnRotate) => {
-        if (!target) return;
-        const nextRotation =
-          typeof beforeRotate === "number" && Number.isFinite(beforeRotate)
-            ? beforeRotate
-            : 0;
-        target.style.transform = patchTransformRotation(
-          target.style.transform,
-          nextRotation,
-        );
-        updateSelected({ rotation: nextRotation } as any);
-      }}
-    />,
-    portalContainer,
+        }}
+        onResizeEnd={() => {
+          scheduleHideGuides(1000);
+          updateSelected.flush();
+          dispatch(endHistoryTransaction());
+        }}
+        onRotateStart={() => {
+          clearGuideTimer();
+          dispatch(beginHistoryTransaction());
+        }}
+        onRotate={({ target, beforeRotate }: OnRotate) => {
+          if (!target) return;
+          const nextRotation =
+            typeof beforeRotate === "number" && Number.isFinite(beforeRotate)
+              ? beforeRotate
+              : 0;
+          target.style.transform = patchTransformRotation(
+            target.style.transform,
+            nextRotation,
+          );
+          updateSelected({ rotation: nextRotation } as any);
+        }}
+        onRotateEnd={() => {
+          scheduleHideGuides(1000);
+          updateSelected.flush();
+          dispatch(endHistoryTransaction());
+        }}
+      />
+    </>,
+    portalContainer as Element,
   );
 }

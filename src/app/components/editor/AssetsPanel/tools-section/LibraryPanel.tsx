@@ -16,8 +16,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Search, Sparkles } from "lucide-react";
+import { History, Search, Sparkles } from "lucide-react";
 import { SoraPanel } from "./SoraPanel";
+import { SoraHistoryPanel } from "./SoraHistoryPanel";
 
 type LibraryFilter = "all" | Exclude<MediaType, "unknown">;
 
@@ -35,6 +36,7 @@ export default function LibraryPanel() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<LibraryFilter>("all");
   const [aiOpen, setAiOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const normalizedQuery = useMemo(() => query.trim(), [query]);
 
@@ -53,28 +55,53 @@ export default function LibraryPanel() {
           </p>
         </div>
 
-        <Dialog open={aiOpen} onOpenChange={setAiOpen}>
-          <DialogTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="border-white/10 bg-black/30 text-white hover:bg-black/40 hover:text-white"
-            >
-              <Sparkles className="h-4 w-4" aria-hidden="true" />
-              Generate
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-xl border-white/10 bg-black/90 text-white">
-            <DialogHeader>
-              <DialogTitle>Generate with Sora</DialogTitle>
-              <DialogDescription>
-                Create a clip and send it straight to your timeline.
-              </DialogDescription>
-            </DialogHeader>
-            <SoraPanel hideHeader onGenerated={() => setAiOpen(false)} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex shrink-0 items-center gap-2">
+          <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-white/10 bg-black/30 text-white hover:bg-black/40 hover:text-white"
+              >
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
+                Generate
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl border-white/10 bg-black/90 text-white">
+              <DialogHeader>
+                <DialogTitle>Generate with Sora</DialogTitle>
+                <DialogDescription>
+                  Queue a render and track progress in History.
+                </DialogDescription>
+              </DialogHeader>
+              <SoraPanel hideHeader onGenerated={() => setAiOpen(false)} />
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-white/10 bg-black/30 text-white hover:bg-black/40 hover:text-white"
+              >
+                <History className="h-4 w-4" aria-hidden="true" />
+                History
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl border-white/10 bg-black/90 text-white">
+              <DialogHeader>
+                <DialogTitle>Sora history</DialogTitle>
+                <DialogDescription>
+                  View queued, rendering, completed, and failed generations.
+                </DialogDescription>
+              </DialogHeader>
+              <SoraHistoryPanel />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <UploadMedia variant="dropzone" className="py-3" />

@@ -3,6 +3,8 @@
 import { useAppSelector } from "@/app/store";
 import {
   applyTimelineEdit,
+  beginHistoryTransaction,
+  endHistoryTransaction,
   setActiveElement,
   setActiveElementIndex,
   setMediaFiles,
@@ -11,7 +13,7 @@ import { MediaFile, MediaType, TimelineTrack } from "@/app/types";
 import Moveable, { OnDrag, OnResize } from "react-moveable";
 import { throttle } from "lodash";
 import { useDispatch } from "react-redux";
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useReducer, useRef } from "react";
 import { Image as ImageIcon, Music, Video } from "lucide-react";
 import {
   computeRipplePlacement,
@@ -39,6 +41,7 @@ export function MediaTimelineTrack({
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const moveableRef = useRef<Record<string, Moveable | null>>({});
+  const [, forceUpdate] = useReducer((v) => v + 1, 0);
   const lastHoverTrackIdRef = useRef<string | null>(null);
   const { mediaFiles, textElements, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
@@ -256,9 +259,14 @@ export function MediaTimelineTrack({
               return (
                 <div
                   ref={(el: HTMLDivElement | null) => {
+                    const prev = targetRefs.current[clip.id] ?? null;
+                    if (prev === el) return;
                     if (el) {
                       targetRefs.current[clip.id] = el;
+                    } else {
+                      delete targetRefs.current[clip.id];
                     }
+                    forceUpdate();
                   }}
                   onClick={() => handleClick(clip.id)}
                   className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border px-2 text-sm text-white/90 shadow-sm ${
@@ -289,176 +297,209 @@ export function MediaTimelineTrack({
               );
             })()}
 
-            <Moveable
-              ref={(el: Moveable | null) => {
-                if (el) {
-                  moveableRef.current[clip.id] = el;
+            {targetRefs.current[clip.id] ? (
+              <Moveable
+                ref={(el: Moveable | null) => {
+                  if (el) {
+                    moveableRef.current[clip.id] = el;
+                  }
+                }}
+                target={targetRefs.current[clip.id] ?? null}
+                container={null}
+                renderDirections={
+                  activeElement === "media" &&
+                  mediaFiles[activeElementIndex]?.id === clip.id
+                    ? ["w", "e"]
+                    : []
                 }
-              }}
-              target={targetRefs.current[clip.id] || null}
-              container={null}
-              renderDirections={
-                activeElement === "media" &&
-                mediaFiles[activeElementIndex]?.id === clip.id
-                  ? ["w", "e"]
-                  : []
-              }
-              draggable
-              throttleDrag={0}
-              rotatable={false}
-              resizable
-              throttleResize={0}
-              linePadding={4}
-              controlPadding={6}
-              onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
-                handleClick(clip.id);
-                handleDrag(clip, target as HTMLElement, left, top);
-                reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
-              }}
-              onDragEnd={({ target, clientX, clientY }) => {
-                reportHoverTrackId(null);
-                if (!target) return;
-                onUpdateMedia.cancel();
-                (target as HTMLElement).style.top = "";
-                if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
+                draggable
+                throttleDrag={0}
+                rotatable={false}
+                resizable
+                throttleResize={0}
+                linePadding={4}
+                controlPadding={6}
+                onDragStart={() => {
+                  dispatch(beginHistoryTransaction());
+                }}
+                onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
+                  handleClick(clip.id);
+                  handleDrag(clip, target as HTMLElement, left, top);
+                  reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
+                }}
+                onDragEnd={({ target, clientX, clientY }) => {
+                  reportHoverTrackId(null);
+                  try {
+                    if (!target) return;
+                    onUpdateMedia.cancel();
+                    (target as HTMLElement).style.top = "";
+                    if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
 
-                const dropTarget = findTrackIdAtPoint(clientX, clientY);
-                const current = mediaFilesRef.current.find((m) => m.id === clip.id);
-                if (!current) return;
+                    const dropTarget = findTrackIdAtPoint(clientX, clientY);
+                    const current = mediaFilesRef.current.find((m) => m.id === clip.id);
+                    if (!current) return;
 
-                const currentTrackId =
-                  current.trackId ?? fallbackTrackIdForType[current.type] ?? trackId;
+                    const currentTrackId =
+                      current.trackId ??
+                      fallbackTrackIdForType[current.type] ??
+                      trackId;
 
-                let targetTrackId = dropTarget ?? currentTrackId;
-                let nextTracks: TimelineTrack[] | undefined;
+                    let targetTrackId = dropTarget ?? currentTrackId;
+                    let nextTracks: TimelineTrack[] | undefined;
 
-                if (
-                  dropTarget === "__new-layer-top" ||
-                  dropTarget === "__new-layer-bottom"
-                ) {
-                  const insertAt =
-                    dropTarget === "__new-layer-bottom"
-                      ? Math.min(2, tracks.length)
-                      : tracks.length;
+                    if (
+                      dropTarget === "__new-layer-top" ||
+                      dropTarget === "__new-layer-bottom"
+                    ) {
+                      const insertAt =
+                        dropTarget === "__new-layer-bottom"
+                          ? Math.min(2, tracks.length)
+                          : tracks.length;
 
-                  const originIndex = tracks.findIndex((t) => t.id === currentTrackId);
-                  const originHasOtherItems =
-                    mediaFilesRef.current.some(
-                      (m) =>
-                        m.id !== current.id &&
-                        (m.trackId ?? fallbackTrackIdForType[m.type]) === currentTrackId,
-                    ) ||
-                    textElementsRef.current.some(
-                      (t) => (t.trackId ?? fallbackTextTrackId) === currentTrackId,
+                      const originIndex = tracks.findIndex(
+                        (t) => t.id === currentTrackId,
+                      );
+                      const originHasOtherItems =
+                        mediaFilesRef.current.some(
+                          (m) =>
+                            m.id !== current.id &&
+                            (m.trackId ?? fallbackTrackIdForType[m.type]) ===
+                              currentTrackId,
+                        ) ||
+                        textElementsRef.current.some(
+                          (t) => (t.trackId ?? fallbackTextTrackId) === currentTrackId,
+                        );
+
+                      const reuseOriginTrack = originIndex >= 2 && !originHasOtherItems;
+
+                      if (reuseOriginTrack) {
+                        const desiredIndex =
+                          dropTarget === "__new-layer-top"
+                            ? tracks.length - 1
+                            : insertAt;
+                        if (originIndex !== desiredIndex) {
+                          nextTracks = moveArrayItem(tracks, originIndex, insertAt);
+                        }
+                        targetTrackId = currentTrackId;
+                      } else {
+                        const nextId = crypto.randomUUID();
+                        const newTrack: TimelineTrack = {
+                          id: nextId,
+                          kind: "layer",
+                          name: `Layer ${insertAt + 1}`,
+                        };
+                        nextTracks = [
+                          ...tracks.slice(0, insertAt),
+                          newTrack,
+                          ...tracks.slice(insertAt),
+                        ];
+                        targetTrackId = nextId;
+                      }
+                    }
+
+                    if (!targetTrackId) return;
+
+                    const rawLeft = Number.parseFloat(
+                      (target as HTMLElement).style.left || "0",
+                    );
+                    const leftPx = Number.isFinite(rawLeft)
+                      ? Math.max(0, rawLeft)
+                      : 0;
+                    const desiredStart = leftPx / zoom;
+
+                    const duration = Math.max(
+                      0,
+                      current.positionEnd - current.positionStart,
                     );
 
-                  const reuseOriginTrack = originIndex >= 2 && !originHasOtherItems;
+                    const bounds = getTrackBounds(targetTrackId);
+                    const placement = computeRipplePlacement({
+                      clips: bounds,
+                      movingId: current.id,
+                      desiredStart,
+                      duration,
+                    });
 
-                  if (reuseOriginTrack) {
-                    const desiredIndex =
-                      dropTarget === "__new-layer-top" ? tracks.length - 1 : insertAt;
-                    if (originIndex !== desiredIndex) {
-                      nextTracks = moveArrayItem(tracks, originIndex, insertAt);
-                    }
-                    targetTrackId = currentTrackId;
-                  } else {
-                    const nextId = crypto.randomUUID();
-                    const newTrack: TimelineTrack = {
-                      id: nextId,
-                      kind: "layer",
-                      name: `Layer ${insertAt + 1}`,
-                    };
-                    nextTracks = [
-                      ...tracks.slice(0, insertAt),
-                      newTrack,
-                      ...tracks.slice(insertAt),
-                    ];
-                    targetTrackId = nextId;
+                    const nextMediaFiles = mediaFilesRef.current.map((m) => {
+                      if (m.id === current.id) {
+                        return {
+                          ...m,
+                          trackId: targetTrackId,
+                          positionStart: placement.start,
+                          positionEnd: placement.end,
+                        };
+                      }
+
+                      const delta = placement.shifts[m.id];
+                      if (
+                        typeof delta !== "number" ||
+                        !Number.isFinite(delta) ||
+                        delta === 0
+                      ) {
+                        return m;
+                      }
+
+                      return {
+                        ...m,
+                        positionStart: m.positionStart + delta,
+                        positionEnd: m.positionEnd + delta,
+                      };
+                    });
+
+                    const nextTextElements = textElementsRef.current.map((t) => {
+                      const delta = placement.shifts[t.id];
+                      if (
+                        typeof delta !== "number" ||
+                        !Number.isFinite(delta) ||
+                        delta === 0
+                      ) {
+                        return t;
+                      }
+                      return {
+                        ...t,
+                        positionStart: t.positionStart + delta,
+                        positionEnd: t.positionEnd + delta,
+                      };
+                    });
+
+                    dispatch(
+                      applyTimelineEdit({
+                        ...(nextTracks ? { tracks: nextTracks } : {}),
+                        mediaFiles: nextMediaFiles,
+                        textElements: nextTextElements,
+                      }),
+                    );
+                  } finally {
+                    dispatch(endHistoryTransaction());
                   }
+                }}
+                onResizeStart={() => {
+                  dispatch(beginHistoryTransaction());
+                }}
+                onResize={({ target, width, delta, direction }: OnResize) => {
+                  if (!isFiniteNumber(width)) return;
+                  if (direction[0] === 1) {
+                    handleClick(clip.id);
+                    delta[0] && (target!.style.width = `${width}px`);
+                    handleRightResize(clip, target as HTMLElement, width);
+                  } else if (direction[0] === -1) {
+                    handleClick(clip.id);
+                    delta[0] && (target!.style.width = `${width}px`);
+                    handleLeftResize(clip, target as HTMLElement, width);
+                  }
+                }}
+                onResizeEnd={() => {
+                  onUpdateMedia.flush();
+                  dispatch(endHistoryTransaction());
+                }}
+                className={
+                  activeElement === "media" &&
+                  mediaFiles[activeElementIndex]?.id === clip.id
+                    ? "moveable-timeline"
+                    : "moveable-control-box-hidden"
                 }
-
-                if (!targetTrackId) return;
-
-                const rawLeft = Number.parseFloat(
-                  (target as HTMLElement).style.left || "0",
-                );
-                const leftPx = Number.isFinite(rawLeft) ? Math.max(0, rawLeft) : 0;
-                const desiredStart = leftPx / zoom;
-
-                const duration = Math.max(
-                  0,
-                  current.positionEnd - current.positionStart,
-                );
-
-                const bounds = getTrackBounds(targetTrackId);
-                const placement = computeRipplePlacement({
-                  clips: bounds,
-                  movingId: current.id,
-                  desiredStart,
-                  duration,
-                });
-
-                const nextMediaFiles = mediaFilesRef.current.map((m) => {
-                  if (m.id === current.id) {
-                    return {
-                      ...m,
-                      trackId: targetTrackId,
-                      positionStart: placement.start,
-                      positionEnd: placement.end,
-                    };
-                  }
-
-                  const delta = placement.shifts[m.id];
-                  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
-                    return m;
-                  }
-
-                  return {
-                    ...m,
-                    positionStart: m.positionStart + delta,
-                    positionEnd: m.positionEnd + delta,
-                  };
-                });
-
-                const nextTextElements = textElementsRef.current.map((t) => {
-                  const delta = placement.shifts[t.id];
-                  if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
-                    return t;
-                  }
-                  return {
-                    ...t,
-                    positionStart: t.positionStart + delta,
-                    positionEnd: t.positionEnd + delta,
-                  };
-                });
-
-                dispatch(
-                  applyTimelineEdit({
-                    ...(nextTracks ? { tracks: nextTracks } : {}),
-                    mediaFiles: nextMediaFiles,
-                    textElements: nextTextElements,
-                  }),
-                );
-              }}
-              onResize={({ target, width, delta, direction }: OnResize) => {
-                if (!isFiniteNumber(width)) return;
-                if (direction[0] === 1) {
-                  handleClick(clip.id);
-                  delta[0] && (target!.style.width = `${width}px`);
-                  handleRightResize(clip, target as HTMLElement, width);
-                } else if (direction[0] === -1) {
-                  handleClick(clip.id);
-                  delta[0] && (target!.style.width = `${width}px`);
-                  handleLeftResize(clip, target as HTMLElement, width);
-                }
-              }}
-              className={
-                activeElement === "media" &&
-                mediaFiles[activeElementIndex]?.id === clip.id
-                  ? "moveable-timeline"
-                  : "moveable-control-box-hidden"
-              }
-            />
+              />
+            ) : null}
           </div>
         ))}
     </div>

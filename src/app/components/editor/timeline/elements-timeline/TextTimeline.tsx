@@ -1,8 +1,10 @@
-import React, { useRef, useMemo, useEffect } from "react";
+import React, { useEffect, useMemo, useReducer, useRef } from "react";
 import Moveable, { OnDrag, OnResize } from "react-moveable";
 import { useAppSelector } from "@/app/store";
 import {
   applyTimelineEdit,
+  beginHistoryTransaction,
+  endHistoryTransaction,
   setActiveElement,
   setActiveElementIndex,
   setTextElements,
@@ -32,6 +34,7 @@ export default function TextTimeline({
   onDragHoverTrackId,
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [, forceUpdate] = useReducer((v) => v + 1, 0);
   const { textElements, mediaFiles, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
@@ -209,9 +212,14 @@ export default function TextTimeline({
         <React.Fragment key={clip.id}>
           <div
             ref={(el: HTMLDivElement | null) => {
+              const prev = targetRefs.current[clip.id] ?? null;
+              if (prev === el) return;
               if (el) {
                 targetRefs.current[clip.id] = el;
+              } else {
+                delete targetRefs.current[clip.id];
               }
+              forceUpdate();
             }}
             onClick={() => handleClick("text", clip.id)}
             className={`absolute top-2 flex h-12 cursor-pointer items-center gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 px-2 text-sm text-white/90 shadow-sm ${
@@ -239,170 +247,201 @@ export default function TextTimeline({
             <span className="truncate text-x">{clip.text}</span>
           </div>
 
-          <Moveable
-            ref={(el: Moveable | null) => {
-              if (el) {
-                moveableRef.current[clip.id] = el;
+          {targetRefs.current[clip.id] ? (
+            <Moveable
+              ref={(el: Moveable | null) => {
+                if (el) {
+                  moveableRef.current[clip.id] = el;
+                }
+              }}
+              target={targetRefs.current[clip.id] ?? null}
+              container={null}
+              className={
+                activeElement === "text" &&
+                textElements[activeElementIndex]?.id === clip.id
+                  ? "moveable-timeline"
+                  : "moveable-control-box-hidden"
               }
-            }}
-            target={targetRefs.current[clip.id] || null}
-            container={null}
-            className={
-              activeElement === "text" &&
-              textElements[activeElementIndex]?.id === clip.id
-                ? "moveable-timeline"
-                : "moveable-control-box-hidden"
-            }
-            renderDirections={
-              activeElement === "text" &&
-              textElements[activeElementIndex]?.id === clip.id
-                ? ["w", "e"]
-                : []
-            }
-            draggable={true}
-            throttleDrag={0}
-            rotatable={false}
-            linePadding={4}
-            controlPadding={6}
-            onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
-              handleClick("text", clip.id);
-              handleDragWithDrop(clip, target as HTMLElement, left, top);
-              reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
-            }}
-            onDragEnd={({ target, clientX, clientY }) => {
-              reportHoverTrackId(null);
-              if (!target) return;
-              onUpdateText.cancel();
-              (target as HTMLElement).style.top = "";
-              if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
+              renderDirections={
+                activeElement === "text" &&
+                textElements[activeElementIndex]?.id === clip.id
+                  ? ["w", "e"]
+                  : []
+              }
+              draggable={true}
+              throttleDrag={0}
+              rotatable={false}
+              linePadding={4}
+              controlPadding={6}
+              onDragStart={() => {
+                dispatch(beginHistoryTransaction());
+              }}
+              onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
+                handleClick("text", clip.id);
+                handleDragWithDrop(clip, target as HTMLElement, left, top);
+                reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
+              }}
+              onDragEnd={({ target, clientX, clientY }) => {
+                reportHoverTrackId(null);
+                try {
+                  if (!target) return;
+                  onUpdateText.cancel();
+                  (target as HTMLElement).style.top = "";
+                  if (!isFiniteNumber(clientX) || !isFiniteNumber(clientY)) return;
 
-              const dropTarget = findTrackIdAtPoint(clientX, clientY);
-              const current = textElementsRef.current.find((t) => t.id === clip.id);
-              if (!current) return;
+                  const dropTarget = findTrackIdAtPoint(clientX, clientY);
+                  const current = textElementsRef.current.find(
+                    (t) => t.id === clip.id,
+                  );
+                  if (!current) return;
 
-              const currentTrackId =
-                current.trackId ?? fallbackTrackId ?? trackId;
+                  const currentTrackId = current.trackId ?? fallbackTrackId ?? trackId;
 
-              let targetTrackId = dropTarget ?? currentTrackId;
-              let nextTracks: TimelineTrack[] | undefined;
+                  let targetTrackId = dropTarget ?? currentTrackId;
+                  let nextTracks: TimelineTrack[] | undefined;
 
-              if (
-                dropTarget === "__new-layer-top" ||
-                dropTarget === "__new-layer-bottom"
-              ) {
-                const insertAt =
-                  dropTarget === "__new-layer-bottom"
-                    ? Math.min(2, tracks.length)
-                    : tracks.length;
+                  if (
+                    dropTarget === "__new-layer-top" ||
+                    dropTarget === "__new-layer-bottom"
+                  ) {
+                    const insertAt =
+                      dropTarget === "__new-layer-bottom"
+                        ? Math.min(2, tracks.length)
+                        : tracks.length;
 
-                const originIndex = tracks.findIndex((t) => t.id === currentTrackId);
-                const originHasOtherItems =
-                  textElementsRef.current.some(
-                    (t) =>
-                      t.id !== current.id &&
-                      (t.trackId ?? fallbackTrackId) === currentTrackId,
-                  ) || mediaFilesRef.current.some((m) => m.trackId === currentTrackId);
+                    const originIndex = tracks.findIndex((t) => t.id === currentTrackId);
+                    const originHasOtherItems =
+                      textElementsRef.current.some(
+                        (t) =>
+                          t.id !== current.id &&
+                          (t.trackId ?? fallbackTrackId) === currentTrackId,
+                      ) ||
+                      mediaFilesRef.current.some((m) => m.trackId === currentTrackId);
 
-                const reuseOriginTrack = originIndex >= 2 && !originHasOtherItems;
+                    const reuseOriginTrack = originIndex >= 2 && !originHasOtherItems;
 
-                if (reuseOriginTrack) {
-                  const desiredIndex =
-                    dropTarget === "__new-layer-top" ? tracks.length - 1 : insertAt;
-                  if (originIndex !== desiredIndex) {
-                    nextTracks = moveArrayItem(tracks, originIndex, insertAt);
+                    if (reuseOriginTrack) {
+                      const desiredIndex =
+                        dropTarget === "__new-layer-top"
+                          ? tracks.length - 1
+                          : insertAt;
+                      if (originIndex !== desiredIndex) {
+                        nextTracks = moveArrayItem(tracks, originIndex, insertAt);
+                      }
+                      targetTrackId = currentTrackId;
+                    } else {
+                      const nextId = crypto.randomUUID();
+                      const newTrack: TimelineTrack = {
+                        id: nextId,
+                        kind: "layer",
+                        name: `Layer ${insertAt + 1}`,
+                      };
+                      nextTracks = [
+                        ...tracks.slice(0, insertAt),
+                        newTrack,
+                        ...tracks.slice(insertAt),
+                      ];
+                      targetTrackId = nextId;
+                    }
                   }
-                  targetTrackId = currentTrackId;
-                } else {
-                  const nextId = crypto.randomUUID();
-                  const newTrack: TimelineTrack = {
-                    id: nextId,
-                    kind: "layer",
-                    name: `Layer ${insertAt + 1}`,
-                  };
-                  nextTracks = [
-                    ...tracks.slice(0, insertAt),
-                    newTrack,
-                    ...tracks.slice(insertAt),
-                  ];
-                  targetTrackId = nextId;
+
+                  if (!targetTrackId) return;
+
+                  const rawLeft = Number.parseFloat(
+                    (target as HTMLElement).style.left || "0",
+                  );
+                  const leftPx = Number.isFinite(rawLeft) ? Math.max(0, rawLeft) : 0;
+                  const desiredStart = leftPx / zoom;
+
+                  const duration = Math.max(
+                    0,
+                    current.positionEnd - current.positionStart,
+                  );
+
+                  const bounds = getTrackBounds(targetTrackId);
+                  const placement = computeRipplePlacement({
+                    clips: bounds,
+                    movingId: current.id,
+                    desiredStart,
+                    duration,
+                  });
+
+                  const nextTextElements = textElementsRef.current.map((t) => {
+                    if (t.id === current.id) {
+                      return {
+                        ...t,
+                        trackId: targetTrackId,
+                        positionStart: placement.start,
+                        positionEnd: placement.end,
+                      };
+                    }
+
+                    const delta = placement.shifts[t.id];
+                    if (
+                      typeof delta !== "number" ||
+                      !Number.isFinite(delta) ||
+                      delta === 0
+                    ) {
+                      return t;
+                    }
+
+                    return {
+                      ...t,
+                      positionStart: t.positionStart + delta,
+                      positionEnd: t.positionEnd + delta,
+                    };
+                  });
+
+                  const nextMediaFiles = mediaFilesRef.current.map((m) => {
+                    const delta = placement.shifts[m.id];
+                    if (
+                      typeof delta !== "number" ||
+                      !Number.isFinite(delta) ||
+                      delta === 0
+                    ) {
+                      return m;
+                    }
+                    return {
+                      ...m,
+                      positionStart: m.positionStart + delta,
+                      positionEnd: m.positionEnd + delta,
+                    };
+                  });
+
+                  dispatch(
+                    applyTimelineEdit({
+                      ...(nextTracks ? { tracks: nextTracks } : {}),
+                      mediaFiles: nextMediaFiles,
+                      textElements: nextTextElements,
+                    }),
+                  );
+                } finally {
+                  dispatch(endHistoryTransaction());
                 }
-              }
-
-              if (!targetTrackId) return;
-
-              const rawLeft = Number.parseFloat(
-                (target as HTMLElement).style.left || "0",
-              );
-              const leftPx = Number.isFinite(rawLeft) ? Math.max(0, rawLeft) : 0;
-              const desiredStart = leftPx / zoom;
-
-              const duration = Math.max(0, current.positionEnd - current.positionStart);
-
-              const bounds = getTrackBounds(targetTrackId);
-              const placement = computeRipplePlacement({
-                clips: bounds,
-                movingId: current.id,
-                desiredStart,
-                duration,
-              });
-
-              const nextTextElements = textElementsRef.current.map((t) => {
-                if (t.id === current.id) {
-                  return {
-                    ...t,
-                    trackId: targetTrackId,
-                    positionStart: placement.start,
-                    positionEnd: placement.end,
-                  };
+              }}
+              resizable={true}
+              throttleResize={0}
+              onResizeStart={() => {
+                dispatch(beginHistoryTransaction());
+              }}
+              onResize={({ target, width, delta, direction }: OnResize) => {
+                if (!isFiniteNumber(width)) return;
+                if (direction[0] === 1) {
+                  handleClick("text", clip.id);
+                  delta[0] && (target!.style.width = `${width}px`);
+                  handleResize(clip, target as HTMLElement, width);
+                } else if (direction[0] === -1) {
+                  handleClick("text", clip.id);
+                  delta[0] && (target!.style.width = `${width}px`);
+                  handleLeftResize(clip, target as HTMLElement, width);
                 }
-
-                const delta = placement.shifts[t.id];
-                if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
-                  return t;
-                }
-
-                return {
-                  ...t,
-                  positionStart: t.positionStart + delta,
-                  positionEnd: t.positionEnd + delta,
-                };
-              });
-
-              const nextMediaFiles = mediaFilesRef.current.map((m) => {
-                const delta = placement.shifts[m.id];
-                if (typeof delta !== "number" || !Number.isFinite(delta) || delta === 0) {
-                  return m;
-                }
-                return {
-                  ...m,
-                  positionStart: m.positionStart + delta,
-                  positionEnd: m.positionEnd + delta,
-                };
-              });
-
-              dispatch(
-                applyTimelineEdit({
-                  ...(nextTracks ? { tracks: nextTracks } : {}),
-                  mediaFiles: nextMediaFiles,
-                  textElements: nextTextElements,
-                }),
-              );
-            }}
-            resizable={true}
-            throttleResize={0}
-            onResize={({ target, width, delta, direction }: OnResize) => {
-              if (!isFiniteNumber(width)) return;
-              if (direction[0] === 1) {
-                handleClick("text", clip.id);
-                delta[0] && (target!.style.width = `${width}px`);
-                handleResize(clip, target as HTMLElement, width);
-              } else if (direction[0] === -1) {
-                handleClick("text", clip.id);
-                delta[0] && (target!.style.width = `${width}px`);
-                handleLeftResize(clip, target as HTMLElement, width);
-              }
-            }}
-          />
+              }}
+              onResizeEnd={() => {
+                onUpdateText.flush();
+                dispatch(endHistoryTransaction());
+              }}
+            />
+          ) : null}
         </React.Fragment>
       ))}
     </>

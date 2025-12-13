@@ -27,16 +27,38 @@
 }
 
 .moveable-control-box.moveable-canvas .moveable-control {
-  width: 18px !important;
-  height: 18px !important;
-  margin-top: -9px !important;
-  margin-left: -9px !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin-top: -11px !important;
+  margin-left: -11px !important;
   border-radius: 9999px !important;
   background: #ffffff !important;
   border: 2px solid rgba(96, 165, 250, 0.95) !important;
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.7),
     0 6px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+.moveable-control-box.moveable-canvas .moveable-rotation-control {
+  width: 28px !important;
+  height: 28px !important;
+  margin-top: -14px !important;
+  margin-left: -14px !important;
+  border-radius: 9999px !important;
+  background: rgba(0, 0, 0, 0.85) !important;
+  border: 2px solid rgba(34, 211, 238, 0.95) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    0 10px 22px rgba(0, 0, 0, 0.45) !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.moveable-control-box.moveable-canvas .moveable-rotation-control::after {
+  content: "⟲";
+  font-size: 14px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .moveable-control-box.moveable-timeline .moveable-control {

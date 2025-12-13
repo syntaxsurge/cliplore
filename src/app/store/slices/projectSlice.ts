@@ -9,6 +9,8 @@ import {
   ProjectExport,
   ProjectPublishRecord,
   RenderEngine,
+  SoraJob,
+  SoraJobStatus,
   TimelineTrack,
   TimelineMarker,
   TrackKind,
@@ -111,6 +113,7 @@ export const createProjectState = (
     textElements: [],
     tracks: normalizeTracks(undefined),
     markers: normalizeMarkers(undefined),
+    soraJobs: [],
     exports: [],
     currentTime: 0,
     isPlaying: false,
@@ -128,6 +131,7 @@ export const createProjectState = (
     aspectRatio: "16:9",
     history: [],
     future: [],
+    historyLockDepth: 0,
     ...restOverrides,
     exportSettings: {
       ...defaultExportSettings,
@@ -140,11 +144,26 @@ export const createProjectState = (
 };
 
 const snapshotState = (state: ProjectState): ProjectHistoryEntry => {
-  const { history, future, ...rest } = state;
+  const {
+    history,
+    future,
+    historyLockDepth,
+    currentTime,
+    isPlaying,
+    isMuted,
+    timelineZoom,
+    enableMarkerTracking,
+    activeSection,
+    activeElement,
+    activeElementIndex,
+    soraJobs,
+    ...rest
+  } = state;
   return JSON.parse(JSON.stringify(rest));
 };
 
 const pushHistory = (state: ProjectState) => {
+  if (state.historyLockDepth > 0) return;
   const snap = snapshotState(state);
   state.history = [...state.history, snap].slice(-MAX_HISTORY);
   state.future = [];
@@ -186,6 +205,7 @@ const projectStateSlice = createSlice({
         mediaFiles?: MediaFile[];
         textElements?: TextElement[];
         tracks?: TimelineTrack[];
+        filesID?: string[];
       }>,
     ) => {
       pushHistory(state);
@@ -197,6 +217,9 @@ const projectStateSlice = createSlice({
       }
       if (Array.isArray(action.payload.tracks)) {
         state.tracks = normalizeTracks(action.payload.tracks);
+      }
+      if (Array.isArray(action.payload.filesID)) {
+        state.filesID = action.payload.filesID;
       }
       state.duration = calculateTotalDuration(state.mediaFiles, state.textElements);
       pruneEmptyTracks(state);
@@ -324,10 +347,9 @@ const projectStateSlice = createSlice({
       state.isPlaying = action.payload;
     },
     setIsMuted: (state, action: PayloadAction<boolean>) => {
-      pushHistory(state);
       state.isMuted = action.payload;
     },
-    setActiveSection: (state, action: PayloadAction<ActiveElement>) => {
+    setActiveSection: (state, action: PayloadAction<ActiveElement | null>) => {
       state.activeSection = action.payload;
     },
     setActiveElement: (state, action: PayloadAction<ActiveElement | null>) => {
@@ -382,12 +404,78 @@ const projectStateSlice = createSlice({
       exp.publish = action.payload.publish;
     },
     setTimelineZoom: (state, action: PayloadAction<number>) => {
-      pushHistory(state);
       state.timelineZoom = action.payload;
     },
     setMarkerTrack: (state, action: PayloadAction<boolean>) => {
-      pushHistory(state);
       state.enableMarkerTracking = action.payload;
+    },
+    beginHistoryTransaction: (state) => {
+      if (state.historyLockDepth === 0) {
+        pushHistory(state);
+      }
+      state.historyLockDepth += 1;
+    },
+    endHistoryTransaction: (state) => {
+      state.historyLockDepth = Math.max(0, state.historyLockDepth - 1);
+      if (state.historyLockDepth === 0) {
+        state.lastModified = new Date().toISOString();
+      }
+    },
+    addSoraJob: (state, action: PayloadAction<SoraJob>) => {
+      const job = action.payload;
+      state.soraJobs = [job, ...(state.soraJobs ?? [])].slice(0, 50);
+    },
+    updateSoraJob: (
+      state,
+      action: PayloadAction<{
+        id: string;
+        status?: SoraJobStatus;
+        jobId?: string;
+        message?: string | null;
+        error?: string | null;
+        contentUrl?: string | null;
+        fileId?: string;
+        mediaId?: string;
+        updatedAt?: string;
+      }>,
+    ) => {
+      state.soraJobs = (state.soraJobs ?? []).map((job) => {
+        if (job.id !== action.payload.id) return job;
+        return {
+          ...job,
+          ...(typeof action.payload.status === "string"
+            ? { status: action.payload.status }
+            : {}),
+          ...(typeof action.payload.jobId === "string"
+            ? { jobId: action.payload.jobId }
+            : {}),
+          ...(action.payload.message !== undefined
+            ? { message: action.payload.message ?? undefined }
+            : {}),
+          ...(action.payload.error !== undefined
+            ? { error: action.payload.error ?? undefined }
+            : {}),
+          ...(action.payload.contentUrl !== undefined
+            ? { contentUrl: action.payload.contentUrl }
+            : {}),
+          ...(typeof action.payload.fileId === "string"
+            ? { fileId: action.payload.fileId }
+            : {}),
+          ...(typeof action.payload.mediaId === "string"
+            ? { mediaId: action.payload.mediaId }
+            : {}),
+          updatedAt:
+            typeof action.payload.updatedAt === "string"
+              ? action.payload.updatedAt
+              : new Date().toISOString(),
+        };
+      });
+    },
+    deleteSoraJob: (state, action: PayloadAction<string>) => {
+      state.soraJobs = (state.soraJobs ?? []).filter((job) => job.id !== action.payload);
+    },
+    clearSoraJobs: (state) => {
+      state.soraJobs = [];
     },
     // Special reducer for rehydrating state from IndexedDB
     rehydrate: (state, action: PayloadAction<ProjectState>) => {
@@ -396,6 +484,64 @@ const projectStateSlice = createSlice({
         ...state.exportSettings,
         ...action.payload.exportSettings,
       };
+
+      const rawActiveSection = (action.payload as any).activeSection as unknown;
+      next.activeSection =
+        rawActiveSection === null ||
+        rawActiveSection === "media" ||
+        rawActiveSection === "text" ||
+        rawActiveSection === "export"
+          ? (rawActiveSection as any)
+          : "media";
+      next.historyLockDepth = 0;
+      next.soraJobs = Array.isArray((action.payload as any).soraJobs)
+        ? ((action.payload as any).soraJobs as unknown[])
+            .filter((job) => job && typeof job === "object")
+            .map((job) => ({
+              id: typeof (job as any).id === "string" ? (job as any).id : crypto.randomUUID(),
+              jobId: typeof (job as any).jobId === "string" ? (job as any).jobId : undefined,
+              model:
+                (job as any).model === "sora-2" || (job as any).model === "sora-2-pro"
+                  ? (job as any).model
+                  : undefined,
+              prompt: typeof (job as any).prompt === "string" ? (job as any).prompt : "",
+              seconds:
+                (job as any).seconds === 4 || (job as any).seconds === 8 || (job as any).seconds === 12
+                  ? (job as any).seconds
+                  : 8,
+              size:
+                (job as any).size === "720x1280" ||
+                (job as any).size === "1280x720" ||
+                (job as any).size === "1024x1792" ||
+                (job as any).size === "1792x1024"
+                  ? (job as any).size
+                  : "1280x720",
+              status:
+                (job as any).status === "queued" ||
+                (job as any).status === "creating" ||
+                (job as any).status === "polling" ||
+                (job as any).status === "downloading" ||
+                (job as any).status === "completed" ||
+                (job as any).status === "failed"
+                  ? (job as any).status
+                  : "failed",
+              createdAt:
+                typeof (job as any).createdAt === "string"
+                  ? (job as any).createdAt
+                  : new Date().toISOString(),
+              updatedAt:
+                typeof (job as any).updatedAt === "string"
+                  ? (job as any).updatedAt
+                  : new Date().toISOString(),
+              message: typeof (job as any).message === "string" ? (job as any).message : undefined,
+              error: typeof (job as any).error === "string" ? (job as any).error : undefined,
+              contentUrl:
+                typeof (job as any).contentUrl === "string" ? (job as any).contentUrl : null,
+              fileId: typeof (job as any).fileId === "string" ? (job as any).fileId : undefined,
+              mediaId: typeof (job as any).mediaId === "string" ? (job as any).mediaId : undefined,
+            }))
+            .slice(0, 50)
+        : [];
 
       next.tracks = normalizeTracks((action.payload as any).tracks);
       next.markers = normalizeMarkers((action.payload as any).markers);
@@ -508,6 +654,7 @@ const projectStateSlice = createSlice({
         ...last,
         history: state.history,
         future: state.future,
+        historyLockDepth: 0,
       });
     },
     redoState: (state) => {
@@ -520,6 +667,7 @@ const projectStateSlice = createSlice({
         ...next,
         history: state.history,
         future: state.future,
+        historyLockDepth: 0,
       });
     },
   },
@@ -553,6 +701,12 @@ export const {
   setActiveElement,
   setActiveElementIndex,
   setTimelineZoom,
+  beginHistoryTransaction,
+  endHistoryTransaction,
+  addSoraJob,
+  updateSoraJob,
+  deleteSoraJob,
+  clearSoraJobs,
   rehydrate,
   createNewProject,
   undoState,
