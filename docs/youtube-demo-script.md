@@ -173,7 +173,7 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
      - Title = [DATASET_TITLE="POV Sidewalks v1"]
      - Description = [DATASET_DESC="Rights-cleared POV navigation sample with structured metadata, hashed artifacts, and Story licensing."]
      - Dataset type = [DATASET_TYPE="PoV video"] (leave default)
-     - Dataset version = [DATASET_VERSION="1.0.0"]
+     - Dataset version = [DATASET_VERSION="1.0.0"] (leave default)
      - Modalities = [DATASET_MODALITIES="video"] (leave default)
      - Tags = [DATASET_TAGS="pov-video, outdoors, handheld"]
      Optional (skip for this demo): Capture + Notes + Optional sections.
