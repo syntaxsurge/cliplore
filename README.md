@@ -54,6 +54,14 @@ Set these in `.env.local`:
 OPENAI_BYOK_COOKIE_SECRET= # used to encrypt/decrypt the user's OpenAI key cookie
 PINATA_JWT=Bearer ...
 
+# Backblaze B2 (S3-compatible; used for direct-from-browser uploads)
+B2_S3_ENDPOINT=https://s3.<region>.backblazeb2.com
+B2_S3_REGION=<region>
+B2_ACCESS_KEY_ID=
+B2_SECRET_ACCESS_KEY=
+B2_BUCKET=
+B2_PUBLIC_BASE_URL= # optional (defaults to `${B2_S3_ENDPOINT}/${B2_BUCKET}`)
+
 CONVEX_DEPLOYMENT=dev:your-deployment-slug # used by Convex CLI for local dev
 CONVEX_RESET_TOKEN= # optional, required for `pnpm run convex:reset`
 CONVEX_RESET_BATCH=128
@@ -68,3 +76,5 @@ NEXT_PUBLIC_DIFFUSION_LICENSE_KEY=... # optional, removes Diffusion Core waterma
 ```
 
 OpenAI API keys are entered by the user in `Settings → AI` and stored on the device as an encrypted, HTTP-only cookie.
+
+For Backblaze uploads in production, the B2 bucket CORS must allow browser `PUT` from your deployed origin (for example `https://cliplore.com`). Update bucket CORS via `pnpm b2:set-cors -- --origin https://cliplore.com`.
