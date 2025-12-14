@@ -216,13 +216,3 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   6. **Verify on-screen:** Confirm navigation between Dashboard → Studio → Assets works without losing wallet connection (address chip remains visible).
 - **Voiceover:**
   > “Finally, the creator Dashboard ties it together: projects, published IP, and activity at a glance. From here, you can jump back into Studio to create, Assets to manage, or Enforcement to verify.”
-
-## Final Wrap-Up
-- **URL:** https://cliplore.com/demo
-- **Shot:** Demo hub with five genre cards and quick nav access to Studio, Explore, Datasets, Assets, and Enforcement.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/dashboard — confirm the header shows “Demo”.
-  2. **Current page:** https://cliplore.com/dashboard — **Navigate:** Click “Demo” in the header → lands on https://cliplore.com/demo — confirm heading “Demos” is visible.
-  3. **Verify final state:** Confirm the five demo cards are visible and each has “Open demo” and “YouTube”, proving Generative Video outputs + prompts are documented alongside Story links.
-- **Voiceover:**
-  > “We just demoed ClipLore across tracks: Generative Video demos with exact prompts, a Creative Front-End editor with Sora BYOK, Story publishing with IPFS fingerprints, IPFi licensing plus real MetaMask transactions for mint, tip, claim, and fractionalize, Data datasets registration, and IP Detection & Enforcement for verification and disputes. Try it at [DEMO_URL=https://cliplore.com/demo].”
