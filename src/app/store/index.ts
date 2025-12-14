@@ -106,6 +106,46 @@ export const listFiles = async () => {
   }
 };
 
+const stripMediaSrc = (media: any) => {
+  if (!media || typeof media !== "object") return media;
+  const { src: _src, ...rest } = media;
+  return rest;
+};
+
+const sanitizeProjectForStorage = (project: any) => {
+  if (!project || typeof project !== "object") return project;
+
+  const sanitized = { ...project };
+
+  if (Array.isArray(sanitized.mediaFiles)) {
+    sanitized.mediaFiles = sanitized.mediaFiles.map(stripMediaSrc);
+  }
+
+  if (Array.isArray(sanitized.history)) {
+    sanitized.history = sanitized.history.map((entry: any) => {
+      if (!entry || typeof entry !== "object") return entry;
+      const nextEntry = { ...entry };
+      if (Array.isArray(nextEntry.mediaFiles)) {
+        nextEntry.mediaFiles = nextEntry.mediaFiles.map(stripMediaSrc);
+      }
+      return nextEntry;
+    });
+  }
+
+  if (Array.isArray(sanitized.future)) {
+    sanitized.future = sanitized.future.map((entry: any) => {
+      if (!entry || typeof entry !== "object") return entry;
+      const nextEntry = { ...entry };
+      if (Array.isArray(nextEntry.mediaFiles)) {
+        nextEntry.mediaFiles = nextEntry.mediaFiles.map(stripMediaSrc);
+      }
+      return nextEntry;
+    });
+  }
+
+  return sanitized;
+};
+
 // Project storage functions
 export const storeProject = async (project: any) => {
   if (typeof window === "undefined") return null;
@@ -117,7 +157,7 @@ export const storeProject = async (project: any) => {
       return null;
     }
 
-    await db.put("projects", project);
+    await db.put("projects", sanitizeProjectForStorage(project));
 
     return project.id;
   } catch (error) {
@@ -132,7 +172,8 @@ export const getProject = async (projectId: string) => {
   try {
     const db = await setupDB();
     if (!db) return null;
-    return await db.get("projects", projectId);
+    const project = await db.get("projects", projectId);
+    return project ? sanitizeProjectForStorage(project) : null;
   } catch (error) {
     toast.error("Error retrieving project");
     console.error("Error retrieving project:", error);
@@ -157,7 +198,10 @@ export const listProjects = async () => {
   try {
     const db = await setupDB();
     if (!db) return [];
-    return await db.getAll("projects");
+    const projects = await db.getAll("projects");
+    return Array.isArray(projects)
+      ? projects.map((project) => sanitizeProjectForStorage(project))
+      : [];
   } catch (error) {
     console.error("Error listing projects:", error);
     return [];

@@ -403,7 +403,7 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
 - **Routing**: Next.js App Router under `src/app`, with `(marketing)` for public routes and `(app)` for wallet-gated routes.
 - **UI**: Tailwind + shadcn-style primitives in `src/components/ui`; global header/footer under `src/app/components`.
 - **Cross-origin isolation**: `/projects/*` sends COOP/COEP headers for the in-browser render stack while marketing routes keep standard third-party embed behavior.
-- **State & persistence**: Redux store under `src/app/store` with projects persisted locally in the browser (import/export supported).
+- **State & persistence**: Redux store under `src/app/store` with projects persisted locally in IndexedDB (import/export supported); media binaries are stored separately by `fileId` and `mediaFiles[].src` is rehydrated client-side from stored files.
 - **Wallet**: Wagmi + RainbowKit in `src/app/providers.tsx`; `(app)/layout.tsx` gates authenticated routes by wallet connection.
 - **Backend**: Convex used for syncing user/project metadata and listing IP assets in the marketplace.
 - **Story publishing**: The publish wizard pins IPA metadata-standard JSON to IPFS (Pinata) and registers the export via `client.ipAsset.registerIpAsset` with SHA-256 metadata hashes, media/thumbnail fingerprints, and license preset terms.

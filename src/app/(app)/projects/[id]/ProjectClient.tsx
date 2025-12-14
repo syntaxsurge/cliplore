@@ -15,7 +15,7 @@ import {
 } from "../../../store/slices/projectsSlice";
 import {
   rehydrate,
-  setMediaFiles,
+  hydrateMediaFiles,
   setActiveSection,
 } from "../../../store/slices/projectSlice";
 import AddText from "../../../components/editor/AssetsPanel/tools-section/AddText";
@@ -72,22 +72,40 @@ export default function ProjectClient({ projectId }: Props) {
         const project = await getProject(currentProjectId);
         if (project) {
           dispatch(rehydrate(project));
-
-          dispatch(
-            setMediaFiles(
-              await Promise.all(
-                project.mediaFiles.map(async (media: MediaFile) => {
-                  const file = await getFile(media.fileId);
-                  return { ...media, src: URL.createObjectURL(file) };
-                }),
-              ),
-            ),
-          );
         }
       }
     };
     loadProjectState();
   }, [dispatch, currentProjectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateMissingMediaSources = async () => {
+      if (!currentProjectId || projectState.id !== currentProjectId) return;
+
+      const hasMissingSrc = projectState.mediaFiles.some(
+        (media) => typeof media.src !== "string" || media.src.length === 0,
+      );
+      if (!hasMissingSrc) return;
+
+      const hydrated = await Promise.all(
+        projectState.mediaFiles.map(async (media: MediaFile) => {
+          if (typeof media.src === "string" && media.src.length > 0) return media;
+          const file = await getFile(media.fileId);
+          return file ? { ...media, src: URL.createObjectURL(file) } : media;
+        }),
+      );
+
+      if (cancelled) return;
+      dispatch(hydrateMediaFiles(hydrated));
+    };
+
+    hydrateMissingMediaSources();
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, currentProjectId, projectState.id, projectState.mediaFiles]);
 
   useEffect(() => {
     const saveProject = async () => {

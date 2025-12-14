@@ -60,7 +60,7 @@ window.litIssuedWarnings.add('dev-mode');`}
               }}
             />
             {children}
-            <Analytics />
+            {process.env.NODE_ENV === "production" ? <Analytics /> : null}
           </main>
           <Footer />
         </Providers>

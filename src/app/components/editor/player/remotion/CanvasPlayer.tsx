@@ -33,10 +33,10 @@ export const CanvasPlayer = memo(
         controls={false}
         clickToPlay={false}
         audioLatencyHint="playback"
+        acknowledgeRemotionLicense
       />
     );
   }),
 );
 
 CanvasPlayer.displayName = "CanvasPlayer";
-

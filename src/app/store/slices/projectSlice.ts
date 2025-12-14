@@ -234,6 +234,9 @@ const projectStateSlice = createSlice({
       );
       pruneEmptyTracks(state);
     },
+    hydrateMediaFiles: (state, action: PayloadAction<MediaFile[]>) => {
+      state.mediaFiles = action.payload;
+    },
     setTracks: (state, action: PayloadAction<TimelineTrack[]>) => {
       pushHistory(state);
       state.tracks = normalizeTracks(action.payload);
@@ -704,6 +707,7 @@ const projectStateSlice = createSlice({
 export const {
   applyTimelineEdit,
   setMediaFiles,
+  hydrateMediaFiles,
   setTextElements,
   setTracks,
   addLayer,
