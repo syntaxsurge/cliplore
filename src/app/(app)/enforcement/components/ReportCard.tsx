@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { DisputeTargetTag } from "@story-protocol/core-sdk";
 import { isAddress } from "viem";
@@ -72,6 +72,12 @@ export function ReportCard({
   const [myAssets, setMyAssets] = useState<Array<any>>([]);
 
   const wallet = useMemo(() => address ?? null, [address]);
+  const statusRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (status?.tone !== "error") return;
+    statusRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [status]);
 
   useEffect(() => {
     if (!wallet) {
@@ -257,58 +263,6 @@ export function ReportCard({
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {status ? (
-          <Alert
-            variant={
-              status.tone === "success"
-                ? "success"
-                : status.tone === "error"
-                  ? "destructive"
-                  : "info"
-            }
-          >
-            <AlertTitle>
-              {status.tone === "success"
-                ? "Submitted"
-                : status.tone === "error"
-                  ? "Couldn’t submit"
-                  : "Working…"}
-            </AlertTitle>
-            <AlertDescription className="whitespace-pre-wrap">
-              {status.message}
-            </AlertDescription>
-            {submission ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Button asChild size="sm" variant="secondary">
-                  <a
-                    href={ipfsUriToGatewayUrl(submission.evidenceUri)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Evidence
-                  </a>
-                </Button>
-                {submission.disputeTxHash ? (
-                  <Button asChild size="sm" variant="secondary">
-                    <a
-                      href={getStoryTxExplorerUrl({ txHash: submission.disputeTxHash })}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Tx
-                    </a>
-                  </Button>
-                ) : null}
-                {submission.disputeId ? (
-                  <Badge variant="outline">#{submission.disputeId}</Badge>
-                ) : null}
-              </div>
-            ) : null}
-          </Alert>
-        ) : null}
-
         <div className="space-y-2">
           <Label htmlFor="targetIpId">Target IP ID (dispute target)</Label>
           <Input
@@ -419,19 +373,86 @@ export function ReportCard({
           />
         </div>
 
-        <Button type="button" onClick={() => void submit()} disabled={busy}>
-          {busy ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Working…
-            </>
-          ) : (
-            <>
-              <Gavel className="h-4 w-4" />
-              Pin evidence & raise dispute
-            </>
-          )}
-        </Button>
+        <div className="space-y-3 pt-2">
+          <Button
+            type="button"
+            onClick={() => void submit()}
+            disabled={busy}
+            className="w-full"
+          >
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Working…
+              </>
+            ) : (
+              <>
+                <Gavel className="h-4 w-4" />
+                Pin evidence & raise dispute
+              </>
+            )}
+          </Button>
+
+          {status ? (
+            <div ref={statusRef} className="animate-in fade-in-0">
+              <Alert
+                variant={
+                  status.tone === "success"
+                    ? "success"
+                    : status.tone === "error"
+                      ? "destructive"
+                      : "info"
+                }
+              >
+                <AlertTitle>
+                  {status.tone === "success"
+                    ? "Submitted"
+                    : status.tone === "error"
+                      ? "Couldn’t submit"
+                      : "Working…"}
+                </AlertTitle>
+                <AlertDescription
+                  className={
+                    status.tone === "error"
+                      ? "whitespace-pre-wrap text-foreground"
+                      : "whitespace-pre-wrap"
+                  }
+                >
+                  {status.message}
+                </AlertDescription>
+                {submission ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Button asChild size="sm" variant="secondary">
+                      <a
+                        href={ipfsUriToGatewayUrl(submission.evidenceUri)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Evidence
+                      </a>
+                    </Button>
+                    {submission.disputeTxHash ? (
+                      <Button asChild size="sm" variant="secondary">
+                        <a
+                          href={getStoryTxExplorerUrl({ txHash: submission.disputeTxHash })}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Tx
+                        </a>
+                      </Button>
+                    ) : null}
+                    {submission.disputeId ? (
+                      <Badge variant="outline">#{submission.disputeId}</Badge>
+                    ) : null}
+                  </div>
+                ) : null}
+              </Alert>
+            </div>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );
