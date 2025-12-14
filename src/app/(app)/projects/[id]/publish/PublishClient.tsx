@@ -26,7 +26,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Copy, ExternalLink, Loader2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Copy,
+  ExternalLink,
+  Globe,
+  LayoutDashboard,
+  Loader2,
+  Upload,
+} from "lucide-react";
 
 const LICENSE_PRESET_ORDER: LicensePreset[] = [
   "commercial-5",
@@ -1500,67 +1509,110 @@ export default function PublishClient({
 	                    </div>
 	                  ) : null}
 
-	                  {published?.ipId ? (
-	                    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-	                      <p className="text-sm font-medium text-foreground">
-	                        Next steps
-	                      </p>
-	                      <div className="flex flex-wrap gap-2">
-	                        <Button size="sm" variant="secondary" asChild>
-	                          <Link href={`/ip/${published.ipId}`}>
-	                            View public page
-	                          </Link>
-	                        </Button>
-	                        <Button size="sm" asChild>
-	                          <Link href={`/assets/${published.ipId}?tab=royalties`}>
-	                            Open asset dashboard
-	                          </Link>
-	                        </Button>
-	                        <Button
-	                          size="sm"
-	                          variant="outline"
-	                          onClick={() => handleCopy(published.ipId)}
-	                        >
-	                          <Copy className="h-4 w-4" />
-	                          Copy IP ID
-	                        </Button>
-                        <Button size="sm" asChild>
-                          <a
-                            href={getStoryIpaExplorerUrl({ ipId: published.ipId })}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Story Explorer
-	                          </a>
-	                        </Button>
-	                        {marketplaceSyncStatus === "error" ||
-	                        marketplaceSyncStatus === "syncing" ? (
-	                          <Button
-	                            size="sm"
-	                            variant="outline"
-	                            onClick={() => void handleRetryMarketplaceSync()}
-	                            disabled={marketplaceSyncStatus === "syncing"}
-	                          >
-	                            {marketplaceSyncStatus === "syncing"
-	                              ? "Retrying…"
-	                              : "Retry marketplace sync"}
-	                          </Button>
-	                        ) : null}
-	                      </div>
-	                      {marketplaceSyncMessage ? (
-	                        <p
-	                          className={`text-xs ${
-	                            marketplaceSyncStatus === "error"
-	                              ? "text-destructive"
-	                              : "text-muted-foreground"
-	                          }`}
-	                        >
-	                          {marketplaceSyncMessage}
-	                        </p>
-	                      ) : null}
-	                    </div>
-	                  ) : null}
+		                  {published?.ipId ? (
+		                    <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+		                      <div className="flex flex-wrap items-start justify-between gap-2">
+		                        <div className="space-y-1">
+		                          <p className="text-sm font-medium text-foreground">
+		                            Next steps
+		                          </p>
+		                          <p className="text-xs text-muted-foreground">
+		                            Your IP is live. View it publicly, open the asset dashboard, or copy
+		                            identifiers for sharing.
+		                          </p>
+		                        </div>
+		                        <Badge variant="success" className="shrink-0">
+		                          Live
+		                        </Badge>
+		                      </div>
+
+		                      <div className="grid gap-2 sm:grid-cols-2">
+		                        <Button
+		                          size="sm"
+		                          variant="secondary"
+		                          asChild
+		                          className="w-full justify-between"
+		                        >
+		                          <Link href={`/ip/${published.ipId}`}>
+		                            <span className="flex items-center gap-2">
+		                              <Globe className="h-4 w-4" />
+		                              View public page
+		                            </span>
+		                            <ArrowRight className="h-4 w-4" />
+		                          </Link>
+		                        </Button>
+		                        <Button size="sm" asChild className="w-full justify-between">
+		                          <Link href={`/assets/${published.ipId}?tab=royalties`}>
+		                            <span className="flex items-center gap-2">
+		                              <LayoutDashboard className="h-4 w-4" />
+		                              Open asset dashboard
+		                            </span>
+		                            <ArrowRight className="h-4 w-4" />
+		                          </Link>
+		                        </Button>
+		                      </div>
+
+		                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+		                        <div className="min-w-0 space-y-0.5">
+		                          <p className="text-[11px] font-medium text-muted-foreground">
+		                            IP Asset ID
+		                          </p>
+		                          <p className="truncate font-mono text-xs text-foreground/90">
+		                            {published.ipId}
+		                          </p>
+		                        </div>
+		                        <div className="flex items-center gap-2">
+		                          <Button
+		                            size="sm"
+		                            variant="ghost"
+		                            className="h-8 px-2 text-xs"
+		                            onClick={() => handleCopy(published.ipId)}
+		                          >
+		                            <Copy className="h-4 w-4" />
+		                            Copy
+		                          </Button>
+		                          <Button
+		                            size="sm"
+		                            variant="ghost"
+		                            className="h-8 px-2 text-xs"
+		                            asChild
+		                          >
+		                            <a
+		                              href={getStoryIpaExplorerUrl({ ipId: published.ipId })}
+		                              target="_blank"
+		                              rel="noreferrer"
+		                            >
+		                              <ExternalLink className="h-4 w-4" />
+		                              Story Explorer
+		                            </a>
+		                          </Button>
+		                        </div>
+		                      </div>
+
+		                      {marketplaceSyncStatus === "syncing" && marketplaceSyncMessage ? (
+		                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+		                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+		                          {marketplaceSyncMessage}
+		                        </div>
+		                      ) : null}
+
+		                      {marketplaceSyncStatus === "error" ? (
+		                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-destructive/5 px-3 py-2">
+		                          <p className="text-xs text-destructive">
+		                            {marketplaceSyncMessage ??
+		                              "Marketplace sync failed. You can retry once Convex is available."}
+		                          </p>
+		                          <Button
+		                            size="sm"
+		                            variant="outline"
+		                            onClick={() => void handleRetryMarketplaceSync()}
+		                          >
+		                            Retry marketplace sync
+		                          </Button>
+		                        </div>
+		                      ) : null}
+		                    </div>
+		                  ) : null}
 	                </CardContent>
 	              </Card>
 	            </form>
