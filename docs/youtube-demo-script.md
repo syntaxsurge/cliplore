@@ -1,279 +1,167 @@
 Project: ClipLore  
-One-liner: Sora-assisted, browser-first video editor that exports, publishes, and licenses Story Protocol IP assets—plus datasets, IPFi, and enforcement tools.
+One-liner: A wallet-first, Sora-assisted video editor that exports and publishes Story Protocol IP—with licensing, IPFi royalties, datasets, and enforcement tools.
 
-## 1. Landing page overview (public)
+## 1. Connect wallet immediately (start of demo)
 - **URL:** https://cliplore.com/
-- **Shot:** Header nav with “Home / Explore / Demo / Studio / Assets / Settings”, hero headline “Create, edit, and license video IP on-chain.”, CTA buttons “Start a project” and “Explore IP marketplace”.
+- **Shot:** Homepage hero with header nav (“Home”, “Explore”, “Datasets”, “Demo”, “Studio”, “Assets”, “Enforcement”, “Settings”) and a RainbowKit “Connect wallet” button in the header.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/ — confirm heading “Create, edit, and license video IP on-chain.” is visible.
-  2. **Navigate:** Open URL directly: https://cliplore.com/ — confirm the header shows “Home”, “Explore”, “Demo”, “Studio”, “Assets”, “Settings”.
-  3. **Action:** Scroll to “From prompt to licensed IP” — confirm steps “1. Generate”, “2. Edit”, “3. License” are visible.
-  4. **Action:** Click “Explore IP marketplace” in the hero CTA row → lands on https://cliplore.com/explore.
-  5. Click “Home” in the header — wait for the hero headline to reappear.
-  6. **Verify on-screen:** Confirm the hero CTA buttons “Start a project” and “Explore IP marketplace” are visible.
+  1. **Current page:** https://cliplore.com/ — confirm the hero headline and the header nav are visible.
+  2. **Current page:** https://cliplore.com/ — **Navigate:** Click “Connect wallet” in the header → confirm the wallet modal opens.
+  3. **Current page:** Wallet modal — **Action:** Click “MetaMask” → confirm MetaMask prompts for connection.
+  4. **Current page:** MetaMask popup — **Action:** Click “Connect” → confirm the site shows a connected wallet chip/address (starts with “0x…”) in the header.
+  5. **Current page:** https://cliplore.com/ — **Action:** Point to the header nav items “Demo”, “Studio”, “Explore”, “Datasets”, “Assets”, “Enforcement”, “Settings” → confirm they’re visible.
+  6. **Verify on-screen:** Confirm the connected wallet indicator is visible in the header (0x…).
 - **Voiceover:**
-  > “We’re on the Cliplore home page. This is a Sora-powered, IP-native video studio: generate shots, edit timelines in the browser, and publish your final cut as licensed Story Protocol IP. I’ll show the public demo reels, the marketplace pages, then jump into the wallet-gated studio to generate, edit, export, publish, and manage royalties and enforcement.”
+  > “We’re on ClipLore’s homepage—click ‘Connect wallet’, choose MetaMask.”
 
-## 2. Demo hub (all genres in one place)
+## 2. Generative Video demos (hub + one genre detail)
 - **URL:** https://cliplore.com/demo
-- **Shot:** Page title “Demos” with five cards: Anime, Horror, Sci-Fi + Fantasy, Commercial / Spec-Ad, Brainrot—each card shows “Open demo” and “YouTube”.
+- **Shot:** “Demos” page with five genre cards (Anime, Horror, Sci-Fi + Fantasy, Commercial / Spec-Ads, Brainrot), each with “Open demo” and “YouTube”.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/ — confirm the header “Demo” nav item is visible.
-  2. **Navigate:** Click “Demo” in the header → lands on https://cliplore.com/demo.
-  3. **Action:** On the “Demos” page, point to the five demo cards — confirm each card shows “Open demo” and “YouTube”.
-  4. **Action:** Click “Open demo” on the “Commercial / Spec-Ad” card → lands on https://cliplore.com/demo/commercial.
-  5. Click “Back to demos” — wait for the “Demos” heading to return.
-  6. **Verify on-screen:** Confirm the “Anime”, “Horror”, “Sci-Fi + Fantasy”, “Commercial / Spec-Ad”, and “Brainrot” cards are visible.
+  1. **Current page:** https://cliplore.com/ — confirm the header shows “Demo”.
+  2. **Current page:** https://cliplore.com/ — **Navigate:** Click “Demo” in the header → lands on https://cliplore.com/demo — confirm heading “Demos” is visible.
+  3. **Current page:** https://cliplore.com/demo — **Action:** Scroll slightly to show all five demo cards → confirm each card shows “Open demo” and “YouTube”.
+  4. **Current page:** https://cliplore.com/demo — **Action:** Click “Open demo” on the “Horror” card → lands on https://cliplore.com/demo/horror — confirm the heading “Horror” is visible.
+  5. **Current page:** https://cliplore.com/demo/horror — **Action:** Scroll to “Prompts used” → confirm “CLIP 1” and “CLIP 2” prompt blocks are visible with a “Copy” button.
+  6. **Verify on-screen:** Confirm the YouTube embed is visible on the page and the “Story Portal asset” and “Story Explorer” link buttons are visible in the Links panel.
 - **Voiceover:**
-  > “This is the Demo hub. Each genre card links to the final YouTube cut, Story links, and the exact Sora prompts used to generate the two 15-second clips. I’ll open one demo detail page to show the full prompt transparency, then we’ll jump to the IP marketplace.”
+  > “I open Demo to show five genres. I click into Horror, where the final YouTube cut is embedded, Story links are one click away, and the exact prompts used are published and copyable.”
 
-## 3. Demo detail (embed + Story links + exact prompts)
-- **URL:** https://cliplore.com/demo/commercial
-- **Shot:** Title “Commercial / Spec-Ad”, embedded YouTube player, “Links” section with “Open on YouTube”, “Story Portal asset”, “Story Explorer (IPA)”, and “Prompts used” with “Copy all” plus per-clip “Copy” buttons.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/demo — confirm heading “Demos” is visible.
-  2. **Navigate:** Click “Open demo” on “Commercial / Spec-Ad” → lands on https://cliplore.com/demo/commercial.
-  3. **Action:** In “Links”, click “Story Portal asset” (opens in new tab) — confirm a new browser tab opens to portal.story.foundation.
-  4. **Action:** Back on the demo page, click “Story Explorer (IPA)” (opens in new tab) — confirm a new browser tab opens to explorer.story.foundation.
-  5. Click “Copy all” in “Prompts used” — wait for the button to confirm copy (or copy state feedback).
-  6. **Verify on-screen:** Confirm “CLIP 1 (15s) — Studio reveal” and “CLIP 2 (15s) — Rain thriller demo” sections are visible with individual “Copy” buttons.
-- **Voiceover:**
-  > “Here’s a full demo detail page. You get the final cut embedded, direct Story Portal and Story Explorer links, and the exact prompts used—copyable at both the section and per-clip level. This is key for judging: every output is reproducible and transparently sourced. Next, let’s see how published IPs appear in the Explore marketplace.”
-
-## 4. Explore IP marketplace (public listing)
-- **URL:** https://cliplore.com/explore
-- **Shot:** Page title “Explore IP”, marketplace cards with a title, on-chain IP ID, license summary, and actions “View details” and “Remix this IP”.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/demo/commercial — confirm the header nav item “Explore” is visible.
-  2. **Navigate:** Click “Explore” in the header → lands on https://cliplore.com/explore.
-  3. **Action:** On “Explore IP”, find a card — confirm an on-chain IP ID like “0x…” is visible on the card.
-  4. **Action:** Click “View details” on that card → lands on https://cliplore.com/ip/[ipId].
-  5. Click “Explore” in the header to return — wait for the “Explore IP” heading to reappear.
-  6. **Verify on-screen:** Confirm each card shows both buttons “View details” and “Remix this IP”.
-- **Voiceover:**
-  > “This is the public Explore marketplace. Each listing shows the IP name, its on-chain IP ID, and the attached license terms so you can understand remix rights at a glance. From here you can view the public asset detail or start a remix. Next I’ll open an asset detail page and show how minting a license works.”
-
-## 5. Public IP asset page (license + remix CTA)
-- **URL:** https://cliplore.com/ip/[ipId]
-- **Shot:** “IP Asset ID: …” line, asset title and description, “License terms” block, “Mint & remix” section, primary action “Mint license token”.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/explore — confirm heading “Explore IP” is visible.
-  2. **Navigate:** Click “View details” on any listing card → lands on https://cliplore.com/ip/[ipId].
-  3. **Action:** On the asset page, scroll to “License terms” — confirm a term summary like “Commercial remix · 5% rev share · 1 WIP fee” is visible.
-  4. **Action:** Scroll to “Mint & remix” — confirm the instructions “Step 1: mint a license token…” are visible.
-  5. Click “Mint license token” — wait for the wallet transaction prompt to appear.
-  6. **Verify on-screen:** Confirm the page still shows “IP Asset ID: …” and “Mint license token” (and the wallet prompt is active if you proceed).
-- **Voiceover:**
-  > “This is the public IP page for a single Story asset. You can see the exact IP ID and the license terms, then mint a license token on-chain to unlock remix rights. This is the core ‘safe remix’ loop: clear terms, on-chain licensing, and a direct path to create derivatives. Next, we’ll jump into the wallet-gated Studio to generate and publish new assets.”
-
-## 6. Wallet-gated entry (Studio / Assets / Settings)
+## 3. Studio: create a project, hit BYOK redirect, set key, return to editor, then generate
 - **URL:** https://cliplore.com/projects
-- **Shot:** Wallet gate message “Connect your wallet to continue” and “Back to home”.
+- **Shot:** Wallet-gated Studio Projects list with a “New project” action; then full-screen editor with Library → AI Studio section; then Settings page showing “AI (Bring your own OpenAI key)” with a masked input and “Save key”; then back to editor where “Generate” opens the prompt modal.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/ip/[ipId] — confirm the header nav item “Studio” is visible.
-  2. **Navigate:** Click “Studio” in the header → lands on https://cliplore.com/projects.
-  3. **Action:** On the wallet gate screen, confirm the text “Connect your wallet to continue” is visible.
-  4. **Action:** Click your wallet connect button (RainbowKit) labeled “Connect wallet” (top bar / modal) — choose your wallet provider.
-  5. Click “Connect” in the wallet modal — wait for the connected wallet address chip to appear (starts with “0x…”).
-  6. **Verify on-screen:** Confirm the wallet address indicator is visible and the app routes are now accessible.
-- **Voiceover:**
-  > “Now we’re entering the creator workspace. Cliplore is wallet-first, so the Studio, Assets, and Settings are gated until you connect. I’ll connect my wallet, confirm the address is shown, and then we’ll configure Sora with a bring-your-own OpenAI key so any user can generate clips securely.”
-
-## 7. Settings (BYOK OpenAI key for Sora)
-- **URL:** https://cliplore.com/settings
-- **Shot:** Settings page with the “AI (Bring your own OpenAI key)” section and a masked key input.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/projects — confirm the header nav item “Settings” is visible.
-  2. **Navigate:** Click “Settings” in the header → lands on https://cliplore.com/settings.
-  3. **Action:** Locate the “AI (Bring your own OpenAI key)” section — confirm it explains adding an OpenAI API key.
-  4. **Enter values:**
+  1. **Current page:** https://cliplore.com/demo/horror — confirm the header shows “Studio”.
+  2. **Current page:** https://cliplore.com/demo/horror — **Navigate:** Click “Studio” in the header → lands on https://cliplore.com/projects — confirm a “Projects” heading (or projects list) is visible.
+  3. **Current page:** https://cliplore.com/projects — **Action:** Click “New project” → confirm you are redirected to https://cliplore.com/projects/[id] (full-screen editor) and the left tool rail shows “Library”, “Text”, “Export”.
+  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Library” in the left tool rail, then click “Generate” in the “AI Studio” section → confirm you are redirected to https://cliplore.com/settings and the section “AI (Bring your own OpenAI key)” is visible.
+  5. **Current page:** https://cliplore.com/settings — **Enter values:**
      - OpenAI API key = [OPENAI_API_KEY=sk-proj-REDACTED_FOR_DEMO]
-  5. Click “Save key” — wait for a success confirmation (saved message / key status indicator).
-  6. **Verify on-screen:** Confirm the key status reads as saved (e.g., “Key saved on this device” or equivalent status text).
+     Click “Save key” — wait for a saved confirmation message (e.g., “Saved” / “Key saved” status).
+  6. **Verify on-screen:** **Current page:** https://cliplore.com/settings — click “Studio” in the header → lands on https://cliplore.com/projects — click your newest project row to return to https://cliplore.com/projects/[id] — click “Library” then “Generate” → confirm the Generate modal/panel opens with a “Prompt” field visible.
 - **Voiceover:**
-  > “On the Settings page, I’m enabling Sora generation with bring-your-own-key. I paste my OpenAI API key—masked for security—and click ‘Save key’. Once this is saved, the Studio’s AI generator works immediately without any server-side shared key, which is perfect for a public demo and for user safety.”
+  > “I open Studio, create a new project, and land in the full-screen editor. When I click Library → Generate, ClipLore redirects me to Settings because it’s bring-your-own-key. I paste my OpenAI key—masked—and click ‘Save key’, then return to the editor. Now when I click Generate again, the prompt modal opens and we can generate Sora clips.”
 
-## 8. Dashboard (creator stats overview)
-- **URL:** https://cliplore.com/dashboard
-- **Shot:** Creator dashboard page (wallet-gated) showing project/IP stats and Convex-backed counts.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/settings — confirm the header nav item “Studio” is visible.
-  2. **Navigate:** Open URL directly: https://cliplore.com/dashboard — confirm the dashboard loads (and no “Connect your wallet to continue” message appears).
-  3. **Action:** Locate the dashboard stats panels — confirm a “Dashboard” header and at least one stats card/table is visible.
-  4. **Action:** Click “Studio” in the header → lands on https://cliplore.com/projects.
-  5. Click “Home” in the header — wait for the home hero to appear.
-  6. **Verify on-screen:** Confirm you can navigate between “Dashboard” and “Studio” without being re-gated (wallet remains connected).
-- **Voiceover:**
-  > “With the wallet connected, the creator dashboard becomes your control center—projects, published assets, and marketplace stats. This is where creators quickly see what they’ve built and what they’ve published. Next, we’ll go back into Studio and create a new project, generate clips with Sora, and edit directly in the browser.”
-
-## 9. Studio projects list (create/open a project)
-- **URL:** https://cliplore.com/projects
-- **Shot:** Projects list view with a “New project” or “Create project” primary action and a table/list of existing projects.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/ — confirm the hero CTA “Start a project” is visible.
-  2. **Navigate:** Click “Start a project” on the home page → lands on https://cliplore.com/projects.
-  3. **Action:** Confirm you see your projects list — verify a “Projects” heading and a “New project” / “Create project” action is visible.
-  4. **Action:** Click “New project” — wait for a new project row to appear (or an editor redirect).
-  5. Click the new project row (or “Open”) — wait for the full-screen editor to load at https://cliplore.com/projects/[id].
-  6. **Verify on-screen:** Confirm the editor loads with the left tool rail showing “Library”, “Text”, and “Export”.
-- **Voiceover:**
-  > “In Studio, we start by creating a project. The projects list keeps drafts and published metadata organized. I click ‘New project’, open it, and we land in the full-screen editor—where we’ll generate Sora clips, drag them into the timeline, add text, and export.”
-
-## 10. Editor (Sora generation → timeline edit)
+## 4. Editor: generate a Sora clip, drag it to the timeline, add a title, and edit inline
 - **URL:** https://cliplore.com/projects/[id]
-- **Shot:** Full-screen editor with left tool rail “Library / Text / Export”, AI Studio section in Library with “Generate” + “History”, preview canvas, timeline with layered tracks.
+- **Shot:** Full-screen editor showing Library AI Studio (Generate + History), a generated clip appearing in History, drag-and-drop into timeline layers, Text tool, and inline text editing on the canvas with selection handles.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id] — confirm the left tool rail shows “Library”, “Text”, “Export”.
-  2. **Navigate:** Click “Library” in the left tool rail — confirm the “AI Studio” section shows “Generate” and “History”.
-  3. **Action:** Click “Generate” in the AI Studio section.
-  4. **Enter values:**
-     - Prompt = [SORA_PROMPT=“Premium minimalist studio commercial, clean UI scan animation, proof seal stamp moment, no logos, cinematic lighting”]
-     - Duration = [SECONDS=8]
-  5. Click “Generate” — wait for a new entry to appear in “History” with a visible status/progress update.
-  6. **Verify on-screen:** Confirm the generated clip appears in the Library assets grid/list and can be drag-dropped onto a timeline layer (clip rectangle becomes visible on the timeline).
+  1. **Current page:** https://cliplore.com/projects/[id] — confirm the Generate modal/panel is open with a “Prompt” field visible.
+  2. **Current page:** https://cliplore.com/projects/[id] — **Enter values:**
+     - Prompt = [SORA_PROMPT="Premium minimalist studio commercial, clean UI scan animation, proof seal stamp moment, cinematic lighting, no logos"]
+     - Seconds = [SECONDS=8]
+     Click “Generate” — wait for a new row to appear in “History” with a visible status/progress indicator.
+  3. **Current page:** https://cliplore.com/projects/[id] — **Action:** After the History row shows completion (or a playable/ready state), drag the new clip from the Library into the timeline layer area → confirm a clip block appears on the timeline.
+  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Text” in the left tool rail → confirm text templates (e.g., “Title”) are visible.
+  5. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Title” → confirm a new text clip appears on the timeline and a text element appears on the canvas.
+  6. **Verify on-screen:** **Current page:** https://cliplore.com/projects/[id] — double-click the text on the canvas → confirm the caret appears for inline editing and the timeline selection highlights the same layer.
 - **Voiceover:**
-  > “Inside the editor, I stay in the Library tab and use the AI Studio panel. I click ‘Generate’, paste a prompt—‘Premium minimalist studio commercial…’—set duration to 8 seconds, and generate. The clip shows up in History, then lands in the library. From there, I drag it onto a layer in the timeline, and now we’re editing like a real NLE—fully in the browser.”
+  > “I generate an 8-second Sora clip with a single prompt, watch it appear in History, and drag it straight onto the timeline. Then I add a Title and double-click it directly on the canvas to edit inline. This proves the Creative Front-End core: a clean workflow from AI generation to real timeline editing.”
 
-## 11. Editor (Text tool + in-canvas editing + selection sync)
+## 5. Export: render the timeline, then go straight to Publish
 - **URL:** https://cliplore.com/projects/[id]
-- **Shot:** Canvas with a text layer selected (resize/rotate handles visible), timeline clip handles visible, text editable on canvas by double-click.
+- **Shot:** Export panel open with an “Export”/“Render” action, visible export progress, and an export completion dialog that includes a “Publish” button.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id] — confirm your generated clip is visible on the timeline.
-  2. **Navigate:** Click “Text” in the left tool rail — confirm text templates like “Title”, “Lower third”, and “Caption” are visible.
-  3. **Action:** Click “Title” — wait for a new text clip to appear on the timeline and a text element to appear on the canvas.
-  4. **Action:** Double-click the text directly on the canvas — confirm the text becomes editable in place (caret visible).
-  5. Click outside the text on the canvas — wait for the selection outline to disappear (deselect confirmation).
-  6. **Verify on-screen:** Click the text clip in the timeline — confirm the corresponding canvas element shows resize/rotate handles (timeline↔canvas selection stays in sync).
+  1. **Current page:** https://cliplore.com/projects/[id] — confirm the timeline shows at least one video clip block and one text clip block.
+  2. **Current page:** https://cliplore.com/projects/[id] — **Navigate:** Click “Export” in the left tool rail → confirm the Export panel opens.
+  3. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Export” (or “Render”) → wait for an export progress indicator to appear.
+  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Wait for export completion → confirm an export completion dialog/card appears showing the exported file details.
+  5. **Current page:** Export completion dialog — **Action:** Click “Publish” → lands on https://cliplore.com/projects/[id]/publish.
+  6. **Verify on-screen:** Confirm the Publish page shows a visible “Publish” heading and the selected export is displayed.
 - **Voiceover:**
-  > “Now I switch to the Text tool and add a Title. A new text layer appears on the timeline and on the canvas. I double-click the text right on the canvas to edit it in place—no hunting through property panels. Then I click off to deselect, and finally I reselect from the timeline to prove selection is synchronized both ways.”
+  > “Now we export like a real editor. I open Export, click Render, and wait for the completion card. From that completion screen, I click Publish immediately—so the workflow is always Create → Edit → Export → Publish.”
 
-## 12. Export (render the timeline)
-- **URL:** https://cliplore.com/projects/[id]
-- **Shot:** Export panel open with export settings and a primary export/render action; progress indicator; completed export confirmation.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id] — confirm your timeline has at least one video clip and one text clip.
-  2. **Navigate:** Click “Export” in the left tool rail — confirm an export panel appears.
-  3. **Action:** Click “Export” (or “Render”) — wait for an export progress indicator to appear.
-  4. **Action:** Wait for export completion — confirm a completion dialog/card appears with the exported file details.
-  5. Click “Publish” on the completion screen (or click “Publish” in the top bar) — wait for navigation to /projects/[id]/publish.
-  6. **Verify on-screen:** Confirm the publish wizard page loads and shows the export selected for publishing.
-- **Voiceover:**
-  > “With the cut ready, I go to Export. I click ‘Export’ to render the timeline, watch the progress, and then Cliplore confirms the export is complete. From that completion screen, I click Publish to move straight into registration—so the workflow is export first, then publish and license.”
-
-## 13. Publish wizard (B2 upload → IPFS metadata → Story registration)
+## 6. Publish wizard: upload to storage, pin IPFS metadata, register on Story, then open Explorer
 - **URL:** https://cliplore.com/projects/[id]/publish
-- **Shot:** Publish wizard showing Storage URLs (video + thumbnail), IPFS metadata (IP + NFT URIs + SHA-256 hashes), and “Next steps” buttons like “View marketplace page”, “Open IPFi”, “Copy IP ID”, “Story Explorer”.
+- **Shot:** Publish wizard showing an “Upload & Register” CTA, then a success view showing Storage URLs (Video URL, Thumbnail URL), IPFS metadata URIs (ipfs://…), SHA-256 hashes (0x…), and Next Steps buttons (“Copy IP ID”, “Story Explorer”, “View marketplace page”, “Open IPFi”).
 - **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm a “Publish” heading/wizard panel is visible.
-  2. **Action:** Click “Upload and Register” (or your primary publish CTA) — wait for upload progress and on-chain registration status to complete.
-  3. **Action:** After success, locate “Storage” — confirm “Video URL” and “Thumbnail URL” are shown.
-  4. **Action:** Locate “IPFS metadata” — confirm both “IP metadata” and “NFT metadata” URIs plus “SHA-256: 0x…” hashes are shown.
-  5. Click “Story Explorer” — wait for a new tab to open showing the IP asset explorer page.
-  6. **Verify on-screen:** Back on the publish success screen, confirm “Copy IP ID” and “View marketplace page” buttons are visible under “Next steps”.
+  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm the primary CTA “Upload & Register” is visible.
+  2. **Current page:** https://cliplore.com/projects/[id]/publish — **Action:** Click “Upload & Register” — wait for the success state to appear.
+  3. **Current page:** Publish success state — **Action:** Locate “Storage” → confirm “Video URL” and “Thumbnail URL” are visible and clickable.
+  4. **Current page:** Publish success state — **Action:** Locate “IPFS metadata” → confirm “IP metadata” and “NFT metadata” show ipfs://… URIs and “SHA-256: 0x…” hashes.
+  5. **Current page:** Publish success state — **Action:** Click “Story Explorer” → confirm a new tab opens to Story Explorer.
+  6. **Verify on-screen:** Back on the success state, confirm “Copy IP ID” and “Open Asset Dashboard” (or “View marketplace page”) is visible.
 - **Voiceover:**
-  > “This is the publish wizard—the bridge from editing to on-chain IP. I click the main Publish action to upload the export to storage, pin Story metadata to IPFS, and register the final cut as a Story IP Asset. On success, Cliplore shows the real storage URLs, the IPFS metadata URIs, and the SHA-256 hashes. Then I open Story Explorer to verify the asset on-chain, and we’ll go back to list it publicly in the marketplace.”
+  > “This Publish wizard is the Story integration surface. I click ‘Upload & Register’ to upload the export to storage, pin metadata to IPFS with SHA-256 fingerprints, and register the final cut as a Story IP asset. The success screen shows the real storage URLs, the ipfs:// metadata, the 0x hashes, and a one-click Story Explorer link for verification.”
 
-## 14. Explore IP (verify marketplace listing and open public page)
+## 7. Explore marketplace + public IP page (Creative Front-End user-facing consumption)
 - **URL:** https://cliplore.com/explore
-- **Shot:** “Explore IP” marketplace list showing your newly published asset card with IP ID and license summary, plus “View details” and “Remix this IP”.
+- **Shot:** Explore marketplace listing cards with IP IDs (0x…), a “View details” button, and the public IP detail page showing license/mint CTA.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm “View marketplace page” is visible in “Next steps”.
-  2. **Navigate:** Click “View marketplace page” → lands on https://cliplore.com/explore.
-  3. **Action:** Locate the newly published asset card — confirm its on-chain IP ID (0x…) appears on the card.
-  4. **Action:** Click “View details” on the new card → lands on https://cliplore.com/ip/[newIpId].
-  5. Click “Remix this IP” from the listing card (or from the detail page CTA if shown) — wait for redirect to https://cliplore.com/projects?parentIp=[newIpId].
-  6. **Verify on-screen:** Confirm the remix navigation either lands on the Studio project flow (or shows wallet gate if disconnected) with the `parentIp=` parameter in the URL.
+  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm “View marketplace page” is visible in Next Steps.
+  2. **Current page:** https://cliplore.com/projects/[id]/publish — **Navigate:** Click “View marketplace page” → lands on https://cliplore.com/explore — confirm heading “Explore” / “Explore IP” is visible.
+  3. **Current page:** https://cliplore.com/explore — **Action:** Find your newly published listing card → confirm it shows an IP ID starting with “0x…”.
+  4. **Current page:** https://cliplore.com/explore — **Action:** Click “View details” → lands on https://cliplore.com/ip/[ipId] — confirm “IP Asset ID” (0x…) is visible.
+  5. **Current page:** https://cliplore.com/ip/[ipId] — **Action:** Scroll to the licensing area → confirm “Mint license token” is visible.
+  6. **Verify on-screen:** Confirm the public IP page shows the IP ID and the licensing/remix CTA area.
 - **Voiceover:**
-  > “Back in Explore, our newly published cut now appears as a marketplace card with its IP ID and license terms. I open the public detail page, then click ‘Remix this IP’ to start a derivative project using the parent IP ID. This is the loop that makes remixing safe: published terms, discoverability, and a one-click path to create derivatives in the studio.”
+  > “Explore lists published IP with on-chain IDs, and each public IP page exposes licensing with a clear ‘Mint license token’ CTA.”
 
-## 15. Assets (creator library) + Asset dashboard overview
+## 8. Assets dashboard + IPFi: licensing, royalties, files, and the project IPFi entrypoint
 - **URL:** https://cliplore.com/assets
-- **Shot:** Creator assets list; clicking an asset opens `/assets/[ipId]` with an overview header and top-right actions like “Copy IP ID”, “Public page”, and “Story Explorer”.
+- **Shot:** Creator Assets list, then an Asset dashboard with tabs (Overview, Licensing, Royalties, Files & metadata), plus a quick jump through /projects/[id]/ipfi into the same asset.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/explore — confirm the header nav item “Assets” is visible.
-  2. **Navigate:** Click “Assets” in the header → lands on https://cliplore.com/assets.
-  3. **Action:** In the assets list, click the row/card for your newly published IP — wait for navigation to https://cliplore.com/assets/[ipId].
-  4. **Action:** On the asset dashboard overview, click “Public page” — confirm a new tab opens to https://cliplore.com/ip/[ipId].
-  5. Click “Story Explorer” — confirm a new tab opens to explorer.story.foundation for the same IP ID.
-  6. **Verify on-screen:** Confirm the asset dashboard shows the correct IP ID (matches the publish success screen) and an “Overview” tab is active.
+  1. **Current page:** https://cliplore.com/explore — confirm the header shows “Assets”.
+  2. **Current page:** https://cliplore.com/explore — **Navigate:** Click “Assets” in the header → lands on https://cliplore.com/assets — confirm heading “Assets” is visible.
+  3. **Current page:** https://cliplore.com/assets — **Action:** Click your newly published asset row/card → lands on https://cliplore.com/assets/[ipId] — confirm the IP ID (0x…) is visible on the asset header.
+  4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Licensing” tab → confirm license terms summary is visible.
+  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Royalties” tab → confirm the Royalties section is visible (either actionable buttons like “Refresh claimable”/“Claim revenue” or a “Royalties not active yet” gate message).
+  6. **Verify on-screen:** **Current page:** https://cliplore.com/projects/[id]/publish — click “Open IPFi” → lands on https://cliplore.com/projects/[id]/ipfi — click the published export row and click “Open asset dashboard” → confirm you land back on https://cliplore.com/assets/[ipId] with Royalties available.
 - **Voiceover:**
-  > “Now we’re in the creator’s Assets area—this is where published IPs live after the one-time publish flow. I open the asset dashboard for the newly published IP and use the quick actions to open the public page and Story Explorer, proving the asset is navigable and consistent across internal, public, and on-chain views. Next we’ll go into licensing, royalties, and IPFi actions.”
+  > “ClipLore gives every published IP an Asset dashboard. I show Licensing and Royalties—where tips, claim flows, and finance utilities live—and Files & metadata for auditing.”
 
-## 16. Asset dashboard (Licensing + Royalties + IPFi utilities)
-- **URL:** https://cliplore.com/assets/[ipId]
-- **Shot:** Asset dashboard tabs for Overview, Licensing, Royalties, Files & metadata; Royalties tab shows Tip/Claim; Files tab shows storage + IPFS references.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/assets/[ipId] — confirm the asset dashboard loads and shows your IP ID.
-  2. **Navigate:** Click the “Licensing” tab — confirm the license terms summary (e.g., “Commercial remix · 5% rev share · 1 WIP fee”) is visible.
-  3. **Navigate:** Click the “Royalties” tab — confirm the Royalties dashboard area is visible with actions like “Refresh claimable” and “Claim revenue”.
-  4. **Action:** In the Royalties area, click “Refresh claimable” — wait for the claimable field to update (or show a gated state if royalties aren’t activated yet).
-  5. **Navigate:** Click the “Files & metadata” tab — confirm you see storage URLs and IPFS metadata URIs/hashes for the asset.
-  6. **Verify on-screen:** Confirm the Files tab shows both the media URLs and the IPFS metadata references (proof the asset is reproducible and auditable).
-- **Voiceover:**
-  > “Inside the asset dashboard, we manage the IP like a product: licensing terms, royalties, and audit-friendly files. I open the Licensing tab to show the attached terms, then the Royalties tab to check claimable revenue, and finally Files & metadata to see the storage URLs plus the pinned IPFS metadata and hashes. This is the IPFi bridge: not just publishing, but managing the ongoing economic lifecycle.”
-
-## 17. IPFi route (project-level export picker → asset dashboard)
-- **URL:** https://cliplore.com/projects/[id]/ipfi
-- **Shot:** IPFi picker UI that lets you choose a published export and jump into its asset dashboard IPFi/royalties area.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm “Open IPFi” is visible in “Next steps”.
-  2. **Navigate:** Click “Open IPFi” → lands on https://cliplore.com/projects/[id]/ipfi.
-  3. **Action:** On the IPFi picker, select the published export row for your new IP — confirm the row shows the IP ID.
-  4. **Action:** Click the primary “Open asset dashboard” (or equivalent) CTA — wait for navigation to https://cliplore.com/assets/[ipId].
-  5. Click the “Royalties” tab — wait for the Royalties dashboard to load.
-  6. **Verify on-screen:** Confirm you’re on `/assets/[ipId]` and the Royalties dashboard is visible (IPFi actions are per-asset).
-- **Voiceover:**
-  > “Cliplore also provides an IPFi entry point from the project level. After publishing, I can open IPFi, pick the published export, and jump directly into the asset dashboard where royalties, tips, and token utilities live. This keeps the workflow clean: projects are for creation, assets are for finance.”
-
-## 18. Datasets marketplace (Data track page)
+## 9. Data track: datasets marketplace, publish a dataset, and open dataset detail
 - **URL:** https://cliplore.com/datasets
-- **Shot:** “Datasets” page with “Publish a dataset” button and empty-state “No datasets yet” (or a list if you’ve published).
+- **Shot:** Datasets marketplace list, “Publish a dataset” CTA, dataset publisher form, then a dataset detail page with Story and IPFS references.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/explore — confirm the header includes “Datasets”.
-  2. **Navigate:** Click “Datasets” in the header → lands on https://cliplore.com/datasets.
-  3. **Action:** Confirm the page heading “Datasets” and the description about rights-cleared samples are visible.
-  4. **Action:** Click “Publish a dataset” → lands on https://cliplore.com/datasets/new.
-  5. Click “Back to home” if you hit the wallet gate — then click “Datasets” again to return (wallet must be connected).
-  6. **Verify on-screen:** Confirm the “Publish a dataset” button remains visible and the list area shows either “No datasets yet” or dataset cards.
-- **Voiceover:**
-  > “Beyond videos, Cliplore supports the Data track: rights-cleared real-world samples registered as Story IP. The Datasets marketplace makes it obvious how to publish and browse dataset IP. I click ‘Publish a dataset’ to show the creator flow—upload, pin metadata, register on Story, and then list it here.”
-
-## 19. Dataset publisher (upload sample + cover → register on Story)
-- **URL:** https://cliplore.com/datasets/new
-- **Shot:** Wallet-gated dataset publish form with sample upload, cover upload, dataset type selector, metadata fields, and a primary publish/register CTA.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/datasets/new — confirm the wallet gate or the dataset publish form is visible.
-  2. **Navigate:** If gated, click “Connect wallet” and complete the wallet modal — confirm your address chip (0x…) is visible.
-  3. **Action:** On the dataset publish form, confirm fields for sample upload, cover upload, and dataset metadata are visible.
-  4. **Enter values:**
+  1. **Current page:** https://cliplore.com/assets/[ipId] — confirm the header shows “Datasets”.
+  2. **Current page:** https://cliplore.com/assets/[ipId] — **Navigate:** Click “Datasets” in the header → lands on https://cliplore.com/datasets — confirm heading “Datasets” is visible.
+  3. **Current page:** https://cliplore.com/datasets — **Action:** Click “Publish a dataset” → lands on https://cliplore.com/datasets/new — confirm the dataset publisher heading is visible.
+  4. **Current page:** https://cliplore.com/datasets/new — **Enter values:**
      - Title = [DATASET_TITLE="POV Sidewalks v1"]
-     - Description = [DATASET_DESC="Rights-cleared POV street navigation clips with explicit licensing and hashed artifacts."]
+     - Description = [DATASET_DESC="Rights-cleared POV navigation sample with structured metadata, hashed artifacts, and Story licensing."]
      - Dataset type = [DATASET_TYPE="pov-video"]
-     - Sample file = [UPLOAD_SAMPLE="pov-sample.mp4"]
-     - Cover image = [UPLOAD_COVER="pov-cover.png"]
-  5. Click “Pin + Register on Story” (or your primary dataset publish CTA) — wait for a success state showing an IP ID.
-  6. **Verify on-screen:** Confirm a success block shows the dataset’s new IP ID and links back to the Datasets list.
+     Click “Pin + Register on Story” — wait for a success block showing an IP ID (0x…).
+  5. **Current page:** https://cliplore.com/datasets/new — **Action:** Click “View dataset” (or the success CTA that opens the dataset detail) → lands on https://cliplore.com/datasets/[ipId].
+  6. **Verify on-screen:** Confirm the dataset detail page shows the dataset IP ID (0x…) and links to Story Explorer and IPFS metadata (ipfs://…).
 - **Voiceover:**
-  > “This is the dataset publishing flow. I upload a sample and a cover, enter a title—‘POV Sidewalks v1’—and a rights-cleared description, select ‘pov-video’, then publish. Cliplore hashes the files, pins dataset metadata to IPFS, registers the dataset as a Story IP Asset, and returns a real IP ID that can be listed and licensed.”
+  > “ClipLore publishes rights-cleared data samples as Story IP assets with structured, machine-readable metadata. I open Datasets, publish a dataset sample with one form, and then open the dataset detail page where Story and IPFS references make the provenance and licensing auditable.”
 
-## 20. Enforcement (verify hashes + report infringement)
+## 10. Enforcement: verify a file hash and submit an IPFS evidence report (IP Detection & Enforcement)
 - **URL:** https://cliplore.com/enforcement
-- **Shot:** Wallet-gated “IP Detection & Enforcement” page with Verify and Report flows, including hash verification and evidence pinning.
+- **Shot:** Enforcement page with Verify panel (SHA-256 output) and Report panel (Victim IP ID, Suspect URL/file, “Pin evidence & raise dispute” button), plus an evidence result showing ipfs://… and a tx confirmation.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/datasets — confirm the header includes “Enforcement”.
-  2. **Navigate:** Click “Enforcement” in the header → lands on https://cliplore.com/enforcement.
-  3. **Action:** If gated, connect wallet — confirm the gate text disappears and the enforcement UI loads.
-  4. **Action:** In “Verify”, upload a suspect file (or paste a suspect URL) — confirm a computed “SHA-256” value appears.
-  5. Click “Report” (or switch to the reporting panel) and click “Pin evidence & raise dispute” — wait for an IPFS evidence URI (ipfs://…) to appear and a tx hash confirmation.
-  6. **Verify on-screen:** Confirm the report result includes an evidence URI (ipfs://…) and a dispute submission confirmation (tx hash or success toast).
+  1. **Current page:** https://cliplore.com/datasets/[ipId] — confirm the header shows “Enforcement”.
+  2. **Current page:** https://cliplore.com/datasets/[ipId] — **Navigate:** Click “Enforcement” in the header → lands on https://cliplore.com/enforcement — confirm heading “IP Detection & Enforcement” is visible.
+  3. **Current page:** https://cliplore.com/enforcement — **Action:** In “Verify”, click “Upload file” and select a sample file → confirm a “SHA-256” value appears on screen.
+  4. **Current page:** https://cliplore.com/enforcement — **Action:** Click “Report” → confirm fields “Victim IP ID” and “Suspect URL” are visible.
+  5. **Current page:** https://cliplore.com/enforcement — **Enter values:**
+     - Victim IP ID = [VICTIM_IP_ID=0xYOUR_PUBLISHED_IP_ID]
+     - Suspect URL = [SUSPECT_URL=https://example.com/suspect.mp4]
+     Click “Pin evidence & raise dispute” — wait for an evidence result to appear.
+  6. **Verify on-screen:** Confirm an evidence URI (ipfs://…) is displayed and a dispute submission confirmation appears (tx hash or success toast).
 - **Voiceover:**
-  > “Cliplore also covers IP Detection & Enforcement. On the Enforcement page, I can verify suspicious content by hash and then file a report: Cliplore pins an evidence bundle to IPFS and raises a dispute on Story. This turns provenance into an actionable enforcement workflow, not just a dashboard.”
+  > “For IP Detection & Enforcement, ClipLore verifies suspicious content by SHA-256 and creates an evidence bundle pinned to IPFS. Then it raises a Story dispute so enforcement is actionable, not just informational. This closes the loop from creation to compliance.”
+
+## 11. Dashboard quick check (creator overview)
+- **URL:** https://cliplore.com/dashboard
+- **Shot:** Creator dashboard with stats/cards showing project count and published asset stats (Convex-backed).
+- **Steps:**
+  1. **Current page:** https://cliplore.com/enforcement — confirm the header shows “Dashboard”.
+  2. **Current page:** https://cliplore.com/enforcement — **Navigate:** Open URL directly: https://cliplore.com/dashboard — confirm the “Dashboard” heading is visible.
+  3. **Current page:** https://cliplore.com/dashboard — **Action:** Locate the stats section — confirm at least one metric card/table row is visible.
+  4. **Current page:** https://cliplore.com/dashboard — **Action:** Click “Studio” in the header → lands on https://cliplore.com/projects — confirm the Projects list is visible.
+  5. **Current page:** https://cliplore.com/projects — **Action:** Click “Assets” in the header → lands on https://cliplore.com/assets — confirm the Assets list is visible.
+  6. **Verify on-screen:** Confirm navigation between Dashboard → Studio → Assets works without losing wallet connection (address chip remains visible).
+- **Voiceover:**
+  > “Finally, the creator Dashboard ties it together: projects, published IP, and activity at a glance. From here, you can jump back into Studio to create, Assets to manage, or Enforcement to verify—keeping the user journey clean and fast.”
 
 ## Final Wrap-Up
-- **URL:** https://cliplore.com/explore
-- **Shot:** Explore marketplace showing IP cards with on-chain IP IDs and license summaries, plus the header navigation for Home/Explore/Datasets/Demo/Studio/Assets/Enforcement/Settings.
+- **URL:** https://cliplore.com/demo
+- **Shot:** Demo hub with five genre cards and quick nav access to Studio, Explore, Datasets, Assets, and Enforcement.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/explore — confirm heading “Explore IP” is visible.
-  2. **Verify final state:** Confirm at least one IP listing card is visible with an IP ID (0x…), license terms summary, and “View details” / “Remix this IP” actions.
+  1. **Current page:** https://cliplore.com/dashboard — confirm the header shows “Demo”.
+  2. **Navigate:** Click “Demo” in the header → lands on https://cliplore.com/demo — confirm heading “Demos” is visible.
+  3. **Verify final state:** Confirm the five demo cards are visible and each has “Open demo” and “YouTube”, proving Generative Video outputs + prompts are documented alongside Story links.
 - **Voiceover:**
-  > “In this demo we proved the full journey: explore public demos with exact prompts, browse the IP marketplace, generate and edit clips in the studio, export and publish to Story with IPFS metadata, manage assets with licensing and royalties, publish dataset IP, and even verify and report infringement. Try it at [DEMO_URL=https://cliplore.com/demo].”
+  > “We just demoed ClipLore across tracks: Generative Video demos with exact prompts, a polished Creative Front-End editor with Sora BYOK, Story publishing with IPFS fingerprints, IPFi dashboards for licensing and royalties, Data datasets registration, and IP Detection & Enforcement for verification and disputes. Try it at [DEMO_URL=https://cliplore.com/demo].”
