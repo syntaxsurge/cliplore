@@ -108,6 +108,39 @@ type RoyaltyVaultStatus =
   | "not-deployed"
   | "error";
 
+function StoryTxReceipt(props: { txHash: string | null; chainId?: number | null }) {
+  const { txHash, chainId } = props;
+
+  if (!txHash) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Tx: <span className="font-mono">submitted</span>
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">Transaction hash</p>
+      <code className="block break-all rounded-md bg-background/60 px-2 py-1 font-mono text-[11px] text-foreground">
+        {txHash}
+      </code>
+      <a
+        className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
+        href={getStoryTxExplorerUrl({
+          txHash,
+          chainId: chainId ?? undefined,
+        })}
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        View on Story Explorer
+      </a>
+    </div>
+  );
+}
+
 function formatUserError(error: unknown, fallback: string) {
   if (typeof error === "string") return error;
   if (error && typeof error === "object") {
@@ -262,12 +295,14 @@ export default function AssetDetailPage() {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [licenseMessage, setLicenseMessage] = useState<string | null>(null);
+  const [licenseTxHash, setLicenseTxHash] = useState<string | null>(null);
 
   const [tipAmount, setTipAmount] = useState("1");
   const [tipStatus, setTipStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [tipMessage, setTipMessage] = useState<string | null>(null);
+  const [tipTxHash, setTipTxHash] = useState<string | null>(null);
 
   const [claimerMode, setClaimerMode] = useState<"wallet" | "ip">("ip");
   const [claimableStatus, setClaimableStatus] = useState<
@@ -279,6 +314,7 @@ export default function AssetDetailPage() {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [claimMessage, setClaimMessage] = useState<string | null>(null);
+  const [claimTxHash, setClaimTxHash] = useState<string | null>(null);
 
   const [fractionTarget, setFractionTarget] = useState("");
   const [fractionPercent, setFractionPercent] = useState("5");
@@ -286,6 +322,7 @@ export default function AssetDetailPage() {
     "idle" | "loading" | "success" | "error"
   >("idle");
   const [fractionMessage, setFractionMessage] = useState<string | null>(null);
+  const [fractionTxHash, setFractionTxHash] = useState<string | null>(null);
 
   const [wrapAmount, setWrapAmount] = useState("1");
   const [wrapStatus, setWrapStatus] = useState<
@@ -487,6 +524,7 @@ export default function AssetDetailPage() {
   const handleAttachTerms = async () => {
     setLicenseStatus("loading");
     setLicenseMessage(null);
+    setLicenseTxHash(null);
     try {
       ensureWalletReady();
       const res = await setCommercialRemixTerms({
@@ -513,7 +551,8 @@ export default function AssetDetailPage() {
       );
 
       setLicenseStatus("success");
-      setLicenseMessage(`License terms attached. Tx: ${txHash ?? "submitted"}`);
+      setLicenseMessage("License terms attached.");
+      setLicenseTxHash(txHash);
 
       if (address) {
         try {
@@ -553,6 +592,7 @@ export default function AssetDetailPage() {
   const handleTip = async () => {
     setTipStatus("loading");
     setTipMessage(null);
+    setTipTxHash(null);
     try {
       ensureWalletReady();
       ensureRoyaltiesActive();
@@ -562,7 +602,8 @@ export default function AssetDetailPage() {
         amountWip: tipAmount,
       });
       setTipStatus("success");
-      setTipMessage(`Tip sent. Tx: ${res.txHash ?? "submitted"}`);
+      setTipMessage("Tip sent.");
+      setTipTxHash(res.txHash ?? null);
       void refetchWipBalance();
     } catch (err: any) {
       console.error(err);
@@ -597,6 +638,7 @@ export default function AssetDetailPage() {
   const handleClaimAll = async () => {
     setClaimStatus("loading");
     setClaimMessage(null);
+    setClaimTxHash(null);
     try {
       ensureWalletReady();
       ensureRoyaltiesActive();
@@ -607,7 +649,8 @@ export default function AssetDetailPage() {
         claimer: claimerAddress as `0x${string}`,
       });
       setClaimStatus("success");
-      setClaimMessage(`Claim submitted. Tx: ${res.txHashes?.[0] ?? "submitted"}`);
+      setClaimMessage("Claim submitted.");
+      setClaimTxHash(res.txHashes?.[0] ?? null);
       void refetchWipBalance();
     } catch (err: any) {
       console.error(err);
@@ -619,6 +662,7 @@ export default function AssetDetailPage() {
   const handleFractionalize = async () => {
     setFractionStatus("loading");
     setFractionMessage(null);
+    setFractionTxHash(null);
     try {
       ensureWalletReady();
       ensureRoyaltiesActive();
@@ -632,9 +676,8 @@ export default function AssetDetailPage() {
         percent: fractionPercent,
       });
       setFractionStatus("success");
-      setFractionMessage(
-        `Transfer submitted. Tx: ${res.txHash ?? "submitted"}`,
-      );
+      setFractionMessage("Transfer submitted.");
+      setFractionTxHash(res.txHash ?? null);
     } catch (err: any) {
       console.error(err);
       setFractionStatus("error");
@@ -1158,7 +1201,15 @@ export default function AssetDetailPage() {
                       }
                       role={licenseStatus === "error" ? "alert" : "status"}
                     >
-                      <AlertDescription>{licenseMessage}</AlertDescription>
+                      <AlertDescription className="space-y-2">
+                        <p>{licenseMessage}</p>
+                        {licenseStatus === "success" ? (
+                          <StoryTxReceipt
+                            txHash={licenseTxHash}
+                            chainId={asset.chainId}
+                          />
+                        ) : null}
+                      </AlertDescription>
                     </Alert>
                   ) : null}
                 </CardContent>
@@ -1322,7 +1373,15 @@ export default function AssetDetailPage() {
                       }
                       role={tipStatus === "error" ? "alert" : "status"}
                     >
-                      <AlertDescription>{tipMessage}</AlertDescription>
+                      <AlertDescription className="space-y-2">
+                        <p>{tipMessage}</p>
+                        {tipStatus === "success" ? (
+                          <StoryTxReceipt
+                            txHash={tipTxHash}
+                            chainId={asset.chainId}
+                          />
+                        ) : null}
+                      </AlertDescription>
                     </Alert>
                   ) : null}
                 </CardContent>
@@ -1437,8 +1496,14 @@ export default function AssetDetailPage() {
                           : "status"
                       }
                     >
-                      <AlertDescription>
-                        {claimMessage ?? claimableMessage}
+                      <AlertDescription className="space-y-2">
+                        <p>{claimMessage ?? claimableMessage}</p>
+                        {claimMessage && claimStatus === "success" ? (
+                          <StoryTxReceipt
+                            txHash={claimTxHash}
+                            chainId={asset.chainId}
+                          />
+                        ) : null}
                       </AlertDescription>
                     </Alert>
                   ) : null}
@@ -1556,8 +1621,14 @@ export default function AssetDetailPage() {
                                 fractionStatus === "error" ? "alert" : "status"
                               }
                             >
-                              <AlertDescription>
-                                {fractionMessage}
+                              <AlertDescription className="space-y-2">
+                                <p>{fractionMessage}</p>
+                                {fractionStatus === "success" ? (
+                                  <StoryTxReceipt
+                                    txHash={fractionTxHash}
+                                    chainId={asset.chainId}
+                                  />
+                                ) : null}
                               </AlertDescription>
                             </Alert>
                           ) : null}
@@ -1607,23 +1678,13 @@ export default function AssetDetailPage() {
                                   wrapStatus === "error" ? "alert" : "status"
                                 }
                               >
-                                <AlertDescription className="space-y-1">
+                                <AlertDescription className="space-y-2">
                                   <p>{wrapMessage}</p>
-                                  {wrapStatus === "success" && wrapTxHash ? (
-                                    <a
-                                      className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
-                                      href={getStoryTxExplorerUrl({
-                                        txHash: wrapTxHash,
-                                      })}
-                                      target="_blank"
-                                      rel="noreferrer noopener"
-                                      title={wrapTxHash}
-                                    >
-                                      View transaction{" "}
-                                      <span className="font-mono">
-                                        ({formatShortHash(wrapTxHash)})
-                                      </span>
-                                    </a>
+                                  {wrapStatus === "success" ? (
+                                    <StoryTxReceipt
+                                      txHash={wrapTxHash}
+                                      chainId={asset.chainId}
+                                    />
                                   ) : null}
                                 </AlertDescription>
                               </Alert>
@@ -1674,24 +1735,13 @@ export default function AssetDetailPage() {
                                   unwrapStatus === "error" ? "alert" : "status"
                                 }
                               >
-                                <AlertDescription className="space-y-1">
+                                <AlertDescription className="space-y-2">
                                   <p>{unwrapMessage}</p>
-                                  {unwrapStatus === "success" &&
-                                  unwrapTxHash ? (
-                                    <a
-                                      className="inline-flex items-center gap-1 text-xs font-medium underline underline-offset-2"
-                                      href={getStoryTxExplorerUrl({
-                                        txHash: unwrapTxHash,
-                                      })}
-                                      target="_blank"
-                                      rel="noreferrer noopener"
-                                      title={unwrapTxHash}
-                                    >
-                                      View transaction{" "}
-                                      <span className="font-mono">
-                                        ({formatShortHash(unwrapTxHash)})
-                                      </span>
-                                    </a>
+                                  {unwrapStatus === "success" ? (
+                                    <StoryTxReceipt
+                                      txHash={unwrapTxHash}
+                                      chainId={asset.chainId}
+                                    />
                                   ) : null}
                                 </AlertDescription>
                               </Alert>
