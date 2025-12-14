@@ -15,7 +15,7 @@ function parsePercentToRoyaltyUnits(percentText: string): number {
   normalized = normalized.replace(/,/g, "");
 
   if (!normalized) throw new Error("Percent is required.");
-  if (!/^(?:\\d+)(?:\\.\\d*)?$/.test(normalized)) {
+  if (!/^(?:\d+)(?:\.\d*)?$/.test(normalized)) {
     throw new Error("Percent must be a number.");
   }
 
