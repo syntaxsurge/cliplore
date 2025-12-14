@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -12,6 +12,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -19,6 +29,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CopyIconButton } from "@/components/data-display/CopyIconButton";
 import { ExternalLinkIconButton } from "@/components/data-display/ExternalLinkIconButton";
 import { TruncatedCode } from "@/components/data-display/TruncatedCode";
@@ -29,12 +47,14 @@ import {
 import { formatBytes, formatShortHash, ipfsUriToGatewayUrl } from "@/lib/utils";
 import {
   AlignLeft,
+  Archive,
   Database,
   FileText,
   Globe,
   Hash,
   Image as ImageIcon,
   LayoutDashboard,
+  MoreVertical,
   Music,
   Play,
   Sparkles,
@@ -64,10 +84,23 @@ function formatLocalDate(value: number) {
   }
 }
 
-export default function AssetCard(props: { row: AssetRow }) {
-  const { row } = props;
+export default function AssetCard(props: {
+  row: AssetRow;
+  viewerWallet?: string;
+  onSetArchived?: (input: { ipId: string; archived: boolean }) => Promise<boolean>;
+}) {
+  const { row, viewerWallet, onSetArchived } = props;
   const assetKind = (row.asset.assetKind ?? "video").toLowerCase();
   const isDataset = assetKind === "dataset";
+  const isArchived = Boolean(row.asset.archived);
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [archiveSubmitting, setArchiveSubmitting] = useState(false);
+
+  const canManageArchive =
+    row.hasRemote &&
+    Boolean(viewerWallet) &&
+    viewerWallet!.toLowerCase() === row.asset.licensorWallet.toLowerCase() &&
+    typeof onSetArchived === "function";
   const mediaUrl = useMemo(
     () => ipfsUriToGatewayUrl(row.asset.videoUrl),
     [row.asset.videoUrl],
@@ -102,11 +135,13 @@ export default function AssetCard(props: { row: AssetRow }) {
   const dashboardHref = `/assets/${encodeURIComponent(row.asset.ipId)}`;
   const remixHref = `/projects?parentIp=${encodeURIComponent(row.asset.ipId)}`;
 
-  const status = row.hasRemote
-    ? { variant: "success" as const, label: "Listed" }
-    : row.hasLocal
-      ? { variant: "warning" as const, label: "Local only" }
-      : { variant: "outline" as const, label: "Unverified" };
+  const status = isArchived
+    ? { variant: "outline" as const, label: "Archived" }
+    : row.hasRemote
+      ? { variant: "success" as const, label: "Listed" }
+      : row.hasLocal
+        ? { variant: "warning" as const, label: "Local only" }
+        : { variant: "outline" as const, label: "Unverified" };
 
   const updatedAt = row.asset.updatedAt ?? row.asset.createdAt;
   const updatedLabel = updatedAt ? formatLocalDate(updatedAt) : "";
@@ -245,9 +280,116 @@ export default function AssetCard(props: { row: AssetRow }) {
           <CardTitle className="min-w-0 truncate text-xl">
             {row.asset.title}
           </CardTitle>
-          <Badge variant="outline" className="shrink-0 font-mono">
-            {formatShortHash(row.asset.ipId)}
-          </Badge>
+          <div className="flex shrink-0 items-center gap-1">
+            <Badge variant="outline" className="font-mono">
+              {formatShortHash(row.asset.ipId)}
+            </Badge>
+
+            {canManageArchive ? (
+              <>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Open asset actions"
+                    >
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel>Marketplace visibility</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => setArchiveDialogOpen(true)}
+                      className={
+                        isArchived
+                          ? undefined
+                          : "text-destructive focus:text-destructive"
+                      }
+                    >
+                      <Archive className="h-4 w-4" />
+                      {isArchived ? "Restore from archive" : "Archive"}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <AlertDialog
+                  open={archiveDialogOpen}
+                  onOpenChange={(open) => {
+                    if (archiveSubmitting) return;
+                    setArchiveDialogOpen(open);
+                  }}
+                >
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {isArchived ? "Restore this asset?" : "Archive this asset?"}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {isArchived
+                          ? "Restoring makes this asset visible in Explore again."
+                          : "Archiving hides this asset from the Explore marketplace."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+
+                    <div className="grid gap-3 text-sm">
+                      <div className="rounded-xl border border-border bg-muted/30 p-3">
+                        <p className="font-medium text-foreground">
+                          {row.asset.title}
+                        </p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">
+                          {row.asset.ipId}
+                        </p>
+                      </div>
+
+                      <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                        <li>Removes it from marketplace lists (Explore / Datasets).</li>
+                        <li>Keeps the on-chain Story registration unchanged.</li>
+                        <li>Still accessible via direct links and your dashboard.</li>
+                        <li>You can restore it anytime from the Archived tab.</li>
+                      </ul>
+                    </div>
+
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={archiveSubmitting}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        disabled={archiveSubmitting}
+                        className={
+                          isArchived
+                            ? undefined
+                            : buttonVariants({ variant: "destructive" })
+                        }
+                        onClick={async (event) => {
+                          event.preventDefault();
+                          if (!onSetArchived) return;
+                          setArchiveSubmitting(true);
+                          try {
+                            const ok = await onSetArchived({
+                              ipId: row.asset.ipId,
+                              archived: !isArchived,
+                            });
+                            if (ok) setArchiveDialogOpen(false);
+                          } finally {
+                            setArchiveSubmitting(false);
+                          }
+                        }}
+                      >
+                        {archiveSubmitting
+                          ? "Working…"
+                          : isArchived
+                            ? "Restore"
+                            : "Archive"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={status.variant}>{status.label}</Badge>

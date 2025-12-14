@@ -13,7 +13,7 @@ import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
 import { clientEnv } from "@/lib/env/client";
 import { uploadIpMetadataAction } from "@/lib/story/actions/upload-ip-metadata";
 import { LICENSE_PRESETS, type LicensePreset } from "@/lib/story/license-presets";
-import { createConvexIpAsset, fetchConvexUser } from "@/lib/api/convex";
+import { fetchConvexUser, upsertConvexIpAsset } from "@/lib/api/convex";
 import { getFile, getProject, storeProject, useAppDispatch, useAppSelector } from "@/app/store";
 import { rehydrate } from "@/app/store/slices/projectSlice";
 import { setCurrentProject, updateProject } from "@/app/store/slices/projectsSlice";
@@ -110,7 +110,7 @@ export default function PublishClient({
   const [marketplaceSyncMessage, setMarketplaceSyncMessage] = useState<
     string | null
   >(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [uploadProgress, setUploadProgress] =
     useState<UploadProgressState | null>(null);
   const [thumbnailTimestamp, setThumbnailTimestamp] = useState(0.1);
@@ -118,6 +118,9 @@ export default function PublishClient({
   const videoRef = useRef<HTMLVideoElement>(null);
   const scrubCaptureInFlightRef = useRef(false);
   const scrubCaptureScheduledRef = useRef(false);
+  const publishInFlightRef = useRef(false);
+  const uploadOnlyInFlightRef = useRef(false);
+  const marketplaceSyncInFlightRef = useRef(false);
 
   const [creatorName, setCreatorName] = useState<string>("");
 
@@ -338,11 +341,13 @@ export default function PublishClient({
       toast.error("Connect your wallet to sync the marketplace listing.");
       return;
     }
+    if (marketplaceSyncInFlightRef.current) return;
+    marketplaceSyncInFlightRef.current = true;
 
     setMarketplaceSyncStatus("syncing");
     setMarketplaceSyncMessage("Syncing listing to marketplace…");
     try {
-      await createConvexIpAsset({
+      await upsertConvexIpAsset({
         wallet: address,
         localProjectId: projectId,
         projectTitle: projectState.projectName,
@@ -371,6 +376,8 @@ export default function PublishClient({
       console.error(err);
       setMarketplaceSyncStatus("error");
       setMarketplaceSyncMessage(err?.message ?? "Marketplace sync failed.");
+    } finally {
+      marketplaceSyncInFlightRef.current = false;
     }
   };
 
@@ -535,25 +542,27 @@ export default function PublishClient({
   };
 
   const handleUploadOnly = async () => {
-    setMessage(null);
-
-    if (!selectedExport || !selectedExportId) {
-      setStatus("error");
-      setMessage("Select an export to upload.");
-      return;
-    }
-    if (!exportFile) {
-      setStatus("error");
-      setMessage("Export file missing. Re-export from the editor.");
-      return;
-    }
-    if (!isConnected || !address) {
-      setStatus("error");
-      setMessage("Connect your wallet to upload.");
-      return;
-    }
-
+    if (uploadOnlyInFlightRef.current) return;
+    uploadOnlyInFlightRef.current = true;
     try {
+      setMessage(null);
+
+      if (!selectedExport || !selectedExportId) {
+        setStatus("error");
+        setMessage("Select an export to upload.");
+        return;
+      }
+      if (!exportFile) {
+        setStatus("error");
+        setMessage("Export file missing. Re-export from the editor.");
+        return;
+      }
+      if (!isConnected || !address) {
+        setStatus("error");
+        setMessage("Connect your wallet to upload.");
+        return;
+      }
+
       await uploadAssetsToB2();
       setStatus("idle");
       setMessage("Upload complete. Ready to register on Story.");
@@ -561,52 +570,62 @@ export default function PublishClient({
       console.error(err);
       setStatus("error");
       setMessage(err?.message ?? "Upload failed.");
+    } finally {
+      uploadOnlyInFlightRef.current = false;
     }
   };
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
-    setMarketplaceSyncStatus("idle");
-    setMarketplaceSyncMessage(null);
-
-    if (!selectedExport || !selectedExportId) {
-      setStatus("error");
-      setMessage("Select an export to publish.");
-      return;
-    }
-    if (!exportFile) {
-      setStatus("error");
-      setMessage("Export file missing. Re-export from the editor.");
-      return;
-    }
-    if (!isConnected || !address) {
-      setStatus("error");
-      setMessage("Connect your wallet to publish.");
-      return;
-    }
-    if (!isSpgConfigured) {
-      setStatus("error");
-      setMessage("Set NEXT_PUBLIC_SPG_NFT_CONTRACT_ADDRESS to publish.");
-      return;
-    }
-    if (!isWipConfigured) {
-      setStatus("error");
-      setMessage("Set NEXT_PUBLIC_WIP_TOKEN_ADDRESS to publish.");
-      return;
-    }
-    if (!title.trim() || title.trim().length < 3) {
-      setStatus("error");
-      setMessage("Title must be at least 3 characters.");
-      return;
-    }
-    if (!summary.trim() || summary.trim().length < 5) {
-      setStatus("error");
-      setMessage("Description must be at least 5 characters.");
-      return;
-    }
+    if (publishInFlightRef.current) return;
+    publishInFlightRef.current = true;
 
     try {
+      setMessage(null);
+      setMarketplaceSyncStatus("idle");
+      setMarketplaceSyncMessage(null);
+
+      if (!selectedExport || !selectedExportId) {
+        setStatus("error");
+        setMessage("Select an export to publish.");
+        return;
+      }
+      if (selectedExport.publish?.ipId) {
+        setStatus("error");
+        setMessage("This export is already published.");
+        return;
+      }
+      if (!exportFile) {
+        setStatus("error");
+        setMessage("Export file missing. Re-export from the editor.");
+        return;
+      }
+      if (!isConnected || !address) {
+        setStatus("error");
+        setMessage("Connect your wallet to publish.");
+        return;
+      }
+      if (!isSpgConfigured) {
+        setStatus("error");
+        setMessage("Set NEXT_PUBLIC_SPG_NFT_CONTRACT_ADDRESS to publish.");
+        return;
+      }
+      if (!isWipConfigured) {
+        setStatus("error");
+        setMessage("Set NEXT_PUBLIC_WIP_TOKEN_ADDRESS to publish.");
+        return;
+      }
+      if (!title.trim() || title.trim().length < 3) {
+        setStatus("error");
+        setMessage("Title must be at least 3 characters.");
+        return;
+      }
+      if (!summary.trim() || summary.trim().length < 5) {
+        setStatus("error");
+        setMessage("Description must be at least 5 characters.");
+        return;
+      }
+
       const { baseProject, videoUpload, thumbnailUpload } =
         await uploadAssetsToB2();
 
@@ -669,7 +688,9 @@ export default function PublishClient({
       });
 
       setStatus("registering");
-      setMessage("Registering IP Asset on Story…");
+      setMessage(
+        "Registering IP Asset on Story… You may be prompted for more than one wallet confirmation (approval + registration).",
+      );
 
       if (!client) {
         throw new Error("Wallet client not ready yet. Try again in a moment.");
@@ -747,7 +768,7 @@ export default function PublishClient({
       try {
         setMarketplaceSyncStatus("syncing");
         setMarketplaceSyncMessage("Syncing listing to marketplace…");
-        await createConvexIpAsset({
+        await upsertConvexIpAsset({
           wallet: address,
           localProjectId: projectId,
           projectTitle: baseProject.projectName,
@@ -788,6 +809,8 @@ export default function PublishClient({
       console.error(err);
       setStatus("error");
       setMessage(err?.message ?? "Publish failed.");
+    } finally {
+      publishInFlightRef.current = false;
     }
   };
 
@@ -1118,7 +1141,7 @@ export default function PublishClient({
 	            </Card>
 
 	            <form
-	              onSubmit={(e) => startTransition(() => handlePublish(e))}
+	              onSubmit={handlePublish}
 	              className="space-y-6"
 	            >
 	              <Card>
@@ -1303,14 +1326,13 @@ export default function PublishClient({
 	                      type="button"
 	                      variant="outline"
 	                      disabled={
-	                        isPending ||
 	                        status === "uploading" ||
 	                        status === "registering" ||
 	                        !selectedExport ||
 	                        !exportFile ||
 	                        !!published?.ipId
 	                      }
-	                      onClick={() => startTransition(() => handleUploadOnly())}
+	                      onClick={() => void handleUploadOnly()}
 	                    >
 	                      Upload only
 	                    </Button>
@@ -1318,7 +1340,6 @@ export default function PublishClient({
 	                      type="submit"
 	                      className="min-w-[220px]"
 	                      disabled={
-	                        isPending ||
 	                        status === "uploading" ||
 	                        status === "registering" ||
 	                        !hasThumbnail ||

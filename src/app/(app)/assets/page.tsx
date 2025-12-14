@@ -4,9 +4,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
+import toast from "react-hot-toast";
 import { listProjects } from "@/app/store";
 import type { ProjectState } from "@/app/types";
-import { createConvexIpAsset, fetchConvexIpAssets } from "@/lib/api/convex";
+import {
+  fetchConvexIpAssets,
+  setConvexIpAssetArchived,
+  upsertConvexIpAsset,
+} from "@/lib/api/convex";
 import { clientEnv } from "@/lib/env/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +38,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { formatShortHash } from "@/lib/utils";
 import {
+  Archive,
   Cloud,
   Filter,
   HardDrive,
@@ -73,6 +80,9 @@ function toMarketplaceAssetFromLocal(
 ): MarketplaceAsset {
   return {
     ipId: local.publish.ipId.toLowerCase(),
+    archived: false,
+    archivedAt: null,
+    archivedBy: null,
     title: local.publish.title,
     summary: local.publish.summary,
     terms: local.publish.terms,
@@ -90,6 +100,7 @@ function toMarketplaceAssetFromLocal(
 type SortKey = "newest" | "oldest";
 type SourceFilter = "all" | "listed" | "local-only" | "remote-only";
 type KindFilter = "all" | "video" | "dataset";
+type ArchiveView = "active" | "archived";
 
 function normalizeQuery(value: string) {
   return value.trim().toLowerCase();
@@ -117,6 +128,7 @@ export default function AssetsPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
+  const [archiveView, setArchiveView] = useState<ArchiveView>("active");
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -162,10 +174,28 @@ export default function AssetsPage() {
     );
   }, [address, localPublished, remoteAssets]);
 
+  const archiveCounts = useMemo(() => {
+    const archived = mergedRows.filter(
+      (row) => row.hasRemote && Boolean(row.asset.archived),
+    ).length;
+    return {
+      archived,
+      active: mergedRows.length - archived,
+    };
+  }, [mergedRows]);
+
+  const viewRows = useMemo(() => {
+    if (archiveView === "archived") {
+      return mergedRows.filter((row) => row.hasRemote && Boolean(row.asset.archived));
+    }
+
+    return mergedRows.filter((row) => !(row.hasRemote && Boolean(row.asset.archived)));
+  }, [archiveView, mergedRows]);
+
   const normalizedQuery = normalizeQuery(query);
 
   const filteredRows = useMemo(() => {
-    let out = mergedRows;
+    let out = viewRows;
 
     if (kindFilter !== "all") {
       out = out.filter(
@@ -213,19 +243,19 @@ export default function AssetsPage() {
     });
 
     return sorted;
-  }, [kindFilter, mergedRows, normalizedQuery, sortKey, sourceFilter]);
+  }, [kindFilter, normalizedQuery, sortKey, sourceFilter, viewRows]);
 
   const counts = useMemo(() => {
-    const total = mergedRows.length;
-    const listed = mergedRows.filter((row) => row.hasRemote).length;
-    const localOnly = mergedRows.filter(
+    const total = viewRows.length;
+    const listed = viewRows.filter((row) => row.hasRemote).length;
+    const localOnly = viewRows.filter(
       (row) => row.hasLocal && !row.hasRemote,
     ).length;
-    const remoteOnly = mergedRows.filter(
+    const remoteOnly = viewRows.filter(
       (row) => row.hasRemote && !row.hasLocal,
     ).length;
     return { total, listed, localOnly, remoteOnly };
-  }, [mergedRows]);
+  }, [viewRows]);
 
   const loadLocalProjects = async () => {
     setIsLoadingLocal(true);
@@ -248,7 +278,10 @@ export default function AssetsPage() {
     setIsLoadingRemote(true);
     setRemoteError(null);
     try {
-      const { ipAssets } = await fetchConvexIpAssets({ wallet: address });
+      const { ipAssets } = await fetchConvexIpAssets({
+        wallet: address,
+        includeArchived: true,
+      });
       setRemoteAssets((ipAssets ?? []) as MarketplaceAsset[]);
     } catch (err: any) {
       setRemoteAssets([]);
@@ -288,8 +321,48 @@ export default function AssetsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address]);
 
+  useEffect(() => {
+    if (archiveView === "archived" && sourceFilter === "local-only") {
+      setSourceFilter("listed");
+    }
+  }, [archiveView, sourceFilter]);
+
   const refreshAll = async () => {
     await Promise.all([loadLocalProjects(), loadRemoteAssets()]);
+  };
+
+  const handleSetArchived = async (input: { ipId: string; archived: boolean }) => {
+    if (!address) return false;
+
+    try {
+      await setConvexIpAssetArchived({
+        wallet: address,
+        ipId: input.ipId,
+        archived: input.archived,
+      });
+
+      const now = Date.now();
+      setRemoteAssets((prev) =>
+        prev.map((asset) =>
+          asset.ipId.toLowerCase() === input.ipId.toLowerCase()
+            ? {
+                ...asset,
+                archived: input.archived,
+                archivedAt: input.archived ? now : null,
+                archivedBy: input.archived ? address : null,
+                updatedAt: now,
+              }
+            : asset,
+        ),
+      );
+
+      toast.success(input.archived ? "Asset archived" : "Asset restored");
+      return true;
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message ?? "Failed to update archive status.");
+      return false;
+    }
   };
 
   const handleSyncLocalToConvex = async () => {
@@ -304,7 +377,7 @@ export default function AssetsPage() {
     setSyncMessage("Syncing local published assets to Convex…");
     try {
       for (const item of localPublished) {
-        await createConvexIpAsset({
+        await upsertConvexIpAsset({
           wallet: address,
           localProjectId: item.projectId,
           projectTitle: item.projectName,
@@ -369,7 +442,7 @@ export default function AssetsPage() {
 
   const isLoading = isLoadingLocal || isLoadingRemote;
   const showEmptyResults =
-    !isLoading && mergedRows.length > 0 && filteredRows.length === 0;
+    !isLoading && viewRows.length > 0 && filteredRows.length === 0;
   const showAnyFilters =
     normalizedQuery.length > 0 ||
     kindFilter !== "all" ||
@@ -490,6 +563,26 @@ export default function AssetsPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
+                <Tabs
+                  value={archiveView}
+                  onValueChange={(value) => setArchiveView(value as ArchiveView)}
+                >
+                  <TabsList>
+                    <TabsTrigger value="active" className="gap-2">
+                      Active
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                        {archiveCounts.active}
+                      </span>
+                    </TabsTrigger>
+                    <TabsTrigger value="archived" className="gap-2">
+                      Archived
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground">
+                        {archiveCounts.archived}
+                      </span>
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -533,7 +626,10 @@ export default function AssetsPage() {
                       <DropdownMenuRadioItem value="listed">
                         Listed (Convex)
                       </DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="local-only">
+                      <DropdownMenuRadioItem
+                        value="local-only"
+                        disabled={archiveView === "archived"}
+                      >
                         Local only
                       </DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="remote-only">
@@ -638,6 +734,37 @@ export default function AssetsPage() {
               </Button>
             </CardContent>
           </Card>
+        ) : viewRows.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {archiveView === "archived"
+                  ? "No archived assets"
+                  : "No active assets"}
+              </CardTitle>
+              <CardDescription>
+                {archiveView === "archived"
+                  ? "Archived assets stay hidden from Explore. Archive an asset from the Active tab to keep the marketplace tidy."
+                  : "Archived assets are hidden from this view. Switch to Archived to review or restore them."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setArchiveView(archiveView === "archived" ? "active" : "archived")}
+              >
+                <Archive />
+                {archiveView === "archived" ? "View active assets" : "View archived"}
+              </Button>
+              <Button asChild variant="outline">
+                <Link href="/explore">
+                  <Cloud />
+                  Explore marketplace
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
         ) : showEmptyResults ? (
           <Card>
             <CardHeader>
@@ -671,7 +798,12 @@ export default function AssetsPage() {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredRows.map((row) => (
-              <AssetCard key={row.asset.ipId} row={row} />
+              <AssetCard
+                key={row.asset.ipId}
+                row={row}
+                viewerWallet={address}
+                onSetArchived={handleSetArchived}
+              />
             ))}
           </div>
         )}

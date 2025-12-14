@@ -7,7 +7,7 @@ import { useAccount } from "wagmi";
 import { parseEther } from "viem";
 import { PILFlavor } from "@story-protocol/core-sdk";
 import { uploadIpMetadataAction } from "@/lib/story/actions/upload-ip-metadata";
-import { createConvexIpAsset } from "@/lib/api/convex";
+import { upsertConvexIpAsset } from "@/lib/api/convex";
 import { clientEnv } from "@/lib/env/client";
 import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
 import { useStoryClient } from "@/lib/story/useStoryClient";
@@ -656,7 +656,7 @@ export default function DatasetPublishClient() {
 
       setStatus("syncing");
       try {
-        await createConvexIpAsset({
+        await upsertConvexIpAsset({
           wallet,
           assetKind: "dataset",
           datasetType,

@@ -373,7 +373,7 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
   - `/projects/[id]`: full-screen editor (header/footer hidden)
   - `/projects/[id]/publish`: publish wizard (upload export to B2, pin Story metadata to IPFS, register on Story)
   - `/projects/[id]/ipfi`: published-export picker that links into the asset dashboard
-  - `/assets`: creator asset library (published Story IP assets + local backfill sync)
+  - `/assets`: creator asset library (published Story IP assets + local backfill sync + archive/unarchive marketplace visibility)
   - `/assets/[ipId]`: asset dashboard (overview, licensing terms, royalties, files & metadata)
   - `/datasets/new`: dataset publisher (upload sample + cover to B2, pin Story metadata to IPFS, register on Story, sync to Convex)
   - `/enforcement`: IP detection & enforcement (verify hashes + C2PA, pin evidence, raise Story disputes)
@@ -395,7 +395,7 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
   - `/api/convex/users` (`GET` fetch user, `POST` upsert user)
   - `/api/convex/projects` (`GET` list projects, `POST` create project)
   - `/api/convex/stats` (`GET` project/IP stats)
-  - `/api/convex/ip-assets` (`GET` list marketplace assets / find by SHA-256, `POST` create asset)
+  - `/api/convex/ip-assets` (`GET` list marketplace assets / find by SHA-256 / list by wallet (`includeArchived=1`), `POST` upsert asset, `PATCH` archive/unarchive listing)
   - `/api/convex/enforcement-reports` (`GET` list reports, `POST` create report)
 
 ## Architecture Overview
@@ -405,7 +405,7 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
 - **Cross-origin isolation**: `/projects/*` sends COOP/COEP headers for the in-browser render stack while marketing routes keep standard third-party embed behavior.
 - **State & persistence**: Redux store under `src/app/store` with projects persisted locally in IndexedDB (import/export supported); media binaries are stored separately by `fileId` and `mediaFiles[].src` is rehydrated client-side from stored files.
 - **Wallet**: Wagmi + RainbowKit in `src/app/providers.tsx`; `(app)/layout.tsx` gates authenticated routes by wallet connection and shows a loading spinner while the wallet session is connecting/reconnecting; `(app)/loading.tsx` provides a workspace loading fallback during route transitions.
-- **Backend**: Convex used for syncing user/project metadata and listing IP assets in the marketplace.
+- **Backend**: Convex used for syncing user/project metadata and listing IP assets in the marketplace, with owner-controlled archiving to hide listings from marketplace lists.
 - **Story publishing**: The publish wizard pins IPA metadata-standard JSON to IPFS (Pinata) and registers the export via `client.ipAsset.registerIpAsset` with SHA-256 metadata hashes, media/thumbnail fingerprints, and license preset terms.
 - **Explorer links**: IP Asset links point to `explorer.story.foundation` (Aeneid: `aeneid.explorer.story.foundation`); transaction links point to Storyscan (Aeneid: `aeneid.storyscan.io`, default: `storyscan.io`).
 - **Data publishing**: `/datasets/new` registers dataset samples as Story IP Assets using IPA metadata `ipType: "dataset"` + a versioned `dataset` payload (`cliplore.dataset.v1`) that captures modalities, capture context, sensors, releases, manifest pointers, and hashed artifacts; the flow uploads sample/cover to B2, pins dataset manifest + Story metadata JSON to IPFS, and syncs marketplace records to Convex with `assetKind: "dataset"`.

@@ -9,8 +9,8 @@ import { formatEther, isAddress, zeroAddress } from "viem";
 import { listProjects } from "@/app/store";
 import type { ProjectState } from "@/app/types";
 import {
-  createConvexIpAsset,
   fetchConvexIpAssetByIpId,
+  upsertConvexIpAsset,
 } from "@/lib/api/convex";
 import { clientEnv } from "@/lib/env/client";
 import {
@@ -490,7 +490,7 @@ export default function AssetDetailPage() {
     setSyncStatus("syncing");
     setSyncMessage("Syncing asset to Convex…");
     try {
-      await createConvexIpAsset({
+      await upsertConvexIpAsset({
         wallet: address,
         localProjectId: localSource.projectId,
         projectTitle: localSource.projectTitle,
@@ -556,7 +556,7 @@ export default function AssetDetailPage() {
 
       if (address) {
         try {
-          await createConvexIpAsset({
+          await upsertConvexIpAsset({
             wallet: address,
             localProjectId: localSource?.projectId,
             projectTitle: localSource?.projectTitle,

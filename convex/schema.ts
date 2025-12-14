@@ -52,6 +52,9 @@ export default defineSchema({
     nftMetadataHash: v.optional(v.string()),
     videoKey: v.optional(v.string()),
     thumbnailKey: v.optional(v.string()),
+    archived: v.optional(v.boolean()),
+    archivedAt: v.optional(v.number()),
+    archivedBy: v.optional(v.string()),
     updatedAt: v.optional(v.number()),
     createdAt: v.number(),
   })

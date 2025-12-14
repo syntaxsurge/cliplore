@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getConvexClient } from "@/lib/db/convex/client";
 import { datasetTypeSchema as datasetTypeSchemaZod } from "@/lib/story/dataset-metadata";
 
-const createSchema = z.object({
+const upsertSchema = z.object({
   wallet: z.string().min(1),
   localProjectId: z.string().min(1).optional(),
   projectTitle: z.string().min(1).optional(),
@@ -31,12 +31,21 @@ const createSchema = z.object({
   thumbnailKey: z.string().min(1).optional(),
 });
 
+const setArchivedSchema = z.object({
+  wallet: z.string().min(1),
+  ipId: z.string().min(1),
+  archived: z.boolean(),
+});
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const wallet = searchParams.get("wallet");
   const ipId = searchParams.get("ipId");
   const sha256 = searchParams.get("sha256");
   const assetKind = searchParams.get("assetKind");
+  const includeArchivedParam = searchParams.get("includeArchived");
+  const includeArchived =
+    includeArchivedParam === "1" || includeArchivedParam === "true";
 
   try {
     const client = getConvexClient();
@@ -64,7 +73,7 @@ export async function GET(req: Request) {
     if (wallet) {
       const ipAssets = await (client as any).query(
         "functions/ipAssets:listByWallet",
-        { wallet },
+        { wallet, includeArchived },
       );
       return NextResponse.json({ ipAssets });
     }
@@ -88,7 +97,7 @@ export async function POST(req: Request) {
     body = null;
   }
 
-  const parsed = createSchema.safeParse(body);
+  const parsed = upsertSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       {
@@ -131,7 +140,7 @@ export async function POST(req: Request) {
     const client = getConvexClient();
     await (client as any).mutation("functions/users:upsert", { wallet });
     const ipAsset = await (client as any).mutation(
-      "functions/ipAssets:create",
+      "functions/ipAssets:upsert",
       {
         wallet,
         localProjectId,
@@ -165,6 +174,45 @@ export async function POST(req: Request) {
     console.error("Convex ipAssets:create error", error);
     return NextResponse.json(
       { error: "Failed to create IP asset in Convex" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PATCH(req: Request) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    body = null;
+  }
+
+  const parsed = setArchivedSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Invalid request",
+        details: parsed.error.flatten(),
+      },
+      { status: 400 },
+    );
+  }
+
+  const { wallet, ipId, archived } = parsed.data;
+
+  try {
+    const client = getConvexClient();
+    await (client as any).mutation("functions/users:upsert", { wallet });
+    await (client as any).mutation("functions/ipAssets:setArchived", {
+      wallet,
+      ipId,
+      archived,
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Convex ipAssets:setArchived error", error);
+    return NextResponse.json(
+      { error: "Failed to update archive status in Convex" },
       { status: 500 },
     );
   }

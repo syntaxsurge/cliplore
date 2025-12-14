@@ -76,10 +76,12 @@ export async function createConvexProject(input: {
 export async function fetchConvexIpAssets(params?: {
   wallet?: string;
   assetKind?: string;
+  includeArchived?: boolean;
 }) {
   const search = new URLSearchParams();
   if (params?.wallet) search.set("wallet", params.wallet);
   if (params?.assetKind) search.set("assetKind", params.assetKind);
+  if (params?.wallet && params?.includeArchived) search.set("includeArchived", "1");
   const suffix = search.toString();
   const url = suffix ? `/api/convex/ip-assets?${suffix}` : "/api/convex/ip-assets";
   const res = await fetch(url, {
@@ -105,7 +107,7 @@ export async function fetchConvexIpAssetsBySha256(sha256: string) {
   return handleResponse<{ matches: Array<any> }>(res);
 }
 
-export async function createConvexIpAsset(input: {
+export async function upsertConvexIpAsset(input: {
   wallet: string;
   localProjectId?: string;
   projectTitle?: string;
@@ -146,6 +148,19 @@ export async function createConvexIpAsset(input: {
     body: JSON.stringify(input),
   });
   return handleResponse<{ ipAsset: { id: string } }>(res);
+}
+
+export async function setConvexIpAssetArchived(input: {
+  wallet: string;
+  ipId: string;
+  archived: boolean;
+}) {
+  const res = await fetch("/api/convex/ip-assets", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return handleResponse<{ ok: true }>(res);
 }
 
 export async function fetchConvexEnforcementReports(params: {

@@ -7,6 +7,10 @@ import {
 import { v } from "convex/values";
 import { getUserByWallet } from "./_helpers";
 
+function getRecordUpdatedAt(record: any) {
+  return record.updatedAt ?? record.createdAt ?? 0;
+}
+
 function toIpAssetResponse(record: any) {
   return {
     assetKind: record.assetKind ?? "video",
@@ -14,6 +18,9 @@ function toIpAssetResponse(record: any) {
     tags: record.tags ?? [],
     mediaMimeType: record.mediaMimeType ?? null,
     mediaSizeBytes: record.mediaSizeBytes ?? null,
+    archived: Boolean(record.archived),
+    archivedAt: record.archivedAt ?? null,
+    archivedBy: record.archivedBy ?? null,
     ipId: record.ipId,
     title: record.title,
     summary: record.summary,
@@ -37,7 +44,7 @@ function toIpAssetResponse(record: any) {
   };
 }
 
-export const create = mutation({
+export const upsert = mutation({
   args: {
     wallet: v.string(),
     localProjectId: v.optional(v.string()),
@@ -139,12 +146,27 @@ export const create = mutation({
     const normalizedVideoSha256 = videoSha256?.toLowerCase();
     const normalizedThumbnailSha256 = thumbnailSha256?.toLowerCase();
 
-    const existing = await db
+    const existingMatches = await db
       .query("ipAssets")
       .withIndex("by_ipId", (q: any) => q.eq("ipId", normalizedIpId))
-      .unique();
+      .collect();
+
+    const sortedExisting = [...existingMatches].sort(
+      (a: any, b: any) => getRecordUpdatedAt(b) - getRecordUpdatedAt(a),
+    );
+    const existing =
+      sortedExisting.find((record: any) => !record.archived) ??
+      sortedExisting[0] ??
+      null;
 
     if (existing) {
+      if (
+        existing.licensorWallet?.toLowerCase?.() !== wallet.toLowerCase() &&
+        existing.licensorWallet !== wallet
+      ) {
+        throw new Error("Only the IP asset owner can update this listing.");
+      }
+
       const patch: any = {
         title,
         summary,
@@ -224,6 +246,7 @@ export const create = mutation({
       terms,
       videoUrl,
       licensorWallet: wallet,
+      archived: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -262,7 +285,16 @@ export const listMarketplace = query({
   args: {},
   handler: async ({ db }: QueryCtx) => {
     const records = await db.query("ipAssets").order("desc").collect();
-    return records.map(toIpAssetResponse);
+    const seen = new Set<string>();
+    const deduped = records.filter((record: any) => {
+      if (record.archived) return false;
+      const key = (record.ipId ?? "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return deduped.map(toIpAssetResponse);
   },
 });
 
@@ -275,13 +307,27 @@ export const listByAssetKind = query({
       .withIndex("by_assetKind", (q: any) => q.eq("assetKind", normalized))
       .order("desc")
       .collect();
-    return records.map(toIpAssetResponse);
+    const seen = new Set<string>();
+    const deduped = records.filter((record: any) => {
+      if (record.archived) return false;
+      const key = (record.ipId ?? "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return deduped.map(toIpAssetResponse);
   },
 });
 
 export const listByWallet = query({
-  args: { wallet: v.string() },
-  handler: async ({ db }: QueryCtx, { wallet }: { wallet: string }) => {
+  args: { wallet: v.string(), includeArchived: v.optional(v.boolean()) },
+  handler: async (
+    { db }: QueryCtx,
+    {
+      wallet,
+      includeArchived,
+    }: { wallet: string; includeArchived?: boolean },
+  ) => {
     const records = await db
       .query("ipAssets")
       .withIndex("by_licensorWallet", (q: any) =>
@@ -289,12 +335,21 @@ export const listByWallet = query({
       )
       .collect();
 
-    return records
-      .sort(
-        (a: any, b: any) =>
-          (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt),
-      )
-      .map(toIpAssetResponse);
+    const filtered = includeArchived ? records : records.filter((r: any) => !r.archived);
+
+    const sorted = filtered.sort(
+      (a: any, b: any) => getRecordUpdatedAt(b) - getRecordUpdatedAt(a),
+    );
+
+    const seen = new Set<string>();
+    const deduped = sorted.filter((record: any) => {
+      const key = (record.ipId ?? "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return deduped.map(toIpAssetResponse);
   },
 });
 
@@ -302,14 +357,60 @@ export const getByIpId = query({
   args: { ipId: v.string() },
   handler: async ({ db }: QueryCtx, { ipId }: { ipId: string }) => {
     const normalizedIpId = ipId.toLowerCase();
-    const record = await db
+    const matches = await db
       .query("ipAssets")
       .withIndex("by_ipId", (q: any) => q.eq("ipId", normalizedIpId))
-      .unique();
+      .collect();
 
-    if (!record) return null;
+    if (!matches.length) return null;
 
-    return toIpAssetResponse(record);
+    const sorted = [...matches].sort(
+      (a: any, b: any) => getRecordUpdatedAt(b) - getRecordUpdatedAt(a),
+    );
+    return toIpAssetResponse(sorted[0]);
+  },
+});
+
+export const setArchived = mutation({
+  args: { wallet: v.string(), ipId: v.string(), archived: v.boolean() },
+  handler: async (
+    { db }: MutationCtx,
+    { wallet, ipId, archived }: { wallet: string; ipId: string; archived: boolean },
+  ) => {
+    const user = await getUserByWallet(db, wallet);
+    if (!user) {
+      throw new Error("User must exist before updating an IP asset.");
+    }
+
+    const normalizedIpId = ipId.toLowerCase();
+    const matches = await db
+      .query("ipAssets")
+      .withIndex("by_ipId", (q: any) => q.eq("ipId", normalizedIpId))
+      .collect();
+
+    if (!matches.length) {
+      throw new Error("IP asset not found.");
+    }
+
+    const normalizedWallet = wallet.toLowerCase();
+    for (const record of matches) {
+      const owner = (record.licensorWallet ?? "").toLowerCase();
+      if (owner && owner !== normalizedWallet) {
+        throw new Error("Only the IP asset owner can change archive status.");
+      }
+    }
+
+    const now = Date.now();
+    for (const record of matches) {
+      await db.patch(record._id, {
+        archived,
+        archivedAt: archived ? now : undefined,
+        archivedBy: archived ? wallet : undefined,
+        updatedAt: now,
+      });
+    }
+
+    return { ok: true };
   },
 });
 

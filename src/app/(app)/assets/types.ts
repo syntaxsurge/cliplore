@@ -15,6 +15,9 @@ export type MarketplaceAsset = {
   tags?: string[] | null;
   mediaMimeType?: string | null;
   mediaSizeBytes?: number | null;
+  archived: boolean;
+  archivedAt: number | null;
+  archivedBy: string | null;
   ipId: string;
   title: string;
   summary: string;
@@ -35,4 +38,3 @@ export type AssetRow = {
   hasRemote: boolean;
   local?: LocalPublishedAsset;
 };
-
