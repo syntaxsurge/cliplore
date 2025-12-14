@@ -81,7 +81,7 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   7. **Current page:** Export completion dialog — **Action:** Click “Publish” → lands on https://cliplore.com/projects/[id]/publish?exportId=...
   8. **Verify on-screen:** Confirm the Publish page shows a visible “Publish” heading and the selected export is displayed.
 - **Voiceover:**
-  > “Now we export like a real editor. I open Export, click Render, and wait for the completion card. From that completion screen, I click Publish immediately—so the workflow is always Create → Edit → Export → Publish.”
+  > “Now we export like a real editor. I open Export, click Render, and wait for the completion card. From that completion screen, I click ‘Publish’—so the workflow is always Create → Edit → Export → Publish.”
 
 ## 6. Publish wizard: upload to storage, pin IPFS metadata, register on Story
 - **URL:** https://cliplore.com/projects/[id]/publish
