@@ -1,6 +1,6 @@
 ## Cliplore
 
-[![Cliplore Demo](public/images/cliplore-homepage.png)](https://cliplore.com/demo-video)
+[![Cliplore Demo](public/images/cliplore-demo.png)](https://cliplore.com/demo-video)
 
 Cliplore is a Sora-powered, IP-native video studio built on Next.js. It combines Remotion for real-time preview, ffmpeg.wasm for high-quality exports, and Story Protocol integration so every final cut can be registered and licensed on-chain.
 
