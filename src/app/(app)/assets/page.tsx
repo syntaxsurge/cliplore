@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
@@ -103,6 +103,7 @@ function normalizeAssetKind(value: string | null | undefined) {
 export default function AssetsPage() {
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [localProjects, setLocalProjects] = useState<ProjectState[]>([]);
   const [remoteAssets, setRemoteAssets] = useState<MarketplaceAsset[]>([]);
@@ -175,7 +176,8 @@ export default function AssetsPage() {
     if (sourceFilter !== "all") {
       out = out.filter((row) => {
         if (sourceFilter === "listed") return row.hasRemote;
-        if (sourceFilter === "local-only") return row.hasLocal && !row.hasRemote;
+        if (sourceFilter === "local-only")
+          return row.hasLocal && !row.hasRemote;
         return row.hasRemote && !row.hasLocal;
       });
     }
@@ -216,8 +218,12 @@ export default function AssetsPage() {
   const counts = useMemo(() => {
     const total = mergedRows.length;
     const listed = mergedRows.filter((row) => row.hasRemote).length;
-    const localOnly = mergedRows.filter((row) => row.hasLocal && !row.hasRemote).length;
-    const remoteOnly = mergedRows.filter((row) => row.hasRemote && !row.hasLocal).length;
+    const localOnly = mergedRows.filter(
+      (row) => row.hasLocal && !row.hasRemote,
+    ).length;
+    const remoteOnly = mergedRows.filter(
+      (row) => row.hasRemote && !row.hasLocal,
+    ).length;
     return { total, listed, localOnly, remoteOnly };
   }, [mergedRows]);
 
@@ -254,6 +260,26 @@ export default function AssetsPage() {
 
   useEffect(() => {
     void loadLocalProjects();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/") return;
+
+      const activeTag =
+        (document.activeElement as HTMLElement | null)?.tagName ?? "";
+      const isTypingTarget =
+        activeTag === "INPUT" ||
+        activeTag === "TEXTAREA" ||
+        activeTag === "SELECT";
+      if (isTypingTarget) return;
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   useEffect(() => {
@@ -320,8 +346,8 @@ export default function AssetsPage() {
               Assets
             </CardTitle>
             <CardDescription>
-              Connect your wallet to view assets you’ve published from Cliplore, plus any
-              marketplace listings synced via Convex.
+              Connect your wallet to view assets you’ve published from Cliplore,
+              plus any marketplace listings synced via Convex.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">
@@ -342,8 +368,17 @@ export default function AssetsPage() {
   }
 
   const isLoading = isLoadingLocal || isLoadingRemote;
-  const showEmptyResults = !isLoading && mergedRows.length > 0 && filteredRows.length === 0;
-  const showAnyFilters = normalizedQuery.length > 0 || kindFilter !== "all" || sourceFilter !== "all";
+  const showEmptyResults =
+    !isLoading && mergedRows.length > 0 && filteredRows.length === 0;
+  const showAnyFilters =
+    normalizedQuery.length > 0 ||
+    kindFilter !== "all" ||
+    sourceFilter !== "all";
+  const activeFilterCount =
+    (normalizedQuery.length > 0 ? 1 : 0) +
+    (kindFilter !== "all" ? 1 : 0) +
+    (sourceFilter !== "all" ? 1 : 0) +
+    (sortKey !== "newest" ? 1 : 0);
 
   const syncVariant =
     syncStatus === "error"
@@ -369,8 +404,9 @@ export default function AssetsPage() {
               </Badge>
             </div>
             <p className="max-w-3xl text-muted-foreground">
-              Your published IP assets, with optional marketplace listing sync via Convex. Use
-              filters to quickly find local-only exports that need syncing.
+              Your published IP assets, with optional marketplace listing sync
+              via Convex. Use filters to quickly find local-only exports that
+              need syncing.
             </p>
           </div>
 
@@ -380,14 +416,20 @@ export default function AssetsPage() {
               onClick={() => void refreshAll()}
               disabled={isLoading}
             >
-              <RefreshCw className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              <RefreshCw
+                className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+              />
               Refresh
             </Button>
             <Button
               onClick={() => void handleSyncLocalToConvex()}
               disabled={syncStatus === "syncing" || !localPublished.length}
             >
-              <UploadCloud className={syncStatus === "syncing" ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              <UploadCloud
+                className={
+                  syncStatus === "syncing" ? "h-4 w-4 animate-spin" : "h-4 w-4"
+                }
+              />
               Sync local publishes
             </Button>
           </div>
@@ -397,7 +439,8 @@ export default function AssetsPage() {
           <Alert variant="destructive">
             <AlertTitle>Marketplace sync unavailable</AlertTitle>
             <AlertDescription>
-              {remoteError} — confirm `NEXT_PUBLIC_CONVEX_URL` points to your deployment.
+              {remoteError} — confirm `NEXT_PUBLIC_CONVEX_URL` points to your
+              deployment.
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -406,7 +449,11 @@ export default function AssetsPage() {
                   onClick={() => void loadRemoteAssets()}
                   disabled={isLoadingRemote}
                 >
-                  <RefreshCw className={isLoadingRemote ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                  <RefreshCw
+                    className={
+                      isLoadingRemote ? "h-4 w-4 animate-spin" : "h-4 w-4"
+                    }
+                  />
                   Retry
                 </Button>
                 <Button asChild size="sm" variant="outline">
@@ -433,6 +480,7 @@ export default function AssetsPage() {
               <div className="relative w-full sm:max-w-md">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search title, terms, IP ID, tx hash, or local project…"
@@ -447,6 +495,7 @@ export default function AssetsPage() {
                     <Button variant="outline" size="sm">
                       <Filter className="h-4 w-4" />
                       Filters
+                      {activeFilterCount ? ` (${activeFilterCount})` : ""}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
@@ -454,11 +503,19 @@ export default function AssetsPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuRadioGroup
                       value={kindFilter}
-                      onValueChange={(value) => setKindFilter(value as KindFilter)}
+                      onValueChange={(value) =>
+                        setKindFilter(value as KindFilter)
+                      }
                     >
-                      <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="video">Video</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="dataset">Dataset</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="all">
+                        All
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="video">
+                        Video
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="dataset">
+                        Dataset
+                      </DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
 
                     <DropdownMenuSeparator />
@@ -466,10 +523,16 @@ export default function AssetsPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuRadioGroup
                       value={sourceFilter}
-                      onValueChange={(value) => setSourceFilter(value as SourceFilter)}
+                      onValueChange={(value) =>
+                        setSourceFilter(value as SourceFilter)
+                      }
                     >
-                      <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="listed">Listed (Convex)</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="all">
+                        All
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="listed">
+                        Listed (Convex)
+                      </DropdownMenuRadioItem>
                       <DropdownMenuRadioItem value="local-only">
                         Local only
                       </DropdownMenuRadioItem>
@@ -485,14 +548,19 @@ export default function AssetsPage() {
                       value={sortKey}
                       onValueChange={(value) => setSortKey(value as SortKey)}
                     >
-                      <DropdownMenuRadioItem value="newest">Newest</DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem value="oldest">Oldest</DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="newest">
+                        Newest
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="oldest">
+                        Oldest
+                      </DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
 
                 <Badge variant="outline" className="tabular-nums">
-                  {filteredRows.length} {filteredRows.length === 1 ? "asset" : "assets"}
+                  {filteredRows.length}{" "}
+                  {filteredRows.length === 1 ? "asset" : "assets"}
                 </Badge>
 
                 <Badge variant="outline" className="tabular-nums gap-1.5">
@@ -545,7 +613,8 @@ export default function AssetsPage() {
             <CardHeader>
               <CardTitle>No published assets yet</CardTitle>
               <CardDescription>
-                Publish an export to register an IP asset and it will appear here.
+                Publish an export to register an IP asset and it will appear
+                here.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
@@ -573,7 +642,9 @@ export default function AssetsPage() {
           <Card>
             <CardHeader>
               <CardTitle>No matching assets</CardTitle>
-              <CardDescription>Clear filters to see everything in your library.</CardDescription>
+              <CardDescription>
+                Clear filters to see everything in your library.
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               <Button

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { ChevronDown, Menu } from "lucide-react";
+import { ChevronDown, LayoutDashboard, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -30,6 +30,8 @@ export default function Header() {
     { href: "/datasets", label: "Datasets" },
     { href: "/demo", label: "Demo" },
   ] as const;
+
+  const dashboardItem = { href: "/dashboard", label: "Dashboard" } as const;
 
   const workspaceItems = [
     { href: "/projects", label: "Studio" },
@@ -82,6 +84,23 @@ export default function Header() {
 
         <nav className="flex items-center gap-2" aria-label="Primary">
           <ul className="hidden items-center gap-1 md:flex">
+            <li>
+              <Button
+                asChild
+                type="button"
+                size="sm"
+                variant={isActive(dashboardItem.href) ? "secondary" : "ghost"}
+                className="px-3"
+              >
+                <Link
+                  href={dashboardItem.href}
+                  aria-current={isActive(dashboardItem.href) ? "page" : undefined}
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  {dashboardItem.label}
+                </Link>
+              </Button>
+            </li>
             <li>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -161,10 +180,10 @@ export default function Header() {
             </div>
 
             <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
                   size="icon"
                   className="md:hidden"
                   aria-label="Open navigation menu"
@@ -190,6 +209,24 @@ export default function Header() {
                     </Link>
                   </DropdownMenuItem>
                 ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs tracking-wide text-muted-foreground">
+                  Dashboard
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  asChild
+                  className={cn(
+                    "cursor-pointer",
+                    isActive(dashboardItem.href) && "bg-accent",
+                  )}
+                >
+                  <Link
+                    href={dashboardItem.href}
+                    aria-current={isActive(dashboardItem.href) ? "page" : undefined}
+                  >
+                    {dashboardItem.label}
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuLabel className="text-xs tracking-wide text-muted-foreground">
                   Workspace

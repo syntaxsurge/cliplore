@@ -97,6 +97,7 @@ export default function Projects() {
   const [isCreating, setIsCreating] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const didAutoOpenCreateRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -166,6 +167,16 @@ export default function Projects() {
       setIsCreating(true);
     }
   }, [searchParams, isCreating, newProjectName]);
+
+  useEffect(() => {
+    const parentIp = searchParams.get("parentIp");
+    const shouldCreate = searchParams.get("create");
+    if (parentIp) return;
+    if (shouldCreate !== "1") return;
+    if (didAutoOpenCreateRef.current) return;
+    didAutoOpenCreateRef.current = true;
+    setIsCreating(true);
+  }, [searchParams]);
 
   useEffect(() => {
     if (isCreating && inputRef.current) {
