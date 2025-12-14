@@ -9,6 +9,13 @@ export function getStoryProtocolExplorerBaseUrl(chainId: number) {
   return "https://explorer.story.foundation";
 }
 
+export function getStoryProtocolTxExplorerBaseUrl(chainId: number) {
+  if (chainId === STORY_AENEID_CHAIN_ID) {
+    return "https://aeneid.storyscan.io";
+  }
+  return "https://storyscan.io";
+}
+
 export function getStoryIpaExplorerUrl(params: {
   ipId: string;
   chainId?: number;
@@ -23,6 +30,6 @@ export function getStoryTxExplorerUrl(params: {
   chainId?: number;
 }) {
   const chainId = params.chainId ?? clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID;
-  const baseUrl = getStoryProtocolExplorerBaseUrl(chainId);
-  return `${baseUrl}/transactions/${encodeURIComponent(params.txHash)}`;
+  const baseUrl = getStoryProtocolTxExplorerBaseUrl(chainId);
+  return `${baseUrl}/tx/${encodeURIComponent(params.txHash)}`;
 }
