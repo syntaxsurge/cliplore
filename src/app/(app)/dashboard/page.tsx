@@ -190,16 +190,6 @@ export default function DashboardPage() {
         </Alert>
       ) : null}
 
-      <Alert variant="info">
-        <AlertTitle>IP assets vs marketplace listings</AlertTitle>
-        <AlertDescription>
-          A Story IP asset is the onchain record (IP ID) created when you publish. A marketplace
-          listing is the offchain Convex record that makes it visible on Explore/Datasets. Local-only
-          means it exists in this browser but isn’t synced to Convex yet — archiving a listing hides
-          it without changing the onchain IP.
-        </AlertDescription>
-      </Alert>
-
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
