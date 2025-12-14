@@ -183,17 +183,6 @@ export default async function IpDetailPage({ params }: Props) {
                   Start remix project
                 </Link>
               </Button>
-              {storyTxUrl ? (
-                <Button asChild variant="outline" className="w-full">
-                  <a
-                    href={storyTxUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                  >
-                    Registration tx
-                  </a>
-                </Button>
-              ) : null}
             </CardFooter>
           </Card>
 
