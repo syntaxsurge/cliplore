@@ -204,4 +204,4 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   5. **Current page:** https://cliplore.com/projects — **Action:** Click “Assets” in the header → lands on https://cliplore.com/assets — confirm the Assets list is visible.
   6. **Verify on-screen:** Confirm navigation between Dashboard → Studio → Assets works without losing wallet connection (address chip remains visible).
 - **Voiceover:**
-  > “Finally, the creator Dashboard ties it together: projects, published IP, and activity at a glance. From here, you can jump back into Studio to create, Assets to manage, or Enforcement to verify.”
+  > “Finally, the creator Dashboard ties it together: projects, published IP, and activity at a glance.”

@@ -1,9 +1,11 @@
 import { serverEnv } from "@/lib/env/server";
-import type { FileObject, PinataMetadata } from "pinata-web3";
+import type { PinataMetadata } from "pinata-web3";
 
 type PinResponse = { IpfsHash: string };
 
 let pinataClientPromise: Promise<import("pinata-web3").PinataSDK> | null = null;
+
+const PINATA_PIN_FILE_URL = "https://api.pinata.cloud/pinning/pinFileToIPFS";
 
 async function getPinataClient() {
   if (!serverEnv.PINATA_JWT) {
@@ -17,19 +19,20 @@ async function getPinataClient() {
   return pinataClientPromise;
 }
 
-function fileObjectFromBytes({
-  bytes,
-  fileName,
-  contentType,
-}: {
-  bytes: Uint8Array;
-  fileName: string;
-  contentType: string;
-}): FileObject {
-  return new File([bytes], fileName, {
-    type: contentType,
-    lastModified: Date.now(),
-  });
+function toPinataApiMetadata(
+  metadata: PinataMetadata | undefined,
+): undefined | { name?: string; keyvalues?: Record<string, string> } {
+  if (!metadata) return undefined;
+
+  const keyValues = (metadata as { keyValues?: Record<string, string> }).keyValues;
+  const keyvalues = (metadata as { keyvalues?: Record<string, string> }).keyvalues;
+
+  const mergedKeyvalues = keyValues ?? keyvalues;
+
+  return {
+    name: metadata.name,
+    keyvalues: mergedKeyvalues,
+  };
 }
 
 export async function uploadJsonToIPFS(
@@ -63,27 +66,61 @@ export async function uploadFileToIPFS(input: {
   cidVersion?: 0 | 1;
   metadata?: PinataMetadata;
 }) {
-  const pinata = await getPinataClient();
+  if (!serverEnv.PINATA_JWT) {
+    throw new Error("PINATA_JWT is required to upload metadata to IPFS.");
+  }
 
-  const file = fileObjectFromBytes({
-    bytes: input.bytes,
-    fileName: input.fileName,
-    contentType: input.contentType,
-  });
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([input.bytes], { type: input.contentType }),
+    input.fileName,
+  );
+
+  const metadata = toPinataApiMetadata(input.metadata);
+  if (metadata) {
+    form.append("pinataMetadata", JSON.stringify(metadata));
+  }
+
+  if (input.cidVersion !== undefined) {
+    form.append("pinataOptions", JSON.stringify({ cidVersion: input.cidVersion }));
+  }
 
   let response: PinResponse;
+  let rawBody = "";
+
   try {
-    response = (await pinata.upload.file(file, {
-      cidVersion: input.cidVersion,
-      metadata: input.metadata,
-    })) as PinResponse;
+    const res = await fetch(PINATA_PIN_FILE_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${serverEnv.PINATA_JWT}`,
+      },
+      body: form,
+    });
+
+    rawBody = await res.text();
+
+    if (!res.ok) {
+      throw new Error(
+        `Pinata upload failed (${res.status} ${res.statusText}): ${rawBody || "empty body"}`,
+      );
+    }
+
+    response = JSON.parse(rawBody) as PinResponse;
   } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(
+        `Pinata upload failed: invalid JSON response: ${rawBody || "empty body"}`,
+      );
+    }
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Pinata upload failed: ${message}`);
   }
 
   if (!response?.IpfsHash) {
-    throw new Error("Pinata upload failed: missing IpfsHash in response.");
+    throw new Error(
+      `Pinata upload failed: missing IpfsHash in response: ${rawBody || "empty body"}`,
+    );
   }
 
   return `ipfs://${response.IpfsHash}`;
