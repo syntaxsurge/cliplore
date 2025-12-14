@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +19,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CopyIconButton } from "@/components/data-display/CopyIconButton";
-import { getStoryIpaExplorerUrl, getStoryTxExplorerUrl } from "@/lib/story/explorer";
+import { ExternalLinkIconButton } from "@/components/data-display/ExternalLinkIconButton";
+import { TruncatedCode } from "@/components/data-display/TruncatedCode";
+import {
+  getStoryIpaExplorerUrl,
+  getStoryTxExplorerUrl,
+} from "@/lib/story/explorer";
 import { formatBytes, formatShortHash, ipfsUriToGatewayUrl } from "@/lib/utils";
 import {
   AlignLeft,
   Database,
-  ExternalLink,
   FileText,
   Globe,
   Hash,
@@ -33,22 +42,6 @@ import {
   Wallet,
 } from "lucide-react";
 import type { AssetRow } from "./types";
-
-function ExternalLinkIconButton(props: { href: string; label: string }) {
-  const { href, label } = props;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button asChild variant="ghost" size="icon" className="h-8 w-8">
-          <a href={href} target="_blank" rel="noreferrer" aria-label={label}>
-            <ExternalLink />
-          </a>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
 
 function getSampleKind(mime: string | null) {
   const value = mime ?? "";
@@ -75,9 +68,15 @@ export default function AssetCard(props: { row: AssetRow }) {
   const { row } = props;
   const assetKind = (row.asset.assetKind ?? "video").toLowerCase();
   const isDataset = assetKind === "dataset";
-  const mediaUrl = useMemo(() => ipfsUriToGatewayUrl(row.asset.videoUrl), [row.asset.videoUrl]);
+  const mediaUrl = useMemo(
+    () => ipfsUriToGatewayUrl(row.asset.videoUrl),
+    [row.asset.videoUrl],
+  );
   const thumbnailUrl = useMemo(
-    () => (row.asset.thumbnailUrl ? ipfsUriToGatewayUrl(row.asset.thumbnailUrl) : null),
+    () =>
+      row.asset.thumbnailUrl
+        ? ipfsUriToGatewayUrl(row.asset.thumbnailUrl)
+        : null,
     [row.asset.thumbnailUrl],
   );
   const storyIpaUrl = useMemo(
@@ -138,7 +137,11 @@ export default function AssetCard(props: { row: AssetRow }) {
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-            {isDataset ? <Database className="size-5" /> : <Play className="size-5" />}
+            {isDataset ? (
+              <Database className="size-5" />
+            ) : (
+              <Play className="size-5" />
+            )}
             No thumbnail
           </div>
         )}
@@ -181,11 +184,16 @@ export default function AssetCard(props: { row: AssetRow }) {
                 </div>
               ) : sampleKind === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={mediaUrl} alt={row.asset.title} className="h-full w-full object-contain" />
+                <img
+                  src={mediaUrl}
+                  alt={row.asset.title}
+                  className="h-full w-full object-contain"
+                />
               ) : (
                 <div className="flex flex-col items-start gap-3 p-6">
                   <p className="text-sm text-muted-foreground">
-                    This file isn’t previewable in-browser. Open it to inspect it locally.
+                    This file isn’t previewable in-browser. Open it to inspect
+                    it locally.
                   </p>
                   <Button asChild>
                     <a href={mediaUrl} target="_blank" rel="noreferrer">
@@ -201,7 +209,9 @@ export default function AssetCard(props: { row: AssetRow }) {
                   IP: {formatShortHash(row.asset.ipId)}
                 </Badge>
                 <Badge variant={status.variant}>{status.label}</Badge>
-                <Badge variant="outline">{isDataset ? "Dataset" : "Video"}</Badge>
+                <Badge variant="outline">
+                  {isDataset ? "Dataset" : "Video"}
+                </Badge>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button asChild size="sm" variant="secondary">
@@ -232,7 +242,9 @@ export default function AssetCard(props: { row: AssetRow }) {
 
       <CardHeader className="space-y-2">
         <div className="flex items-start justify-between gap-3">
-          <CardTitle className="min-w-0 truncate text-xl">{row.asset.title}</CardTitle>
+          <CardTitle className="min-w-0 truncate text-xl">
+            {row.asset.title}
+          </CardTitle>
           <Badge variant="outline" className="shrink-0 font-mono">
             {formatShortHash(row.asset.ipId)}
           </Badge>
@@ -245,12 +257,16 @@ export default function AssetCard(props: { row: AssetRow }) {
               Updated {updatedLabel}
             </Badge>
           ) : null}
-          {isDataset && row.asset.datasetType ? <Badge>{row.asset.datasetType}</Badge> : null}
+          {isDataset && row.asset.datasetType ? (
+            <Badge>{row.asset.datasetType}</Badge>
+          ) : null}
           {isDataset && row.asset.mediaMimeType ? (
             <Badge variant="outline">{row.asset.mediaMimeType}</Badge>
           ) : null}
           {isDataset && typeof row.asset.mediaSizeBytes === "number" ? (
-            <Badge variant="outline">{formatBytes(row.asset.mediaSizeBytes)}</Badge>
+            <Badge variant="outline">
+              {formatBytes(row.asset.mediaSizeBytes)}
+            </Badge>
           ) : null}
         </div>
       </CardHeader>
@@ -282,15 +298,13 @@ export default function AssetCard(props: { row: AssetRow }) {
               <Database className="size-3.5" />
               IP Asset ID
             </p>
-            <div className="flex items-center gap-2">
-              <code
-                className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
-                title={row.asset.ipId}
-              >
-                {row.asset.ipId}
-              </code>
+            <div className="flex min-w-0 items-center gap-2">
+              <TruncatedCode value={row.asset.ipId} />
               <CopyIconButton value={row.asset.ipId} label="Copy IP Asset ID" />
-              <ExternalLinkIconButton href={storyIpaUrl} label="Open in Story Explorer" />
+              <ExternalLinkIconButton
+                href={storyIpaUrl}
+                label="Open in Story Explorer"
+              />
             </div>
           </div>
 
@@ -299,14 +313,12 @@ export default function AssetCard(props: { row: AssetRow }) {
               <Wallet className="size-3.5" />
               Creator wallet
             </p>
-            <div className="flex items-center gap-2">
-              <code
-                className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
-                title={row.asset.licensorWallet}
-              >
-                {row.asset.licensorWallet}
-              </code>
-              <CopyIconButton value={row.asset.licensorWallet} label="Copy creator wallet" />
+            <div className="flex min-w-0 items-center gap-2">
+              <TruncatedCode value={row.asset.licensorWallet} />
+              <CopyIconButton
+                value={row.asset.licensorWallet}
+                label="Copy creator wallet"
+              />
             </div>
           </div>
 
@@ -316,16 +328,13 @@ export default function AssetCard(props: { row: AssetRow }) {
                 <Hash className="size-3.5" />
                 Registration tx
               </p>
-              <div className="flex items-center gap-2">
-                <code
-                  className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
-                  title={row.asset.txHash}
-                >
-                  {row.asset.txHash}
-                </code>
-                <CopyIconButton value={row.asset.txHash} label="Copy transaction hash" />
+              <div className="flex min-w-0 items-center gap-2">
+                <TruncatedCode value={row.asset.txHash} />
                 {storyTxUrl ? (
-                  <ExternalLinkIconButton href={storyTxUrl} label="Open tx in Story Explorer" />
+                  <ExternalLinkIconButton
+                    href={storyTxUrl}
+                    label="Open tx in Story Explorer"
+                  />
                 ) : null}
               </div>
             </div>

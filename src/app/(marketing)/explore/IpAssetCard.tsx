@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -13,37 +19,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CopyIconButton } from "@/components/data-display/CopyIconButton";
+import { ExternalLinkIconButton } from "@/components/data-display/ExternalLinkIconButton";
+import { TruncatedCode } from "@/components/data-display/TruncatedCode";
 import { formatShortHash, ipfsUriToGatewayUrl } from "@/lib/utils";
-import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
+import {
+  getStoryIpaExplorerUrl,
+  getStoryTxExplorerUrl,
+} from "@/lib/story/explorer";
 import {
   AlignLeft,
-  ExternalLink,
   Eye,
   FileText,
   Fingerprint,
+  Hash,
   Play,
   Sparkles,
   Wallet,
 } from "lucide-react";
 import type { ExploreAsset } from "./types";
-
-function ExternalLinkIconButton(props: { href: string; label: string }) {
-  const { href, label } = props;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button asChild variant="ghost" size="icon" className="h-8 w-8">
-          <a href={href} target="_blank" rel="noreferrer" aria-label={label}>
-            <ExternalLink />
-          </a>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-}
 
 export default function IpAssetCard(props: { asset: ExploreAsset }) {
   const { asset } = props;
@@ -63,6 +57,13 @@ export default function IpAssetCard(props: { asset: ExploreAsset }) {
       }),
     [asset.chainId, asset.ipId],
   );
+  const storyTxUrl = useMemo(() => {
+    if (!asset.txHash) return null;
+    return getStoryTxExplorerUrl({
+      txHash: asset.txHash,
+      chainId: asset.chainId ?? undefined,
+    });
+  }, [asset.chainId, asset.txHash]);
 
   return (
     <Card className="group overflow-hidden transition-shadow duration-200 ease-out hover:shadow-md motion-reduce:transition-none">
@@ -162,13 +163,8 @@ export default function IpAssetCard(props: { asset: ExploreAsset }) {
               <Fingerprint className="size-3.5" />
               IP Asset ID
             </p>
-            <div className="flex items-center gap-2">
-              <code
-                className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
-                title={asset.ipId}
-              >
-                {asset.ipId}
-              </code>
+            <div className="flex min-w-0 items-center gap-2">
+              <TruncatedCode value={asset.ipId} />
               <CopyIconButton value={asset.ipId} label="Copy IP Asset ID" />
               <ExternalLinkIconButton
                 href={storyExplorerUrl}
@@ -182,19 +178,30 @@ export default function IpAssetCard(props: { asset: ExploreAsset }) {
               <Wallet className="size-3.5" />
               Creator wallet
             </p>
-            <div className="flex items-center gap-2">
-              <code
-                className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
-                title={asset.licensorWallet}
-              >
-                {asset.licensorWallet}
-              </code>
+            <div className="flex min-w-0 items-center gap-2">
+              <TruncatedCode value={asset.licensorWallet} />
               <CopyIconButton
                 value={asset.licensorWallet}
                 label="Copy creator wallet"
               />
             </div>
           </div>
+
+          {asset.txHash && storyTxUrl ? (
+            <div className="grid gap-1">
+              <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Hash className="size-3.5" />
+                Registration tx
+              </p>
+              <div className="flex min-w-0 items-center gap-2">
+                <TruncatedCode value={asset.txHash} />
+                <ExternalLinkIconButton
+                  href={storyTxUrl}
+                  label="Open tx in Story Explorer"
+                />
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-1">
             <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
