@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
@@ -413,7 +414,7 @@ export default function HomeClient() {
                       <div className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
                     </div>
                     <div className="text-xs font-medium text-muted-foreground">
-                      Timeline preview (replace with your screenshot)
+                      Cliplore Studio timeline
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
@@ -428,30 +429,21 @@ export default function HomeClient() {
               </div>
 
               <div className="relative p-5 sm:p-7">
-                <div
-                  className="relative aspect-video overflow-hidden rounded-2xl border border-dashed border-border bg-muted/30"
-                  role="img"
-                  aria-label="Placeholder for a timeline screenshot"
-                >
+                <div className="relative aspect-video overflow-hidden rounded-2xl border border-border bg-muted/10 shadow-sm">
                   <motion.div
                     aria-hidden="true"
                     className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,119,198,0.25),transparent_55%)]"
                     animate={reduceMotion ? undefined : { opacity: [0.35, 0.55, 0.35] }}
                     transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
                   />
-                  <div className="relative flex h-full items-center justify-center p-8 text-center">
-                    <div className="max-w-sm space-y-3">
-                      <Badge variant="outline" className="mx-auto w-fit">
-                        Image placeholder
-                      </Badge>
-                      <p className="text-sm font-medium text-foreground">
-                        Drop a timeline screenshot here when you&apos;re ready.
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Replace this block with an image once you capture the editor.
-                      </p>
-                    </div>
-                  </div>
+                  <Image
+                    src="/images/cliplore-timeline.png"
+                    alt="Cliplore timeline screenshot"
+                    fill
+                    priority
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    className="relative object-contain p-2"
+                  />
                 </div>
               </div>
             </Card>
