@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
-import { useConnectModal } from "@rainbow-me/rainbowkit";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,8 +61,7 @@ function formatLocalDate(value: string | number) {
 }
 
 export default function DashboardPage() {
-  const { address, isConnected } = useAccount();
-  const { openConnectModal } = useConnectModal();
+  const { address } = useAccount();
   const [stats, setStats] = useState<Stats | null>(null);
   const [projects, setProjects] = useState<ProjectState[]>([]);
   const [recentAssets, setRecentAssets] = useState<DashboardAsset[]>([]);
@@ -144,9 +142,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => openConnectModal?.()}>
-            {isConnected ? "Switch wallet" : "Connect wallet"}
-          </Button>
           <Button asChild>
             <Link href="/projects?create=1">
               <FolderPlus />

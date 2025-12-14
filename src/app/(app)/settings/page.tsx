@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
-import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { z } from "zod";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -60,7 +59,6 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function SettingsPage() {
   const { address, isConnected } = useAccount();
-  const { openConnectModal } = useConnectModal();
   const [isFetching, startFetching] = useTransition();
   const [isSaving, startSaving] = useTransition();
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -164,7 +162,7 @@ export default function SettingsPage() {
               </Badge>
             </div>
             <p className="max-w-2xl text-muted-foreground">
-              Manage your wallet connection, creator defaults, and BYOK AI key for Sora generation.
+              Manage creator defaults and your BYOK AI key for Sora generation.
             </p>
           </div>
 
@@ -230,17 +228,6 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </CardContent>
-
-              <CardFooter className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => openConnectModal?.()}
-                  className="min-w-[160px]"
-                >
-                  {isConnected ? "Switch wallet" : "Connect wallet"}
-                </Button>
-              </CardFooter>
             </Card>
 
             <OpenAIKeyCard />
