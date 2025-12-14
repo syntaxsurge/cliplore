@@ -317,7 +317,7 @@ function AccessBadge({ access }: { access: AccessType }) {
     return (
       <Badge variant="outline" className="gap-1.5 whitespace-nowrap">
         <Globe className="h-3.5 w-3.5" />
-        Browse
+        Public
       </Badge>
     );
   }
@@ -325,7 +325,7 @@ function AccessBadge({ access }: { access: AccessType }) {
   return (
     <Badge variant="outline" className="gap-1.5 whitespace-nowrap bg-muted/60">
       <Wallet className="h-3.5 w-3.5" />
-      Connect wallet
+      Wallet required
     </Badge>
   );
 }
