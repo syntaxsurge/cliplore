@@ -40,11 +40,10 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   5. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Library”, then click “Generate” in “AI Studio” → confirm you are redirected to https://cliplore.com/settings and “AI (Bring your own OpenAI key)” is visible.
   6. **Current page:** https://cliplore.com/settings — **Enter values:**
      - OpenAI API key = [OPENAI_API_KEY=sk-proj-REDACTED_FOR_DEMO]
-     Optional (skip for this demo): toggle the eye icon to show/hide the key.
      Click “Save key” — wait for toast “OpenAI key saved.” → confirm you are routed back to https://cliplore.com/projects/[id].
   7. **Verify on-screen:** **Current page:** https://cliplore.com/projects/[id] — click “Library” then “Generate” → confirm the Generate modal opens with a prompt textarea visible.
 - **Voiceover:**
-  > “I open Studio, create a new project, and land in the full-screen editor. When I click Library → Generate, ClipLore redirects me to Settings because it’s bring-your-own-key. I paste my OpenAI key—masked—and click ‘Save key’, then return to the editor. Now when I click Generate again, the prompt modal opens and we can generate Sora clips.”
+  > “I open Studio, create a new project, and land in the full-screen editor. When I click Library → Generate, ClipLore redirects me to Settings because it’s bring-your-own-key. I paste my OpenAI key and click ‘Save key’, then return to the editor. Now when I click Generate again, the prompt modal opens and we can generate Sora clips.”
 
 ## 4. Editor: generate a Sora clip, drag it to the timeline, add a title, and edit inline
 - **URL:** https://cliplore.com/projects/[id]
