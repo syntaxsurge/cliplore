@@ -280,10 +280,6 @@ export default function AssetCard(props: {
             {row.asset.title}
           </CardTitle>
           <div className="flex shrink-0 items-center gap-1">
-            <Badge variant="outline" className="font-mono">
-              {formatShortHash(row.asset.ipId)}
-            </Badge>
-
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
