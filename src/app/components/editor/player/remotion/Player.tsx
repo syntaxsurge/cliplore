@@ -1,5 +1,4 @@
-import { Player } from "@remotion/player";
-import Composition from "./sequence/composition";
+import { CanvasPlayer } from "./CanvasPlayer";
 import { useAppSelector, useAppDispatch } from "@/app/store";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,8 +21,16 @@ import { useCurrentPlayerFrame } from "./useCurrentPlayerFrame";
 import { cn } from "@/lib/utils";
 
 export const PreviewPlayer = () => {
-  const projectState = useAppSelector((state) => state.projectState);
-  const { duration, currentTime, isPlaying, isMuted, fps } = projectState;
+  const {
+    duration,
+    currentTime,
+    isPlaying,
+    isMuted,
+    fps,
+    resolution,
+    mediaFiles,
+    textElements,
+  } = useAppSelector((state) => state.projectState);
   const { playerRef, player, registerPlayer } = useEditorPlayer();
   const dispatch = useAppDispatch();
   const fullscreenRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +118,39 @@ export const PreviewPlayer = () => {
     return Math.max(0, safe);
   }, [duration]);
 
+  const baseCompositionWidth =
+    typeof resolution?.width === "number" && Number.isFinite(resolution.width) && resolution.width > 0
+      ? resolution.width
+      : 1920;
+  const baseCompositionHeight =
+    typeof resolution?.height === "number" && Number.isFinite(resolution.height) && resolution.height > 0
+      ? resolution.height
+      : 1080;
+
+  const previewScale = useMemo(() => {
+    const maxPreviewWidth = 1280;
+    const maxPreviewHeight = 720;
+    const scale = Math.min(
+      1,
+      maxPreviewWidth / baseCompositionWidth,
+      maxPreviewHeight / baseCompositionHeight,
+    );
+    return Number.isFinite(scale) && scale > 0 ? scale : 1;
+  }, [baseCompositionHeight, baseCompositionWidth]);
+
+  const compositionInputProps = useMemo(
+    () => ({ mediaFiles, textElements, renderScale: previewScale }),
+    [mediaFiles, previewScale, textElements],
+  );
+
+  const durationInFrames = useMemo(() => {
+    const safeDurationSeconds = Math.max(0, durationSeconds);
+    return Math.floor((safeDurationSeconds > 0 ? safeDurationSeconds : 1) * safeFps) + 1;
+  }, [durationSeconds, safeFps]);
+
+  const compositionWidth = Math.max(1, Math.round(baseCompositionWidth * previewScale));
+  const compositionHeight = Math.max(1, Math.round(baseCompositionHeight * previewScale));
+
   const formatTime = (seconds: number) => {
     const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
     const rounded = Math.floor(safe);
@@ -164,25 +204,13 @@ export const PreviewPlayer = () => {
       )}
     >
       <div className="relative min-h-0 flex-1">
-        <Player
+        <CanvasPlayer
           ref={registerPlayer}
-          component={Composition}
-          inputProps={{}}
-          durationInFrames={
-            Math.floor(
-              (typeof duration === "number" &&
-              Number.isFinite(duration) &&
-              duration > 0
-                ? duration
-                : 1) * safeFps,
-            ) + 1
-          }
-          compositionWidth={1920}
-          compositionHeight={1080}
+          inputProps={compositionInputProps}
+          durationInFrames={durationInFrames}
+          compositionWidth={compositionWidth}
+          compositionHeight={compositionHeight}
           fps={safeFps}
-          style={{ width: "100%", height: "100%" }}
-          controls={false}
-          clickToPlay={false}
         />
         <MoveableOverlay />
       </div>

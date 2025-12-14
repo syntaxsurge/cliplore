@@ -1,8 +1,4 @@
-import { AbsoluteFill, OffthreadVideo, Audio, Img, Sequence } from "remotion";
-import { MediaFile, TextElement } from "@/app/types";
-import { setTextElements } from "@/app/store/slices/projectSlice";
-import { useAppDispatch, useAppSelector } from "@/app/store";
-import React from "react";
+import type { MediaFile, TextElement } from "@/app/types";
 import { TextSequenceItem } from "./items/text-sequence-item";
 import { AudioSequenceItem } from "./items/audio-sequence-item";
 import { VideoSequenceItem } from "./items/video-sequence-item";
@@ -11,6 +7,7 @@ import { ImageSequenceItem } from "./items/image-sequence-item";
 interface SequenceItemOptions {
   handleTextChange?: (id: string, text: string) => void;
   fps: number;
+  renderScale: number;
   editableTextId?: string | null;
   currentTime?: number;
 }

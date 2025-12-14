@@ -74,6 +74,9 @@ importers:
       '@reduxjs/toolkit':
         specifier: ^2.7.0
         version: 2.11.1(react-redux@9.2.0(@types/react@18.3.12)(react@18.3.1)(redux@5.0.1))(react@18.3.1)
+      '@remotion/media':
+        specifier: 4.0.386
+        version: 4.0.386(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@remotion/media-parser':
         specifier: 4.0.386
         version: 4.0.386
@@ -1759,6 +1762,12 @@ packages:
 
   '@remotion/media-parser@4.0.386':
     resolution: {integrity: sha512-2xaRK5dwwboBMiShkUi6o1SkpHMdS45yhrSQAAR3OYFpDo/LtMG/h6RRemJk5of6rfkGyvODMYj71QQgVnZizg==}
+
+  '@remotion/media@4.0.386':
+    resolution: {integrity: sha512-kUu1L5Cl4h4+UXxsXVciDZb3pp+rAY1Iyc7pCZfn7Xxd6grzSqav105DDV4q5tEpWgpcXCIZHumGNZLgK6gpdw==}
+    peerDependencies:
+      react: '>=16.8.0'
+      react-dom: '>=16.8.0'
 
   '@remotion/player@4.0.386':
     resolution: {integrity: sha512-4gn1dTw7Yn6lyFtup3WULlAIN2ocd/IZUg4CybN3OtwYRxAPXh/gsv74tyjNm7mX/ZsdSDyf53Xbz7LBOCJ5wQ==}
@@ -4208,6 +4217,9 @@ packages:
 
   media-query-parser@2.0.2:
     resolution: {integrity: sha512-1N4qp+jE0pL5Xv4uEcwVUhIkwdUO3S/9gML90nqKA7v7FcOS5vUtatfzok9S9U1EJU8dHWlcv95WLnKmmxZI9w==}
+
+  mediabunny@1.25.8:
+    resolution: {integrity: sha512-2WCa9WtEbHOvg5rAWXQjVE+O/r01fpj65ymZdA2XhIeaWmdDQ40p32F0WY6tdBi+aeY+4ldwhAOpo0eyVrYTGg==}
 
   mediabunny@1.26.0:
     resolution: {integrity: sha512-0duZPn/vVpx+mKjOn3PNb/tBrtKUoq4n5+uO1JwyQm3cdaKYy7tVTEvTpXJxbpQ/CdnHn5YMVRg8mwi7fIgSYA==}
@@ -7517,6 +7529,13 @@ snapshots:
       react-redux: 9.2.0(@types/react@18.3.12)(react@18.3.1)(redux@5.0.1)
 
   '@remotion/media-parser@4.0.386': {}
+
+  '@remotion/media@4.0.386(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      mediabunny: 1.25.8
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+      remotion: 4.0.386(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   '@remotion/player@4.0.386(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
@@ -11200,6 +11219,11 @@ snapshots:
   media-query-parser@2.0.2:
     dependencies:
       '@babel/runtime': 7.28.4
+
+  mediabunny@1.25.8:
+    dependencies:
+      '@types/dom-mediacapture-transform': 0.1.11
+      '@types/dom-webcodecs': 0.1.13
 
   mediabunny@1.26.0:
     dependencies:

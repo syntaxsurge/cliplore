@@ -15,37 +15,31 @@ import {
 } from "remotion";
 import { useEffect, useMemo, useRef } from "react";
 import { useEditorPlayer } from "@/app/components/editor/player/remotion/EditorPlayerContext";
-
-const REMOTION_SAFE_FRAME = 0;
+import { calculateSequenceFrames } from "../timing";
 
 interface SequenceItemOptions {
   handleTextChange?: (id: string, text: string) => void;
   fps: number;
+  renderScale: number;
   editableTextId?: string | null;
   currentTime?: number;
 }
-
-const calculateFrames = (
-  display: { from: number; to: number },
-  fps: number,
-) => {
-  const from = display.from * fps;
-  const to = display.to * fps;
-  const durationInFrames = Math.max(1, to - from);
-  return { from, durationInFrames };
-};
 
 export const TextSequenceItem: React.FC<{
   item: TextElement;
   options: SequenceItemOptions;
 }> = ({ item, options }) => {
-  const { fps } = options;
+  const { fps, renderScale } = options;
   const dispatch = useAppDispatch();
   const { editingTextId, startInlineTextEdit, stopInlineTextEdit } =
     useEditorPlayer();
   const { textElements, tracks, activeElement, activeElementIndex } = useAppSelector(
     (state) => state.projectState,
   );
+  const safeRenderScale =
+    typeof renderScale === "number" && Number.isFinite(renderScale) && renderScale > 0
+      ? renderScale
+      : 1;
   const frame = useCurrentFrame();
   const videoConfig = useVideoConfig();
   const textRef = useRef<HTMLDivElement | null>(null);
@@ -59,7 +53,7 @@ export const TextSequenceItem: React.FC<{
 
   const effectiveZIndex = trackIndex * 1000 + (item.zIndex ?? 0);
 
-  const { from, durationInFrames } = calculateFrames(
+  const { from, durationInFrames } = calculateSequenceFrames(
     {
       from: item.positionStart,
       to: item.positionEnd,
@@ -114,7 +108,7 @@ export const TextSequenceItem: React.FC<{
   }, [isEditing, item.text]);
 
   const localFrame = frame - from;
-  const totalFrames = durationInFrames + REMOTION_SAFE_FRAME;
+  const totalFrames = durationInFrames;
   const fadeInFrames = Math.floor(
     (item.fadeInDuration ?? 0.4) * videoConfig.fps,
   );
@@ -143,7 +137,7 @@ export const TextSequenceItem: React.FC<{
     switch (item.animation) {
       case "slide-in":
       case "slide-up":
-        const slideY = interpolate(localFrame, [0, fadeInFrames], [30, 0], {
+        const slideY = interpolate(localFrame, [0, fadeInFrames], [30 * safeRenderScale, 0], {
           easing: Easing.out(Easing.cubic),
           extrapolateRight: "clamp",
         });
@@ -182,15 +176,18 @@ export const TextSequenceItem: React.FC<{
       className={`designcombo-scene-item id-${item.id} designcombo-scene-item-type-text `}
       key={item.id}
       from={from}
-      durationInFrames={durationInFrames + REMOTION_SAFE_FRAME}
+      durationInFrames={durationInFrames}
       data-track-item="transition-element"
       style={{
         position: "absolute",
-        width: item.width || 3000,
-        height: item.height || 400,
-        fontSize: item.fontSize || "16px",
-        top: item.y,
-        left: item.x,
+        width: (item.width ?? 3000) * safeRenderScale,
+        height: (item.height ?? 400) * safeRenderScale,
+        fontSize:
+          typeof item.fontSize === "number" && Number.isFinite(item.fontSize)
+            ? item.fontSize * safeRenderScale
+            : 16 * safeRenderScale,
+        top: item.y * safeRenderScale,
+        left: item.x * safeRenderScale,
         color: item.color || "#000000",
         zIndex: effectiveZIndex,
         // backgroundColor: item.backgroundColor || "transparent",
@@ -199,7 +196,7 @@ export const TextSequenceItem: React.FC<{
         transform: combinedTransform,
         transformOrigin: "center center",
         transition: "transform 0.2s ease",
-        filter: item.blur ? `blur(${item.blur}px)` : "none",
+        filter: item.blur ? `blur(${item.blur * safeRenderScale}px)` : "none",
       }}
     >
       <div

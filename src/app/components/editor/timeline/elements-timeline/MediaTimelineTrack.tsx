@@ -574,4 +574,4 @@ export function MediaTimelineTrack({
   );
 }
 
-export default MediaTimelineTrack;
+export default React.memo(MediaTimelineTrack);

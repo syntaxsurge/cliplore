@@ -1,13 +1,25 @@
-import { useAppSelector } from "@/app/store";
 import { SequenceItem } from "./sequence-item";
-import { MediaFile, TextElement } from "@/app/types";
+import type { MediaFile, TextElement } from "@/app/types";
 import { useVideoConfig } from "remotion";
 import React from "react";
 
-const Composition = () => {
-  const projectState = useAppSelector((state) => state.projectState);
-  const { mediaFiles, textElements } = projectState;
+export type CompositionProps = {
+  mediaFiles: MediaFile[];
+  textElements: TextElement[];
+  renderScale: number;
+};
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
+const Composition: React.FC<CompositionProps> = ({
+  mediaFiles,
+  textElements,
+  renderScale,
+}) => {
   const { fps } = useVideoConfig();
+  const safeRenderScale =
+    isFiniteNumber(renderScale) && renderScale > 0 ? renderScale : 1;
   return (
     <>
       {mediaFiles.map((item: MediaFile) => {
@@ -17,7 +29,10 @@ const Composition = () => {
         } as MediaFile;
         return (
           <React.Fragment key={trackItem.id}>
-            {SequenceItem[trackItem.type](trackItem, { fps })}
+            {SequenceItem[trackItem.type](trackItem, {
+              fps,
+              renderScale: safeRenderScale,
+            })}
           </React.Fragment>
         );
       })}
@@ -28,7 +43,10 @@ const Composition = () => {
         } as TextElement;
         return (
           <React.Fragment key={trackItem.id}>
-            {SequenceItem["text"](trackItem, { fps })}
+            {SequenceItem["text"](trackItem, {
+              fps,
+              renderScale: safeRenderScale,
+            })}
           </React.Fragment>
         );
       })}

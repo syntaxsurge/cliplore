@@ -28,7 +28,7 @@ type Props = {
   onDragHoverTrackId?: (trackId: string | null) => void;
 };
 
-export default function TextTimeline({
+function TextTimeline({
   trackId,
   fallbackTrackId,
   onDragHoverTrackId,
@@ -461,3 +461,5 @@ export default function TextTimeline({
     </>
   );
 }
+
+export default React.memo(TextTimeline);

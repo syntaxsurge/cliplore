@@ -8,13 +8,13 @@ import {
   setMediaFiles,
   setTextElements,
 } from "@/app/store/slices/projectSlice";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { throttle } from "lodash";
 import type { MediaFile, TextElement } from "@/app/types";
 import { createPortal } from "react-dom";
 import { useEditorPlayer } from "./EditorPlayerContext";
 
-export default function MoveableOverlay() {
+function MoveableOverlay() {
   const dispatch = useAppDispatch();
   const { editingTextId, player } = useEditorPlayer();
   const {
@@ -229,6 +229,23 @@ export default function MoveableOverlay() {
         ? resolution.height
         : 1080;
 
+  const baseResolutionWidth =
+    typeof resolution?.width === "number" && Number.isFinite(resolution.width) && resolution.width > 0
+      ? resolution.width
+      : 1920;
+  const baseResolutionHeight =
+    typeof resolution?.height === "number" && Number.isFinite(resolution.height) && resolution.height > 0
+      ? resolution.height
+      : 1080;
+
+  const stateToCanvasScale = (() => {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return 1;
+    const scaleX = canvasSize.width / baseResolutionWidth;
+    const scaleY = canvasSize.height / baseResolutionHeight;
+    const scale = Math.min(scaleX, scaleY);
+    return Number.isFinite(scale) && scale > 0 ? scale : 1;
+  })();
+
   const centerX = snapWidth / 2;
   const centerY = snapHeight / 2;
 
@@ -331,7 +348,10 @@ export default function MoveableOverlay() {
           if (!target) return;
           target.style.left = `${left}px`;
           target.style.top = `${top}px`;
-          updateSelected({ x: left, y: top } as any);
+          updateSelected({
+            x: left / stateToCanvasScale,
+            y: top / stateToCanvasScale,
+          } as any);
 
           const htmlTarget = target as HTMLElement;
           const width = htmlTarget.offsetWidth;
@@ -369,12 +389,12 @@ export default function MoveableOverlay() {
           const nextLeft = isFiniteNumber(drag?.left)
             ? drag.left
             : isFiniteNumber(selected?.x)
-              ? selected.x
+              ? selected.x * stateToCanvasScale
               : 0;
           const nextTop = isFiniteNumber(drag?.top)
             ? drag.top
             : isFiniteNumber(selected?.y)
-              ? selected.y
+              ? selected.y * stateToCanvasScale
               : 0;
           const htmlTarget = target as HTMLElement;
           const nextWidth = isFiniteNumber(width) ? width : htmlTarget.offsetWidth;
@@ -402,10 +422,10 @@ export default function MoveableOverlay() {
             const prevBoundsHeight = prevCrop.height || media.height || 1;
 
             const nextBoundsWidth = isFiniteNumber(width)
-              ? Math.max(1, width)
+              ? Math.max(1, width / stateToCanvasScale)
               : prevBoundsWidth;
             const nextBoundsHeight = isFiniteNumber(height)
-              ? Math.max(1, height)
+              ? Math.max(1, height / stateToCanvasScale)
               : prevBoundsHeight;
 
             const scaleX =
@@ -427,17 +447,21 @@ export default function MoveableOverlay() {
                 width: Math.round(nextBoundsWidth),
                 height: Math.round(nextBoundsHeight),
               },
-              ...(isFiniteNumber(drag?.left) ? { x: drag.left } : {}),
-              ...(isFiniteNumber(drag?.top) ? { y: drag.top } : {}),
+              ...(isFiniteNumber(drag?.left)
+                ? { x: drag.left / stateToCanvasScale }
+                : {}),
+              ...(isFiniteNumber(drag?.top) ? { y: drag.top / stateToCanvasScale } : {}),
             } as any);
             return;
           }
 
           updateSelected({
-            ...(isFiniteNumber(width) ? { width } : {}),
-            ...(isFiniteNumber(height) ? { height } : {}),
-            ...(isFiniteNumber(drag?.left) ? { x: drag.left } : {}),
-            ...(isFiniteNumber(drag?.top) ? { y: drag.top } : {}),
+            ...(isFiniteNumber(width) ? { width: width / stateToCanvasScale } : {}),
+            ...(isFiniteNumber(height) ? { height: height / stateToCanvasScale } : {}),
+            ...(isFiniteNumber(drag?.left)
+              ? { x: drag.left / stateToCanvasScale }
+              : {}),
+            ...(isFiniteNumber(drag?.top) ? { y: drag.top / stateToCanvasScale } : {}),
           } as any);
         }}
         onResizeEnd={() => {
@@ -471,3 +495,5 @@ export default function MoveableOverlay() {
     portalContainer as Element,
   );
 }
+
+export default memo(MoveableOverlay);

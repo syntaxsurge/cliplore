@@ -41,6 +41,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@rainbow-me/rainbowkit": "^2.2.1",
     "@reduxjs/toolkit": "^2.7.0",
+    "@remotion/media": "4.0.386",
     "@remotion/media-parser": "4.0.386",
     "@remotion/player": "4.0.386",
     "@story-protocol/core-sdk": "^1.4.2",
