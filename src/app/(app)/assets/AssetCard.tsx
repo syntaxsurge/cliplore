@@ -1,0 +1,386 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CopyIconButton } from "@/components/data-display/CopyIconButton";
+import { getStoryIpaExplorerUrl, getStoryTxExplorerUrl } from "@/lib/story/explorer";
+import { formatBytes, formatShortHash, ipfsUriToGatewayUrl } from "@/lib/utils";
+import {
+  AlignLeft,
+  Database,
+  ExternalLink,
+  FileText,
+  Globe,
+  Hash,
+  Image as ImageIcon,
+  LayoutDashboard,
+  Music,
+  Play,
+  Sparkles,
+  Tag,
+  Wallet,
+} from "lucide-react";
+import type { AssetRow } from "./types";
+
+function ExternalLinkIconButton(props: { href: string; label: string }) {
+  const { href, label } = props;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button asChild variant="ghost" size="icon" className="h-8 w-8">
+          <a href={href} target="_blank" rel="noreferrer" aria-label={label}>
+            <ExternalLink />
+          </a>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function getSampleKind(mime: string | null) {
+  const value = mime ?? "";
+  if (value.startsWith("video/")) return "video";
+  if (value.startsWith("audio/")) return "audio";
+  if (value.startsWith("image/")) return "image";
+  if (value) return "file";
+  return "file";
+}
+
+function formatLocalDate(value: number) {
+  try {
+    return new Date(value).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+export default function AssetCard(props: { row: AssetRow }) {
+  const { row } = props;
+  const assetKind = (row.asset.assetKind ?? "video").toLowerCase();
+  const isDataset = assetKind === "dataset";
+  const mediaUrl = useMemo(() => ipfsUriToGatewayUrl(row.asset.videoUrl), [row.asset.videoUrl]);
+  const thumbnailUrl = useMemo(
+    () => (row.asset.thumbnailUrl ? ipfsUriToGatewayUrl(row.asset.thumbnailUrl) : null),
+    [row.asset.thumbnailUrl],
+  );
+  const storyIpaUrl = useMemo(
+    () =>
+      getStoryIpaExplorerUrl({
+        ipId: row.asset.ipId,
+        chainId: row.asset.chainId ?? undefined,
+      }),
+    [row.asset.chainId, row.asset.ipId],
+  );
+  const storyTxUrl = useMemo(() => {
+    if (!row.asset.txHash) return null;
+    return getStoryTxExplorerUrl({
+      txHash: row.asset.txHash,
+      chainId: row.asset.chainId ?? undefined,
+    });
+  }, [row.asset.chainId, row.asset.txHash]);
+
+  const publicHref =
+    assetKind === "dataset"
+      ? `/datasets/${encodeURIComponent(row.asset.ipId)}`
+      : `/ip/${encodeURIComponent(row.asset.ipId)}`;
+  const dashboardHref = `/assets/${encodeURIComponent(row.asset.ipId)}`;
+  const remixHref = `/projects?parentIp=${encodeURIComponent(row.asset.ipId)}`;
+
+  const status = row.hasRemote
+    ? { variant: "success" as const, label: "Listed" }
+    : row.hasLocal
+      ? { variant: "warning" as const, label: "Local only" }
+      : { variant: "outline" as const, label: "Unverified" };
+
+  const updatedAt = row.asset.updatedAt ?? row.asset.createdAt;
+  const updatedLabel = updatedAt ? formatLocalDate(updatedAt) : "";
+  const sampleKind = useMemo(
+    () => (isDataset ? getSampleKind(row.asset.mediaMimeType ?? "") : "video"),
+    [isDataset, row.asset.mediaMimeType],
+  );
+
+  const SampleIcon =
+    sampleKind === "video"
+      ? Play
+      : sampleKind === "audio"
+        ? Music
+        : sampleKind === "image"
+          ? ImageIcon
+          : Database;
+
+  return (
+    <Card className="group overflow-hidden transition-shadow duration-200 ease-out hover:shadow-md motion-reduce:transition-none">
+      <div className="relative aspect-video overflow-hidden border-b border-border bg-muted">
+        {thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumbnailUrl}
+            alt={`${row.asset.title} thumbnail`}
+            className="h-full w-full object-cover transition-transform duration-200 ease-out group-hover:scale-[1.02] motion-reduce:transition-none"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+            {isDataset ? <Database className="size-5" /> : <Play className="size-5" />}
+            No thumbnail
+          </div>
+        )}
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="absolute inset-0 flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              aria-label={`Preview ${row.asset.title}`}
+            >
+              <span className="rounded-full border border-border/60 bg-background/80 p-3 shadow-sm backdrop-blur-sm opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none">
+                <SampleIcon className="size-5" />
+              </span>
+            </button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl overflow-hidden p-0">
+            <div className="border-b border-border px-6 py-4">
+              <DialogHeader>
+                <DialogTitle className="text-lg">{row.asset.title}</DialogTitle>
+                <DialogDescription className="max-w-prose">
+                  {row.asset.summary}
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+            <div className="border-b border-border bg-black">
+              {sampleKind === "video" ? (
+                <div className="aspect-video">
+                  <video
+                    src={mediaUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full"
+                  />
+                </div>
+              ) : sampleKind === "audio" ? (
+                <div className="p-6">
+                  <audio src={mediaUrl} controls className="w-full" />
+                </div>
+              ) : sampleKind === "image" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={mediaUrl} alt={row.asset.title} className="h-full w-full object-contain" />
+              ) : (
+                <div className="flex flex-col items-start gap-3 p-6">
+                  <p className="text-sm text-muted-foreground">
+                    This file isn’t previewable in-browser. Open it to inspect it locally.
+                  </p>
+                  <Button asChild>
+                    <a href={mediaUrl} target="_blank" rel="noreferrer">
+                      Open file
+                    </a>
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-6 py-4">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="font-mono">
+                  IP: {formatShortHash(row.asset.ipId)}
+                </Badge>
+                <Badge variant={status.variant}>{status.label}</Badge>
+                <Badge variant="outline">{isDataset ? "Dataset" : "Video"}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm" variant="secondary">
+                  <Link href={dashboardHref}>
+                    <LayoutDashboard />
+                    Dashboard
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href={publicHref}>
+                    <Globe />
+                    Public page
+                  </Link>
+                </Button>
+                {!isDataset ? (
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={remixHref}>
+                      <Sparkles />
+                      Remix
+                    </Link>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <CardHeader className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="min-w-0 truncate text-xl">{row.asset.title}</CardTitle>
+          <Badge variant="outline" className="shrink-0 font-mono">
+            {formatShortHash(row.asset.ipId)}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={status.variant}>{status.label}</Badge>
+          <Badge variant="outline">{isDataset ? "Dataset" : "Video"}</Badge>
+          {updatedLabel ? (
+            <Badge variant="outline" className="tabular-nums">
+              Updated {updatedLabel}
+            </Badge>
+          ) : null}
+          {isDataset && row.asset.datasetType ? <Badge>{row.asset.datasetType}</Badge> : null}
+          {isDataset && row.asset.mediaMimeType ? (
+            <Badge variant="outline">{row.asset.mediaMimeType}</Badge>
+          ) : null}
+          {isDataset && typeof row.asset.mediaSizeBytes === "number" ? (
+            <Badge variant="outline">{formatBytes(row.asset.mediaSizeBytes)}</Badge>
+          ) : null}
+        </div>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="grid gap-1">
+          <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <AlignLeft className="size-3.5" />
+            Description
+          </p>
+          <p className="text-sm text-foreground/90">{row.asset.summary}</p>
+        </div>
+
+        {row.local ? (
+          <div className="grid gap-1">
+            <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <FileText className="size-3.5" />
+              Local origin
+            </p>
+            <p className="text-sm text-foreground/90">
+              {row.local.projectName} • {row.local.exportName}
+            </p>
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 text-sm">
+          <div className="grid gap-1">
+            <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Database className="size-3.5" />
+              IP Asset ID
+            </p>
+            <div className="flex items-center gap-2">
+              <code
+                className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
+                title={row.asset.ipId}
+              >
+                {row.asset.ipId}
+              </code>
+              <CopyIconButton value={row.asset.ipId} label="Copy IP Asset ID" />
+              <ExternalLinkIconButton href={storyIpaUrl} label="Open in Story Explorer" />
+            </div>
+          </div>
+
+          <div className="grid gap-1">
+            <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Wallet className="size-3.5" />
+              Creator wallet
+            </p>
+            <div className="flex items-center gap-2">
+              <code
+                className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
+                title={row.asset.licensorWallet}
+              >
+                {row.asset.licensorWallet}
+              </code>
+              <CopyIconButton value={row.asset.licensorWallet} label="Copy creator wallet" />
+            </div>
+          </div>
+
+          {row.asset.txHash ? (
+            <div className="grid gap-1">
+              <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Hash className="size-3.5" />
+                Registration tx
+              </p>
+              <div className="flex items-center gap-2">
+                <code
+                  className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs"
+                  title={row.asset.txHash}
+                >
+                  {row.asset.txHash}
+                </code>
+                <CopyIconButton value={row.asset.txHash} label="Copy transaction hash" />
+                {storyTxUrl ? (
+                  <ExternalLinkIconButton href={storyTxUrl} label="Open tx in Story Explorer" />
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid gap-1">
+            <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <FileText className="size-3.5" />
+              License terms
+            </p>
+            <p className="text-sm font-medium text-emerald-600 dark:text-emerald-300">
+              {row.asset.terms}
+            </p>
+          </div>
+
+          {isDataset && row.asset.tags?.length ? (
+            <div className="grid gap-1">
+              <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Tag className="size-3.5" />
+                Tags
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {row.asset.tags.slice(0, 6).map((tag) => (
+                  <Badge key={tag} variant="outline">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </CardContent>
+
+      <CardFooter className="flex flex-wrap gap-2">
+        <Button asChild size="sm" variant="secondary">
+          <Link href={dashboardHref}>
+            <LayoutDashboard />
+            Open dashboard
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href={publicHref}>
+            <Globe />
+            Public page
+          </Link>
+        </Button>
+        {!isDataset ? (
+          <Button asChild size="sm" variant="outline">
+            <Link href={remixHref}>
+              <Sparkles />
+              Remix
+            </Link>
+          </Button>
+        ) : null}
+      </CardFooter>
+    </Card>
+  );
+}

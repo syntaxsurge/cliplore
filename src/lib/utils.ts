@@ -57,3 +57,10 @@ export function formatBytes(bytes: number) {
   const value = bytes / Math.pow(1024, index);
   return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
 }
+
+export function formatShortHash(value: string, visibleStart = 6, visibleEnd = 4) {
+  if (!value) return value;
+  const minLength = visibleStart + visibleEnd + 2;
+  if (value.length <= minLength) return value;
+  return `${value.slice(0, visibleStart)}…${value.slice(-visibleEnd)}`;
+}

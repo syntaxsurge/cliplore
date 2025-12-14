@@ -2,6 +2,8 @@ import { getConvexClient } from "@/lib/db/convex/client";
 import ExploreClient from "./ExploreClient";
 import type { ExploreAsset } from "./types";
 
+export const dynamic = "force-dynamic";
+
 export default async function ExplorePage() {
   let ipAssets: ExploreAsset[] = [];
   let hadError = false;
