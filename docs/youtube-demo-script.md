@@ -33,12 +33,16 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **Steps:**
   1. **Current page:** https://cliplore.com/demo/horror — confirm the header shows “Studio”.
   2. **Current page:** https://cliplore.com/demo/horror — **Navigate:** Click “Studio” in the header → lands on https://cliplore.com/projects — confirm a “Projects” heading (or projects list) is visible.
-  3. **Current page:** https://cliplore.com/projects — **Action:** Click “New project” → confirm you are redirected to https://cliplore.com/projects/[id] and the left tool rail shows “Library”, “Text”, “Export”.
-  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Library”, then click “Generate” in “AI Studio” → confirm you are redirected to https://cliplore.com/settings and “AI (Bring your own OpenAI key)” is visible.
-  5. **Current page:** https://cliplore.com/settings — **Enter values:**
+  3. **Current page:** https://cliplore.com/projects — **Action:** Click “New project” → confirm the “Create new project” modal opens and a “Project name” input is visible.
+  4. **Current page:** https://cliplore.com/projects — **Enter values:**
+     - Project name = [PROJECT_NAME="Neon courier demo v1"]
+     Click “Create” — confirm toast “Project created” → confirm you are redirected to https://cliplore.com/projects/[id] and the left tool rail shows “Library”, “Text”, “Export”.
+  5. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Library”, then click “Generate” in “AI Studio” → confirm you are redirected to https://cliplore.com/settings and “AI (Bring your own OpenAI key)” is visible.
+  6. **Current page:** https://cliplore.com/settings — **Enter values:**
      - OpenAI API key = [OPENAI_API_KEY=sk-proj-REDACTED_FOR_DEMO]
-     Click “Save key” — wait for a saved confirmation message (“Saved” / “Key saved”).
-  6. **Verify on-screen:** **Current page:** https://cliplore.com/settings — click “Studio” in the header → lands on https://cliplore.com/projects — click your newest project row to return to https://cliplore.com/projects/[id] — click “Library” then “Generate” → confirm the Generate modal opens with a “Prompt” field visible.
+     Optional (skip for this demo): toggle the eye icon to show/hide the key.
+     Click “Save key” — wait for toast “OpenAI key saved.” → confirm you are routed back to https://cliplore.com/projects/[id].
+  7. **Verify on-screen:** **Current page:** https://cliplore.com/projects/[id] — click “Library” then “Generate” → confirm the Generate modal opens with a prompt textarea visible.
 - **Voiceover:**
   > “I open Studio, create a new project, and land in the full-screen editor. When I click Library → Generate, ClipLore redirects me to Settings because it’s bring-your-own-key. I paste my OpenAI key—masked—and click ‘Save key’, then return to the editor. Now when I click Generate again, the prompt modal opens and we can generate Sora clips.”
 
@@ -49,12 +53,15 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   1. **Current page:** https://cliplore.com/projects/[id] — confirm the Generate modal is open with a “Prompt” field visible.
   2. **Current page:** https://cliplore.com/projects/[id] — **Enter values:**
      - Prompt = [SORA_PROMPT="Premium minimalist studio commercial, clean UI scan animation, proof seal stamp moment, cinematic lighting, no logos"]
-     - Seconds = [SECONDS=8]
-     Click “Generate” — wait for a new row in “History” with a visible status/progress indicator.
-  3. **Current page:** https://cliplore.com/projects/[id] — **Action:** After History shows completion, drag the new clip from Library into the timeline layer area → confirm a clip block appears on the timeline.
-  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Text” → confirm “Title” is visible.
-  5. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Title” → confirm a new text clip appears on the timeline and a text element appears on the canvas.
-  6. **Verify on-screen:** Double-click the text on the canvas → confirm the caret appears for inline editing and the timeline selection highlights the same layer.
+     - Duration = [SECONDS=8]
+     - Size = [SIZE="1280 x 720 (16:9)"]
+     Click “Generate clip” — confirm toast “Sora job queued. Track it in History.” → wait for the job to complete.
+  3. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “History” → confirm the job appears and reaches “completed”.
+  4. **Current page:** https://cliplore.com/projects/[id] — **Verify on-screen:** Confirm toast “Sora clip ready.” and a new video clip appears on the timeline.
+     Optional: If it didn’t auto-add, drag the new clip from the Library list onto the timeline.
+  5. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Text” → in “Default text”, enter [TEXT_DEFAULT="NEON COURIER"] → click “Title”.
+  6. **Verify on-screen:** Confirm a new text clip appears on the timeline and a text element appears on the canvas.
+  7. **Verify on-screen:** Double-click the text on the canvas → replace with [TEXT_EDITED="NEON COURIER (Story IP)"] → click outside to finish.
 - **Voiceover:**
   > “I generate an 8-second Sora clip with a single prompt, watch it appear in History, and drag it straight onto the timeline. Then I add a Title and double-click it directly on the canvas to edit inline. This proves the Creative Front-End core: a clean workflow from AI generation to real timeline editing.”
 
@@ -64,23 +71,35 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **Steps:**
   1. **Current page:** https://cliplore.com/projects/[id] — confirm the timeline shows at least one video clip and one text clip.
   2. **Current page:** https://cliplore.com/projects/[id] — **Navigate:** Click “Export” → confirm the Export panel opens.
-  3. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Export” (or “Render”) → wait for a progress indicator.
-  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Wait for export completion → confirm an export completion dialog/card shows the exported file details.
-  5. **Current page:** Export completion dialog — **Action:** Click “Publish” → lands on https://cliplore.com/projects/[id]/publish.
-  6. **Verify on-screen:** Confirm the Publish page shows a visible “Publish” heading and the selected export is displayed.
+  3. **Current page:** https://cliplore.com/projects/[id] — **Set values:**
+     - Render Engine = [RENDER_ENGINE="FFmpeg (WASM, CPU)"]
+     - Resolution = [EXPORT_RESOLUTION="720p"]
+     - Quality = [EXPORT_QUALITY="Medium"]
+     - Processing Speed = [EXPORT_SPEED="Balanced"]
+  4. **Current page:** https://cliplore.com/projects/[id] — **Action:** Click “Render” → wait for a progress indicator.
+  5. **Current page:** https://cliplore.com/projects/[id] — **Action:** Wait for export completion → confirm the completion dialog shows a preview video plus “Save Video” and “Publish”.
+  6. **Optional:** Click “Save Video” and keep the default filename [EXPORT_FILENAME="Neon courier demo v1.mp4"] (used later in Enforcement → Verify).
+  7. **Current page:** Export completion dialog — **Action:** Click “Publish” → lands on https://cliplore.com/projects/[id]/publish?exportId=...
+  8. **Verify on-screen:** Confirm the Publish page shows a visible “Publish” heading and the selected export is displayed.
 - **Voiceover:**
   > “Now we export like a real editor. I open Export, click Render, and wait for the completion card. From that completion screen, I click Publish immediately—so the workflow is always Create → Edit → Export → Publish.”
 
 ## 6. Publish wizard: upload to storage, pin IPFS metadata, register on Story
 - **URL:** https://cliplore.com/projects/[id]/publish
-- **Shot:** Publish wizard with “Upload & Register” CTA; success view showing Storage URLs, IPFS metadata URIs, SHA-256 hashes, and Next Steps (“Copy IP ID”, “Story Explorer”, “View marketplace page”, “Open Asset Dashboard”).
+- **Shot:** Publish wizard with export selection + thumbnail + metadata; success view showing Storage URLs, IPFS metadata URIs, SHA-256 hashes, and Next Steps (“Copy IP ID”, “Story Explorer”, “View public page”, “Open asset dashboard”).
 - **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm the primary CTA “Upload & Register” is visible.
-  2. **Current page:** https://cliplore.com/projects/[id]/publish — **Action:** Click “Upload & Register” — wait for the success state.
-  3. **Current page:** Publish success state — **Action:** Locate “Storage” → confirm “Video URL” and “Thumbnail URL” are visible and clickable.
-  4. **Current page:** Publish success state — **Action:** Locate “IPFS metadata” → confirm “IP metadata” and “NFT metadata” show ipfs://… URIs and “SHA-256: 0x…” hashes.
-  5. **Current page:** Publish success state — **Action:** Click “Story Explorer” → confirm a new tab opens to Story Explorer.
-  6. **Verify on-screen:** Back on the success state, confirm “Copy IP ID” is visible and the IP ID is shown in the results.
+  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm “Exports” list is visible and the newest export is selected (radio).
+  2. **Current page:** https://cliplore.com/projects/[id]/publish — **Action:** In “Preview & Thumbnail”, scrub to [THUMBNAIL_TIME_SECONDS=1.20]s → click “Set thumbnail”.
+     Optional (skip for this demo): “Upload thumbnail” file picker.
+  3. **Current page:** https://cliplore.com/projects/[id]/publish — **Enter values (Metadata):**
+     - Title = [PUBLISH_TITLE="Neon courier edit"]
+     - License preset = [LICENSE_PRESET="Commercial remix · 5% rev share · 1 WIP fee"]
+     - Description = [PUBLISH_DESC="8-second Sora clip cut in ClipLore with a title overlay; published as Story IP with explicit remix licensing."]
+  4. **Current page:** https://cliplore.com/projects/[id]/publish — **Action:** Click the main publish CTA (“Upload & Register” on first run; may show “Register on Story” if already uploaded) → wait for the success state.
+  5. **Current page:** Publish success state — **Action:** Click “Copy IP ID” → confirm “Copied” → save it as [PUBLISHED_IP_ID=0xYOUR_PUBLISHED_IP_ID] for later steps.
+  6. **Current page:** Publish success state — **Action:** Locate “Storage” → confirm “Video URL” and “Thumbnail URL” are visible and clickable.
+  7. **Current page:** Publish success state — **Action:** Locate “IPFS metadata” → confirm “IP metadata” and “NFT metadata” show ipfs://… URIs and “SHA-256: 0x…” hashes.
+  8. **Current page:** Publish success state — **Action:** Click “Story Explorer” → confirm a new tab opens to Story Explorer.
 - **Voiceover:**
   > “This Publish wizard is the Story integration surface. I click ‘Upload & Register’ to upload the export to storage, pin metadata to IPFS with SHA-256 fingerprints, and register the final cut as a Story IP asset.”
 
@@ -88,9 +107,9 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **URL:** https://cliplore.com/explore
 - **Shot:** Explore marketplace listing cards with IP IDs and “View details”; public IP page showing license terms and a “Mint license token” CTA.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/projects/[id]/publish — confirm “View marketplace page” is visible in Next Steps.
-  2. **Current page:** https://cliplore.com/projects/[id]/publish — **Navigate:** Click “View marketplace page” → lands on https://cliplore.com/explore — confirm heading “Explore” / “Explore IP” is visible.
-  3. **Current page:** https://cliplore.com/explore — **Action:** Click “View details” on your newly published listing → lands on https://cliplore.com/ip/[ipId] — confirm “IP Asset ID” (0x…) is visible.
+  1. **Current page:** Publish success state — **Navigate:** Click “Explore” in the header → lands on https://cliplore.com/explore — confirm heading “Explore IP” is visible.
+  2. **Current page:** https://cliplore.com/explore — **Enter values:** In the search bar, type [EXPLORE_QUERY="Neon courier edit"].
+  3. **Current page:** https://cliplore.com/explore — **Action:** Click “View details” on your listing → lands on https://cliplore.com/ip/[ipId] — confirm “IP Asset ID” (0x…) is visible.
   4. **Current page:** https://cliplore.com/ip/[ipId] — **Action:** Scroll to the licensing area → confirm “Mint license token” is visible.
   5. **Current page:** https://cliplore.com/ip/[ipId] — **Action:** Click “Copy IP ID” (if present) → confirm a “Copied” toast or icon state appears.
   6. **Verify on-screen:** Confirm the public IP page shows the IP ID and the “Mint license token” CTA.
@@ -117,11 +136,10 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   1. **Current page:** Incognito https://cliplore.com/ip/[ipId] — confirm the license mint succeeded (toast / tx link).
   2. **Current page:** Original browser https://cliplore.com/ip/[ipId] — **Navigate:** Click “Assets” in the header → lands on https://cliplore.com/assets — confirm heading “Assets” is visible.
   3. **Current page:** https://cliplore.com/assets — **Action:** Click your newly published asset row/card → lands on https://cliplore.com/assets/[ipId] — confirm the IP ID (0x…) is visible on the header.
-  4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Royalties” tab → confirm “Royalties dashboard” is visible and the “Royalties vault” address is NOT 0x000…000.
-  5. **Current page:** https://cliplore.com/assets/[ipId] — **Enter values:**
-     - Wrap IP → WIP = [WRAP_AMOUNT_IP=1]
-     Click “Wrap” — confirm MetaMask opens → click “Confirm” — wait for a success toast (wrap complete).
-  6. **Verify on-screen:** **Current page:** https://cliplore.com/assets/[ipId] — in “Tip this IP”, set Amount (WIP) = [TIP_WIP=1] → click “Send tip” → confirm MetaMask opens → click “Confirm” — then click “Refresh claimable” and confirm “Claimable” updates from “—” to a value.
+  4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Royalties” tab → confirm “Royalties vault” is visible and the vault address is NOT 0x000…000.
+  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Wrap / unwrap WIP” → **Enter values:** Wrap IP → WIP = [WRAP_AMOUNT_IP=1] → click “Wrap” → MetaMask → “Confirm”.
+  6. **Current page:** https://cliplore.com/assets/[ipId] — **Enter values:** In “Tip this IP”, Amount (WIP) = [TIP_WIP=1] → click “Send tip” → MetaMask → “Confirm”.
+  7. **Verify on-screen:** In “Claim revenue”, leave “Claim as” = “IP account” (default) → click “Refresh claimable” and confirm “Claimable” updates from “—” to a value.
 - **Voiceover:**
   > “Back in the creator asset dashboard, royalties are now activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 1 IP into WIP, then send a 1 WIP tip to the IP vault, refresh claimable, and you can see revenue appear—this demonstrates the full IPFi loop.”
 
@@ -129,15 +147,16 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **URL:** https://cliplore.com/assets/[ipId]
 - **Shot:** Asset dashboard Royalties tab showing “Claim revenue” and “Fractionalize royalties (transfer Royalty Tokens)” with recipient + percent.
 - **Steps:**
-  1. **Current page:** https://cliplore.com/assets/[ipId] — confirm “Royalties dashboard” is visible and “Claimable” shows a number (not “—”).
-  2. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Claim revenue” — confirm MetaMask opens a transaction.
-  3. **Current page:** MetaMask popup — **Action:** Click “Confirm” — wait for a success toast and confirm “Claimable” decreases or resets after “Refresh claimable”.
-  4. **Current page:** https://cliplore.com/assets/[ipId] — **Enter values:**
+  1. **Current page:** https://cliplore.com/assets/[ipId] — confirm you’re on the “Royalties” tab and “Claim revenue” is visible.
+  2. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Leave “Claim as” = “IP account” (default) → click “Refresh claimable” → confirm “Claimable” shows a number (not “—”).
+  3. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Claim revenue” — confirm MetaMask opens a transaction → click “Confirm” — wait for a success toast.
+  4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Refresh claimable” again → confirm “Claimable” decreases or resets.
+  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Fractionalize royalties” → **Enter values:**
      - Recipient = [RECIPIENT_WALLET=0xYOUR_SECOND_WALLET]
-     - Percent = [PERCENT=5]
+     - Percent (%) = [PERCENT=5]
      Click “Transfer” — confirm MetaMask opens → click “Confirm” — wait for a success toast.
-  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Files & metadata” tab → confirm Storage URLs and IPFS metadata URIs/hashes are visible for audit.
-  6. **Verify on-screen:** Confirm the transfer action shows a success confirmation (toast or tx hash displayed) and the Files tab shows ipfs:// URIs and SHA-256 0x… hashes.
+  6. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Files & metadata” tab → confirm Storage URLs and IPFS metadata URIs/hashes are visible for audit.
+  7. **Verify on-screen:** Confirm the transfer action shows a success confirmation (toast or tx hash displayed) and the Files tab shows ipfs:// URIs and SHA-256 0x… hashes.
 - **Voiceover:**
   > “Now I claim the revenue to my wallet with one click and confirm the MetaMask transaction. Then I fractionalize royalties by transferring 5% of the royalty tokens to my second wallet—again confirmed on-chain. This shows licensing, revenue, claiming, and fractional rights in one end-to-end flow.”
 
@@ -148,27 +167,39 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   1. **Current page:** https://cliplore.com/assets/[ipId] — confirm the header shows “Datasets”.
   2. **Current page:** https://cliplore.com/assets/[ipId] — **Navigate:** Click “Datasets” in the header → lands on https://cliplore.com/datasets — confirm heading “Datasets” is visible.
   3. **Current page:** https://cliplore.com/datasets — **Action:** Click “Publish a dataset” → lands on https://cliplore.com/datasets/new — confirm the dataset publisher heading is visible.
-  4. **Current page:** https://cliplore.com/datasets/new — **Enter values:**
+  4. **Current page:** https://cliplore.com/datasets/new — **Upload files:**
+     - Dataset sample = [DATASET_FILE="pov-sidewalks-sample.mp4"]
+     - Cover image = [DATASET_COVER="pov-sidewalks-cover.jpg"]
+  5. **Current page:** https://cliplore.com/datasets/new — **Enter values (Metadata → Basics):**
      - Title = [DATASET_TITLE="POV Sidewalks v1"]
      - Description = [DATASET_DESC="Rights-cleared POV navigation sample with structured metadata, hashed artifacts, and Story licensing."]
-     - Dataset type = [DATASET_TYPE="pov-video"]
-     Click “Pin + Register on Story” — wait for a success block showing an IP ID (0x…).
-  5. **Current page:** https://cliplore.com/datasets/new — **Action:** Click “View dataset” → lands on https://cliplore.com/datasets/[ipId].
-  6. **Verify on-screen:** Confirm the dataset detail page shows the dataset IP ID (0x…) and links to Story Explorer and IPFS metadata (ipfs://…).
+     - Dataset type = [DATASET_TYPE="PoV video"] (leave default)
+     - Dataset version = [DATASET_VERSION="1.0.0"]
+     - Modalities = [DATASET_MODALITIES="video"] (leave default)
+     - Tags = [DATASET_TAGS="pov-video, outdoors, handheld"]
+     Optional (skip for this demo): Capture + Notes + Optional sections.
+  6. **Current page:** https://cliplore.com/datasets/new — **Action (Rights & compliance):** Check “I have the rights to license this data sample”.
+  7. **Current page:** https://cliplore.com/datasets/new — **Action:** Click “Register on Story” — wait for a success block showing an IP ID (0x…).
+  8. **Current page:** https://cliplore.com/datasets/new — **Action:** Click “View dataset page” → lands on https://cliplore.com/datasets/[ipId].
+  9. **Verify on-screen:** Confirm the dataset detail page shows the dataset IP ID (0x…) and links to Story Explorer and IPFS metadata (ipfs://…).
 - **Voiceover:**
   > “ClipLore also ships the Data track: rights-cleared dataset samples registered as Story IP. I publish a dataset in one flow and open the dataset detail page where Story and IPFS references make the provenance auditable.”
 
 ## 12. Enforcement: verify a file hash and submit an IPFS evidence report (IP Detection & Enforcement)
 - **URL:** https://cliplore.com/enforcement
-- **Shot:** Enforcement page with Verify panel (SHA-256 output) and Report panel (Victim IP ID, Suspect URL/file, “Pin evidence & raise dispute”), then evidence URI shown.
+- **Shot:** Enforcement page with Verify panel (SHA-256 output) and Report panel (“Target IP ID (dispute target)”, suspect URL/file, “Pin evidence & raise dispute”), then evidence URI shown.
 - **Steps:**
   1. **Current page:** https://cliplore.com/datasets/[ipId] — confirm the header shows “Enforcement”.
   2. **Current page:** https://cliplore.com/datasets/[ipId] — **Navigate:** Click “Enforcement” in the header → lands on https://cliplore.com/enforcement — confirm heading “IP Detection & Enforcement” is visible.
-  3. **Current page:** https://cliplore.com/enforcement — **Action:** In “Verify”, click “Upload file” and select a sample file — confirm a “SHA-256” value appears.
-  4. **Current page:** https://cliplore.com/enforcement — **Action:** Click “Report” → confirm fields “Victim IP ID” and “Suspect URL” are visible.
+  3. **Current page:** https://cliplore.com/enforcement — **Verify (Upload tab):** Click “Upload file” and select [EXPORT_FILENAME="Neon courier demo v1.mp4"] → click “Verify” → confirm a “Fingerprint” block appears with a SHA-256 value (0x…).
+  4. **Current page:** https://cliplore.com/enforcement — **Action:** In “Report”, confirm fields “Target IP ID (dispute target)” and “Suspect URL (optional)” are visible.
   5. **Current page:** https://cliplore.com/enforcement — **Enter values:**
-     - Victim IP ID = [VICTIM_IP_ID=0xYOUR_PUBLISHED_IP_ID]
-     - Suspect URL = [SUSPECT_URL=https://example.com/suspect.mp4]
+     - Target IP ID (dispute target) = [PUBLISHED_IP_ID=0xYOUR_PUBLISHED_IP_ID]
+     - Protected IP (optional) = None (leave blank)
+     - Dispute tag = [DISPUTE_TAG=IMPROPER_USAGE] (leave default)
+     - Liveness (seconds) = [LIVENESS_SECONDS=2592000] (leave default)
+     - Suspect URL (optional) = [SUSPECT_URL=https://example.com/suspect.mp4]
+     - Notes (optional) = [NOTES="Demo report: suspected unauthorized repost; evidence bundle includes SHA-256 fingerprint and target Story IP ID."]
      Click “Pin evidence & raise dispute” — wait for an evidence result to appear.
   6. **Verify on-screen:** Confirm an evidence URI (ipfs://…) is displayed and a dispute submission confirmation appears (tx hash or success toast).
 - **Voiceover:**
