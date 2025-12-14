@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import { useAccount } from "wagmi";
@@ -14,8 +14,14 @@ import { useStoryClient } from "@/lib/story/useStoryClient";
 import { LICENSE_PRESETS, type LicensePreset } from "@/lib/story/license-presets";
 import { sha256HexFromFile } from "@/lib/crypto/sha256";
 import { uploadFileToB2, type StorageUploadScope } from "@/lib/storage/upload-client";
-import { formatBytes } from "@/lib/utils";
+import { cn, formatBytes } from "@/lib/utils";
 import { CopyIconButton } from "@/components/data-display/CopyIconButton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
@@ -74,6 +81,8 @@ const MODALITY_OPTIONS = [
 ] as const;
 
 type DatasetModality = (typeof MODALITY_OPTIONS)[number];
+
+type MetadataTab = "basics" | "capture" | "notes";
 
 const CAPTURE_METHOD_OPTIONS = [
   { value: "handheld", label: "Handheld" },
@@ -231,9 +240,15 @@ function CheckboxRow(props: {
   title: string;
   description: string;
   disabled?: boolean;
+  invalid?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-3">
+    <div
+      className={cn(
+        "flex items-start gap-3 rounded-xl border border-border bg-background p-3",
+        props.invalid && "border-destructive/50 bg-destructive/5",
+      )}
+    >
       <Checkbox
         id={props.id}
         checked={props.checked}
@@ -321,6 +336,11 @@ export default function DatasetPublishClient() {
   const [marketplaceSyncError, setMarketplaceSyncError] = useState<string | null>(null);
   const [result, setResult] = useState<PublishResult | null>(null);
   const [hashJobs, setHashJobs] = useState<Record<string, boolean>>({});
+  const [metadataTab, setMetadataTab] = useState<MetadataTab>("basics");
+  const [showValidation, setShowValidation] = useState(false);
+  const [pendingScroll, setPendingScroll] = useState<{ sectionId: string; focusId?: string } | null>(
+    null,
+  );
 
   const canPublish = Boolean(
     address &&
@@ -337,6 +357,23 @@ export default function DatasetPublishClient() {
       status !== "registering" &&
       status !== "syncing",
   );
+
+  useEffect(() => {
+    if (!pendingScroll) return;
+    const prefersReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const el = document.getElementById(pendingScroll.focusId ?? pendingScroll.sectionId);
+    el?.scrollIntoView({
+      behavior: prefersReduced ? "auto" : "smooth",
+      block: "start",
+    });
+    if (pendingScroll.focusId) {
+      const focusEl = document.getElementById(pendingScroll.focusId);
+      if (focusEl instanceof HTMLElement) {
+        focusEl.focus({ preventScroll: true });
+      }
+    }
+    setPendingScroll(null);
+  }, [metadataTab, pendingScroll]);
 
   const computeHashForUrl = async (jobId: string, url: string) => {
     if (!url.trim()) {
@@ -768,18 +805,67 @@ export default function DatasetPublishClient() {
 
   const missingCount = requirements.filter((item) => !item.ok).length;
 
+  type RequirementKey = (typeof requirements)[number]["key"];
+
+  const jumpTo = (opts: { sectionId: string; focusId?: string; metadataTab?: MetadataTab }) => {
+    if (opts.metadataTab) setMetadataTab(opts.metadataTab);
+    setPendingScroll({ sectionId: opts.sectionId, focusId: opts.focusId });
+  };
+
+  const requirementTargets: Record<
+    RequirementKey,
+    { sectionId: string; focusId?: string; metadataTab?: MetadataTab }
+  > = {
+    wallet: { sectionId: "dataset-review" },
+    dataset: { sectionId: "dataset-files", focusId: "dataset-file" },
+    cover: { sectionId: "dataset-files", focusId: "cover-file" },
+    title: { sectionId: "dataset-metadata", focusId: "title", metadataTab: "basics" },
+    description: { sectionId: "dataset-metadata", focusId: "description", metadataTab: "basics" },
+    version: { sectionId: "dataset-metadata", focusId: "dataset-version", metadataTab: "basics" },
+    modalities: { sectionId: "dataset-metadata", metadataTab: "basics" },
+    rights: { sectionId: "dataset-rights", focusId: "rights-confirmed" },
+  };
+
+  const onPublishClick = () => {
+    setShowValidation(true);
+    const firstMissing = requirements.find((item) => !item.ok);
+    if (firstMissing) jumpTo(requirementTargets[firstMissing.key]);
+    void handlePublish();
+  };
+
+  const datasetFileError = showValidation && !datasetFile ? "Select a dataset sample file." : null;
+  const thumbnailFileError = showValidation && !thumbnailFile ? "Select a cover image." : null;
+  const titleError =
+    (showValidation || title.trim().length > 0) && title.trim().length < 3
+      ? "Use at least 3 characters."
+      : null;
+  const descriptionError =
+    (showValidation || description.trim().length > 0) && description.trim().length < 5
+      ? "Use at least 5 characters."
+      : null;
+  const datasetVersionError = datasetVersion.trim().length < 1 ? "Version is required." : null;
+  const modalitiesError = modalities.length < 1 ? "Select at least one modality." : null;
+  const rightsConfirmedError = showValidation && !rightsConfirmed ? "Required to publish." : null;
+
+  const selectedLicense = LICENSE_PRESETS[licensePreset];
+  const licenseSummary =
+    selectedLicense?.share && selectedLicense.share > 0
+      ? `${selectedLicense.share}% rev share · ${selectedLicense.fee ?? "1"} WIP fee`
+      : "Non-commercial remix";
+
   return (
     <TooltipProvider>
-      <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+      <main
+        id="main"
+        className="mx-auto max-w-7xl space-y-8 px-4 py-10 pb-24 sm:px-6 sm:py-12 lg:px-8"
+      >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">Data track</p>
-            <h1 className="text-4xl font-semibold tracking-tight text-foreground">
-              Publish dataset
-            </h1>
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground">Publish dataset</h1>
             <p className="max-w-3xl text-muted-foreground">
-              Upload a rights-cleared sample, pin Story IPA metadata to IPFS, register on Story,
-              and list it for licensing.
+              Upload a rights-cleared sample, pin Story IPA metadata to IPFS, register on Story, and
+              list it for licensing.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -796,1253 +882,1465 @@ export default function DatasetPublishClient() {
           </div>
         </div>
 
-      <Card>
-        <CardHeader className="space-y-2">
-          <CardTitle className="text-base">Publish controls</CardTitle>
-          <CardDescription>
-            Confirm requirements, pick a license preset, and register the dataset on Story.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!address ? (
-            <Alert variant="warning">
-              <AlertTitle>Wallet required</AlertTitle>
-              <AlertDescription>
-                Connect your wallet to register on Story and list this dataset in the marketplace.
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          <div className="grid gap-2 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Dataset type</span>
-              <span className="font-medium text-foreground">{datasetTypeLabel}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Capture method</span>
-              <span className="font-medium text-foreground">{captureMethodLabel}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">License preset</span>
-              <span className="font-medium text-foreground">{licenseLabel}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Modalities</span>
-              <span className="font-medium text-foreground">{modalities.length}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">Tags</span>
-              <span className="font-medium text-foreground">{tags.length}</span>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-foreground">Requirements</p>
-              <Badge variant="outline" className="tabular-nums">
-                {missingCount === 0 ? "Ready" : `${missingCount} missing`}
-              </Badge>
-            </div>
-            <ul className="space-y-2">
-              {requirements.map((item) => (
-                <li key={item.key} className="flex gap-2">
-                  {item.ok ? (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600 dark:text-emerald-300" />
-                  ) : (
-                    <CircleAlert className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                  )}
-                  <div className="min-w-0">
-                    <p
-                      className={`text-sm ${
-                        item.ok ? "text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {item.title}
-                    </p>
-                    {!item.ok ? (
-                      <p className="text-xs text-muted-foreground">{item.hint}</p>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {(uploadDatasetProgress || uploadThumbnailProgress) ? (
-            <>
-              <Separator />
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-foreground">Upload progress</p>
-
-                {uploadDatasetProgress ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <FileText className="h-3.5 w-3.5" />
-                        Dataset sample
-                      </span>
-                      <span className="tabular-nums">
-                        {formatBytes(uploadDatasetProgress.uploadedBytes)} /{" "}
-                        {formatBytes(uploadDatasetProgress.totalBytes)}
-                      </span>
-                    </div>
-                    <Progress value={datasetUploadPercent ?? 0} />
-                    <p className="text-xs text-muted-foreground">
-                      Part {uploadDatasetProgress.partNumber} / {uploadDatasetProgress.totalParts}
-                    </p>
-                  </div>
-                ) : null}
-
-                {uploadThumbnailProgress ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1.5">
-                        <ImageIcon className="h-3.5 w-3.5" />
-                        Cover image
-                      </span>
-                      <span className="tabular-nums">
-                        {formatBytes(uploadThumbnailProgress.uploadedBytes)} /{" "}
-                        {formatBytes(uploadThumbnailProgress.totalBytes)}
-                      </span>
-                    </div>
-                    <Progress value={thumbnailUploadPercent ?? 0} />
-                    <p className="text-xs text-muted-foreground">
-                      Part {uploadThumbnailProgress.partNumber} /{" "}
-                      {uploadThumbnailProgress.totalParts}
-                    </p>
-                  </div>
-                ) : null}
+        {result ? (
+          <Card>
+            <CardHeader className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                  Published
+                </CardTitle>
+                <Badge variant="success">Story registered</Badge>
               </div>
-            </>
-          ) : null}
-
-          {error ? (
-            <Alert variant="destructive">
-              <AlertTitle>Publish failed</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          {marketplaceSyncError ? (
-            <Alert variant="warning">
-              <AlertTitle>Marketplace sync failed</AlertTitle>
-              <AlertDescription>{marketplaceSyncError}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button onClick={() => void handlePublish()} disabled={!canPublish} className="flex-1">
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {statusLabel}
-                </>
-              ) : (
-                <>
-                  <UploadCloud className="h-4 w-4" />
-                  Register on Story
-                </>
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setDatasetId(crypto.randomUUID());
-                setDatasetFile(null);
-                setThumbnailFile(null);
-                setTitle("");
-                setDescription("");
-                setDatasetType("pov-video");
-                setDatasetVersion("1.0.0");
-                setModalities(["video"]);
-                setTagsInput("");
-                setCaptureMethod("handheld");
-                setCaptureDevice("");
-                setCaptureEnvironment("");
-                setCaptureLighting("");
-                setCaptureFps("");
-                setCaptureResolution("");
-                setLocationPrivacy("coarse");
-                setCaptureCountry("");
-                setCaptureRegion("");
-                setUsageNotes("");
-                setContainsPeople(false);
-                setContainsSensitiveData(false);
-                setRightsConfirmed(false);
-                setModelRelease(false);
-                setPropertyRelease(false);
-                setThirdPartyAudioCleared(false);
-                setReleaseProofs([]);
-                setSensors([]);
-                setHasLabels(false);
-                setLabelFormat("");
-                setLabelTaxonomy("");
-                setLabelingTool("");
-                setLabelManifestUri("");
-                setLabelManifestHash("");
-                setSplitTrain("");
-                setSplitVal("");
-                setSplitTest("");
-                setArtifacts([]);
-                setCaptureSigned(false);
-                setDeviceSignature("");
-                setC2paManifestUri("");
-                setC2paManifestHash("");
-                setLicensePreset("commercial-5");
-                setUploadDatasetProgress(null);
-                setUploadThumbnailProgress(null);
-                setError(null);
-                setMarketplaceSyncError(null);
-                setResult(null);
-                setHashJobs({});
-                setStatus("idle");
-                toast.success("Reset form");
-              }}
-              disabled={status !== "idle" && status !== "success" && status !== "error"}
-              className="sm:w-[160px]"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Reset
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {result ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Published</CardTitle>
-            <CardDescription>Your dataset is registered on Story and ready to license.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-2">
-              <Label>IP Asset ID</Label>
-              <div className="flex items-center gap-2">
-                <code className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs">
-                  {result.ipId}
-                </code>
-                <CopyIconButton value={result.ipId} label="Copy IP Asset ID" />
+              <CardDescription>Your dataset is registered on Story and ready to license.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label>IP Asset ID</Label>
+                <div className="flex items-center gap-2">
+                  <code className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs">
+                    {result.ipId}
+                  </code>
+                  <CopyIconButton value={result.ipId} label="Copy IP Asset ID" />
+                </div>
               </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <a
-                  href={getStoryIpaExplorerUrl({ ipId: result.ipId })}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Globe className="h-4 w-4" />
-                  Story Explorer
-                </a>
-              </Button>
-              <Button asChild size="sm" variant="secondary">
-                <Link href={`/datasets/${encodeURIComponent(result.ipId)}`}>
-                  View dataset page
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>1) Files</CardTitle>
-          <CardDescription>Primary data sample + cover image for marketplace previews.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-2">
-            <Label htmlFor="dataset-file">Dataset sample</Label>
-            <Input
-              id="dataset-file"
-              type="file"
-              onChange={(e) => setDatasetFile(e.target.files?.[0] ?? null)}
-            />
-            {datasetFile ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">{datasetFile.type || "application/octet-stream"}</Badge>
-                <Badge variant="outline">{formatBytes(datasetFile.size)}</Badge>
-                <Badge variant="outline">{datasetFile.name}</Badge>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="cover-file">Cover image</Label>
-            <Input
-              id="cover-file"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setThumbnailFile(e.target.files?.[0] ?? null)}
-            />
-            {thumbnailFile ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="outline">{thumbnailFile.type || "image/png"}</Badge>
-                <Badge variant="outline">{formatBytes(thumbnailFile.size)}</Badge>
-                <Badge variant="outline">{thumbnailFile.name}</Badge>
-              </div>
-            ) : null}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>2) Metadata</CardTitle>
-          <CardDescription>Structured fields to improve search, licensing, and provenance.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="grid gap-2">
-            <Label htmlFor="title">Title</Label>
-            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this sample? How was it captured? What’s allowed/restricted?"
-              className="min-h-[110px]"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Dataset type</Label>
-            <div className="flex flex-wrap gap-2">
-              {DATASET_TYPE_OPTIONS.map((t) => (
-                <Button
-                  key={t.value}
-                  type="button"
-                  size="sm"
-                  variant={datasetType === t.value ? "default" : "outline"}
-                  onClick={() => setDatasetType(t.value)}
-                >
-                  {t.label}
-                </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="dataset-version">Dataset version</Label>
-              <Input
-                id="dataset-version"
-                value={datasetVersion}
-                onChange={(e) => setDatasetVersion(e.target.value)}
-                placeholder="e.g. 1.0.0"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Modalities</Label>
               <div className="flex flex-wrap gap-2">
-                {MODALITY_OPTIONS.map((m) => (
-                  <Button
-                    key={m}
-                    type="button"
-                    size="sm"
-                    variant={modalities.includes(m) ? "default" : "outline"}
-                    onClick={() => setModalities((prev) => toggleInArray(prev, m))}
+                <Button asChild size="sm">
+                  <a
+                    href={getStoryIpaExplorerUrl({ ipId: result.ipId })}
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    {m}
-                  </Button>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Select every signal present in this dataset sample.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="tags">Tags</Label>
-            <Input
-              id="tags"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              placeholder="Comma-separated (e.g. pov-video, outdoors, handheld)"
-            />
-            {tags.length ? (
-              <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <Badge key={tag} variant="outline">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Capture method</Label>
-            <div className="flex flex-wrap gap-2">
-              {CAPTURE_METHOD_OPTIONS.map((m) => (
-                <Button
-                  key={m.value}
-                  type="button"
-                  size="sm"
-                  variant={captureMethod === m.value ? "default" : "outline"}
-                  onClick={() => setCaptureMethod(m.value)}
-                >
-                  {m.label}
+                    <Globe className="h-4 w-4" />
+                    Story Explorer
+                  </a>
                 </Button>
-              ))}
-            </div>
-          </div>
+                <Button asChild size="sm" variant="secondary">
+                  <Link href={`/datasets/${encodeURIComponent(result.ipId)}`}>View dataset page</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="capture-device">Capture device</Label>
-              <Input
-                id="capture-device"
-                value={captureDevice}
-                onChange={(e) => setCaptureDevice(e.target.value)}
-                placeholder="e.g. GoPro Hero 12, DJI Air 3, Quest 3"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="capture-environment">Environment</Label>
-              <Input
-                id="capture-environment"
-                value={captureEnvironment}
-                onChange={(e) => setCaptureEnvironment(e.target.value)}
-                placeholder="e.g. indoor lab, coastal trail, city streets"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="capture-lighting">Lighting</Label>
-              <Input
-                id="capture-lighting"
-                value={captureLighting}
-                onChange={(e) => setCaptureLighting(e.target.value)}
-                placeholder="e.g. daylight, low light, mixed"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="capture-fps">FPS</Label>
-              <Input
-                id="capture-fps"
-                inputMode="decimal"
-                value={captureFps}
-                onChange={(e) => setCaptureFps(e.target.value)}
-                placeholder="e.g. 30"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="capture-resolution">Resolution</Label>
-              <Input
-                id="capture-resolution"
-                value={captureResolution}
-                onChange={(e) => setCaptureResolution(e.target.value)}
-                placeholder="e.g. 1920x1080"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <Label htmlFor="location-privacy">Location privacy</Label>
-              <Select
-                value={locationPrivacy}
-                onValueChange={(value) =>
-                  setLocationPrivacy(value as LocationPrivacy)
-                }
-              >
-                <SelectTrigger id="location-privacy">
-                  <SelectValue placeholder="Select privacy level" />
-                </SelectTrigger>
-                <SelectContent>
-                  {LOCATION_PRIVACY_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="capture-country">Country</Label>
-              <Input
-                id="capture-country"
-                value={captureCountry}
-                onChange={(e) => setCaptureCountry(e.target.value)}
-                placeholder="e.g. US"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="capture-region">Region</Label>
-              <Input
-                id="capture-region"
-                value={captureRegion}
-                onChange={(e) => setCaptureRegion(e.target.value)}
-                placeholder="e.g. Metro Manila"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="usage-notes">Usage notes</Label>
-            <Textarea
-              id="usage-notes"
-              value={usageNotes}
-              onChange={(e) => setUsageNotes(e.target.value)}
-              placeholder="Any constraints, model-training intent, or special handling notes."
-              className="min-h-[90px]"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>3) Sensors (optional)</CardTitle>
-          <CardDescription>
-            Describe capture hardware for robotics, drone, mocap, and multimodal datasets.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {sensors.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Add sensors to make the dataset easier to evaluate and reuse.
-            </p>
-          ) : null}
-
-          <div className="space-y-4">
-            {sensors.map((sensor) => (
-              <div key={sensor.id} className="rounded-lg border border-border p-4 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-foreground">Sensor</p>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setSensors((prev) => prev.filter((s) => s.id !== sensor.id))}
-                  >
-                    Remove
-                  </Button>
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="space-y-6 lg:col-span-7 xl:col-span-8">
+            <Card id="dataset-files">
+              <CardHeader className="space-y-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-4 w-4" />
+                  Files
+                </CardTitle>
+                <CardDescription>Primary data sample + cover image for marketplace previews.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid gap-2">
+                  <Label htmlFor="dataset-file">Dataset sample</Label>
+                  <Input
+                    id="dataset-file"
+                    type="file"
+                    onChange={(e) => setDatasetFile(e.target.files?.[0] ?? null)}
+                    disabled={busy}
+                    aria-invalid={Boolean(datasetFileError)}
+                    aria-describedby={datasetFileError ? "dataset-file-error" : undefined}
+                    className={cn(datasetFileError && "border-destructive focus-visible:ring-destructive")}
+                  />
+                  {datasetFileError ? (
+                    <p id="dataset-file-error" className="text-xs text-destructive">
+                      {datasetFileError}
+                    </p>
+                  ) : null}
+                  {datasetFile ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline">{datasetFile.type || "application/octet-stream"}</Badge>
+                      <Badge variant="outline">{formatBytes(datasetFile.size)}</Badge>
+                      <Badge variant="outline" className="max-w-full truncate">
+                        {datasetFile.name}
+                      </Badge>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="cover-file">Cover image</Label>
+                  <Input
+                    id="cover-file"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setThumbnailFile(e.target.files?.[0] ?? null)}
+                    disabled={busy}
+                    aria-invalid={Boolean(thumbnailFileError)}
+                    aria-describedby={thumbnailFileError ? "cover-file-error" : undefined}
+                    className={cn(thumbnailFileError && "border-destructive focus-visible:ring-destructive")}
+                  />
+                  {thumbnailFileError ? (
+                    <p id="cover-file-error" className="text-xs text-destructive">
+                      {thumbnailFileError}
+                    </p>
+                  ) : null}
+                  {thumbnailFile ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <Badge variant="outline">{thumbnailFile.type || "image/png"}</Badge>
+                      <Badge variant="outline">{formatBytes(thumbnailFile.size)}</Badge>
+                      <Badge variant="outline" className="max-w-full truncate">
+                        {thumbnailFile.name}
+                      </Badge>
+                    </div>
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card id="dataset-metadata">
+              <CardHeader className="space-y-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ImageIcon className="h-4 w-4" />
+                  Metadata
+                </CardTitle>
+                <CardDescription>Structured fields improve search, licensing, and provenance.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Tabs value={metadataTab} onValueChange={(v) => setMetadataTab(v as MetadataTab)}>
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="basics">Basics</TabsTrigger>
+                    <TabsTrigger value="capture">Capture</TabsTrigger>
+                    <TabsTrigger value="notes">Notes</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="basics" className="space-y-5 pt-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="title">Title</Label>
+                      <Input
+                        id="title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        disabled={busy}
+                        aria-invalid={Boolean(titleError)}
+                        aria-describedby={titleError ? "title-error" : undefined}
+                        className={cn(titleError && "border-destructive focus-visible:ring-destructive")}
+                      />
+                      {titleError ? (
+                        <p id="title-error" className="text-xs text-destructive">
+                          {titleError}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="What is this sample? How was it captured? What’s allowed/restricted?"
+                        disabled={busy}
+                        aria-invalid={Boolean(descriptionError)}
+                        aria-describedby={descriptionError ? "description-error" : undefined}
+                        className={cn(
+                          "min-h-[110px]",
+                          descriptionError && "border-destructive focus-visible:ring-destructive",
+                        )}
+                      />
+                      {descriptionError ? (
+                        <p id="description-error" className="text-xs text-destructive">
+                          {descriptionError}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label>Dataset type</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {DATASET_TYPE_OPTIONS.map((t) => (
+                          <Button
+                            key={t.value}
+                            type="button"
+                            size="sm"
+                            variant={datasetType === t.value ? "default" : "outline"}
+                            onClick={() => setDatasetType(t.value)}
+                            disabled={busy}
+                          >
+                            {t.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="dataset-version">Dataset version</Label>
+                        <Input
+                          id="dataset-version"
+                          value={datasetVersion}
+                          onChange={(e) => setDatasetVersion(e.target.value)}
+                          placeholder="e.g. 1.0.0"
+                          disabled={busy}
+                          aria-invalid={showValidation && Boolean(datasetVersionError)}
+                          className={cn(
+                            showValidation &&
+                              datasetVersionError &&
+                              "border-destructive focus-visible:ring-destructive",
+                          )}
+                        />
+                        {showValidation && datasetVersionError ? (
+                          <p className="text-xs text-destructive">{datasetVersionError}</p>
+                        ) : null}
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label>Modalities</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {MODALITY_OPTIONS.map((m) => (
+                            <Button
+                              key={m}
+                              type="button"
+                              size="sm"
+                              variant={modalities.includes(m) ? "default" : "outline"}
+                              onClick={() => setModalities((prev) => toggleInArray(prev, m))}
+                              disabled={busy}
+                            >
+                              {m}
+                            </Button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Select every signal present in this dataset sample.
+                        </p>
+                        {showValidation && modalitiesError ? (
+                          <p className="text-xs text-destructive">{modalitiesError}</p>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="tags">Tags</Label>
+                      <Input
+                        id="tags"
+                        value={tagsInput}
+                        onChange={(e) => setTagsInput(e.target.value)}
+                        placeholder="Comma-separated (e.g. pov-video, outdoors, handheld)"
+                        disabled={busy}
+                      />
+                      {tags.length ? (
+                        <div className="flex flex-wrap gap-2">
+                          {tags.map((tag) => (
+                            <Badge key={tag} variant="outline">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="capture" className="space-y-5 pt-4">
+                    <div className="grid gap-2">
+                      <Label>Capture method</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {CAPTURE_METHOD_OPTIONS.map((m) => (
+                          <Button
+                            key={m.value}
+                            type="button"
+                            size="sm"
+                            variant={captureMethod === m.value ? "default" : "outline"}
+                            onClick={() => setCaptureMethod(m.value)}
+                            disabled={busy}
+                          >
+                            {m.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-device">Capture device</Label>
+                        <Input
+                          id="capture-device"
+                          value={captureDevice}
+                          onChange={(e) => setCaptureDevice(e.target.value)}
+                          placeholder="e.g. GoPro Hero 12, DJI Air 3, Quest 3"
+                          disabled={busy}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-environment">Environment</Label>
+                        <Input
+                          id="capture-environment"
+                          value={captureEnvironment}
+                          onChange={(e) => setCaptureEnvironment(e.target.value)}
+                          placeholder="e.g. indoor lab, coastal trail, city streets"
+                          disabled={busy}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-lighting">Lighting</Label>
+                        <Input
+                          id="capture-lighting"
+                          value={captureLighting}
+                          onChange={(e) => setCaptureLighting(e.target.value)}
+                          placeholder="e.g. daylight, low light, mixed"
+                          disabled={busy}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-fps">FPS</Label>
+                        <Input
+                          id="capture-fps"
+                          inputMode="decimal"
+                          value={captureFps}
+                          onChange={(e) => setCaptureFps(e.target.value)}
+                          placeholder="e.g. 30"
+                          disabled={busy}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-resolution">Resolution</Label>
+                        <Input
+                          id="capture-resolution"
+                          value={captureResolution}
+                          onChange={(e) => setCaptureResolution(e.target.value)}
+                          placeholder="e.g. 1920x1080"
+                          disabled={busy}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="location-privacy">Location privacy</Label>
+                        <Select
+                          value={locationPrivacy}
+                          onValueChange={(value) => setLocationPrivacy(value as LocationPrivacy)}
+                        >
+                          <SelectTrigger id="location-privacy" disabled={busy}>
+                            <SelectValue placeholder="Select privacy level" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {LOCATION_PRIVACY_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-country">Country</Label>
+                        <Input
+                          id="capture-country"
+                          value={captureCountry}
+                          onChange={(e) => setCaptureCountry(e.target.value)}
+                          placeholder="e.g. US"
+                          disabled={busy}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="capture-region">Region</Label>
+                        <Input
+                          id="capture-region"
+                          value={captureRegion}
+                          onChange={(e) => setCaptureRegion(e.target.value)}
+                          placeholder="e.g. Metro Manila"
+                          disabled={busy}
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="notes" className="space-y-4 pt-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="usage-notes">Usage notes</Label>
+                      <Textarea
+                        id="usage-notes"
+                        value={usageNotes}
+                        onChange={(e) => setUsageNotes(e.target.value)}
+                        placeholder="Any constraints, model-training intent, or special handling notes."
+                        className="min-h-[120px]"
+                        disabled={busy}
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+
+            <Card id="dataset-rights">
+              <CardHeader className="space-y-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Rights & compliance
+                </CardTitle>
+                <CardDescription>
+                  Encode rights-clearing signals and optionally attach proof URLs.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3">
+                  <div className="space-y-1">
+                    <CheckboxRow
+                      id="rights-confirmed"
+                      checked={rightsConfirmed}
+                      onChange={setRightsConfirmed}
+                      title="I have the rights to license this data sample"
+                      description="You own the content and/or have releases/consent required to grant Story license terms."
+                      disabled={busy}
+                      invalid={Boolean(rightsConfirmedError)}
+                    />
+                    {rightsConfirmedError ? (
+                      <p className="text-xs text-destructive">{rightsConfirmedError}</p>
+                    ) : null}
+                  </div>
+                  <CheckboxRow
+                    id="contains-people"
+                    checked={containsPeople}
+                    onChange={setContainsPeople}
+                    title="Contains identifiable people"
+                    description="Used to signal that releases/consent may be required for downstream use."
+                    disabled={busy}
+                  />
+                  <CheckboxRow
+                    id="contains-sensitive"
+                    checked={containsSensitiveData}
+                    onChange={setContainsSensitiveData}
+                    title="Contains sensitive data"
+                    description="Examples: medical info, biometrics, license plates, or other personal identifiers."
+                    disabled={busy}
+                  />
+                  <CheckboxRow
+                    id="model-release"
+                    checked={modelRelease}
+                    onChange={setModelRelease}
+                    title="Model releases obtained (if applicable)"
+                    description="Use when identifiable people appear and releases are required for licensing/training."
+                    disabled={busy}
+                  />
+                  <CheckboxRow
+                    id="property-release"
+                    checked={propertyRelease}
+                    onChange={setPropertyRelease}
+                    title="Property releases obtained (if applicable)"
+                    description="Use when private property requires clearance."
+                    disabled={busy}
+                  />
+                  <CheckboxRow
+                    id="audio-cleared"
+                    checked={thirdPartyAudioCleared}
+                    onChange={setThirdPartyAudioCleared}
+                    title="Third-party audio cleared (if applicable)"
+                    description="Use when music/voice content is present and cleared for licensing."
+                    disabled={busy}
+                  />
+                </div>
+
+                <Accordion type="single" collapsible className="w-full">
+                  <AccordionItem value="release-proofs">
+                    <AccordionTrigger>
+                      <div className="flex items-center gap-2">
+                        Release proofs (optional)
+                        {releaseProofs.length ? (
+                          <Badge variant="outline" className="tabular-nums">
+                            {releaseProofs.length}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          Add URLs to documents (IPFS or HTTPS). Hashing is recommended for verification.
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setReleaseProofs((prev) => [
+                              ...prev,
+                              { id: crypto.randomUUID(), type: "model", uri: "", hash: "" },
+                            ])
+                          }
+                          disabled={busy}
+                        >
+                          Add proof
+                        </Button>
+                      </div>
+
+                      {releaseProofs.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No proofs added.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {releaseProofs.map((proof) => (
+                            <div key={proof.id} className="rounded-lg border border-border bg-muted/10 p-4 space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-foreground">Proof</p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setReleaseProofs((prev) => prev.filter((p) => p.id !== proof.id))
+                                  }
+                                  disabled={busy}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="grid gap-2">
+                                  <Label htmlFor={`proof-type-${proof.id}`}>Type</Label>
+                                  <Select
+                                    value={proof.type}
+                                    onValueChange={(value) =>
+                                      setReleaseProofs((prev) =>
+                                        prev.map((p) =>
+                                          p.id === proof.id ? { ...p, type: value as ReleaseProofType } : p,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <SelectTrigger id={`proof-type-${proof.id}`} disabled={busy}>
+                                      <SelectValue placeholder="Select proof type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {RELEASE_PROOF_TYPE_OPTIONS.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                          {opt.label}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+
+                                <div className="grid gap-2">
+                                  <Label htmlFor={`proof-hash-${proof.id}`}>SHA-256 (optional)</Label>
+                                  <Input
+                                    id={`proof-hash-${proof.id}`}
+                                    value={proof.hash}
+                                    onChange={(e) =>
+                                      setReleaseProofs((prev) =>
+                                        prev.map((p) => (p.id === proof.id ? { ...p, hash: e.target.value } : p)),
+                                      )
+                                    }
+                                    placeholder="0x…"
+                                    disabled={busy}
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid gap-2">
+                                <Label htmlFor={`proof-uri-${proof.id}`}>URL</Label>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                  <Input
+                                    id={`proof-uri-${proof.id}`}
+                                    value={proof.uri}
+                                    onChange={(e) =>
+                                      setReleaseProofs((prev) =>
+                                        prev.map((p) => (p.id === proof.id ? { ...p, uri: e.target.value } : p)),
+                                      )
+                                    }
+                                    placeholder="ipfs://… or https://…"
+                                    disabled={busy}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    disabled={busy || Boolean(hashJobs[`proof:${proof.id}`]) || !proof.uri.trim()}
+                                    onClick={async () => {
+                                      const res = await computeHashForUrl(`proof:${proof.id}`, proof.uri);
+                                      if (!res) return;
+                                      setReleaseProofs((prev) =>
+                                        prev.map((p) => (p.id === proof.id ? { ...p, hash: res.sha256 } : p)),
+                                      );
+                                    }}
+                                  >
+                                    {hashJobs[`proof:${proof.id}`] ? "Hashing…" : "Compute hash"}
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </CardContent>
+            </Card>
+
+            <Card id="dataset-optional">
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-base">Optional details</CardTitle>
+                <CardDescription>
+                  Add sensors, labels, artifacts, and provenance pointers to improve reuse.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Accordion type="multiple" className="w-full">
+                  <AccordionItem value="sensors">
+                    <AccordionTrigger>
+                      <div className="flex items-center gap-2">
+                        Sensors
+                        {sensors.length ? (
+                          <Badge variant="outline" className="tabular-nums">
+                            {sensors.length}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-4">
+                      {sensors.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Add sensors to make the dataset easier to evaluate and reuse.
+                        </p>
+                      ) : null}
+
+                      <div className="space-y-4">
+                        {sensors.map((sensor) => (
+                          <div key={sensor.id} className="rounded-lg border border-border bg-muted/10 p-4 space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-sm font-medium text-foreground">Sensor</p>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSensors((prev) => prev.filter((s) => s.id !== sensor.id))}
+                                disabled={busy}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <div className="grid gap-2">
+                                <Label htmlFor={`sensor-type-${sensor.id}`}>Type</Label>
+                                <Select
+                                  value={sensor.sensorType}
+                                  onValueChange={(value) =>
+                                    setSensors((prev) =>
+                                      prev.map((s) =>
+                                        s.id === sensor.id ? { ...s, sensorType: value as SensorType } : s,
+                                      ),
+                                    )
+                                  }
+                                >
+                                  <SelectTrigger id={`sensor-type-${sensor.id}`} disabled={busy}>
+                                    <SelectValue placeholder="Select sensor type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {SENSOR_TYPE_OPTIONS.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="grid gap-2">
+                                <Label htmlFor={`sensor-make-${sensor.id}`}>Make</Label>
+                                <Input
+                                  id={`sensor-make-${sensor.id}`}
+                                  value={sensor.make}
+                                  onChange={(e) =>
+                                    setSensors((prev) =>
+                                      prev.map((s) => (s.id === sensor.id ? { ...s, make: e.target.value } : s)),
+                                    )
+                                  }
+                                  placeholder="e.g. DJI, GoPro"
+                                  disabled={busy}
+                                />
+                              </div>
+
+                              <div className="grid gap-2">
+                                <Label htmlFor={`sensor-model-${sensor.id}`}>Model</Label>
+                                <Input
+                                  id={`sensor-model-${sensor.id}`}
+                                  value={sensor.model}
+                                  onChange={(e) =>
+                                    setSensors((prev) =>
+                                      prev.map((s) => (s.id === sensor.id ? { ...s, model: e.target.value } : s)),
+                                    )
+                                  }
+                                  placeholder="e.g. Air 3, HERO 12"
+                                  disabled={busy}
+                                />
+                              </div>
+
+                              <div className="grid gap-2">
+                                <Label htmlFor={`sensor-lens-${sensor.id}`}>Lens</Label>
+                                <Input
+                                  id={`sensor-lens-${sensor.id}`}
+                                  value={sensor.lens}
+                                  onChange={(e) =>
+                                    setSensors((prev) =>
+                                      prev.map((s) => (s.id === sensor.id ? { ...s, lens: e.target.value } : s)),
+                                    )
+                                  }
+                                  placeholder="e.g. wide, 24mm"
+                                  disabled={busy}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                              <Label htmlFor={`sensor-calib-url-${sensor.id}`}>Calibration URL (optional)</Label>
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <Input
+                                  id={`sensor-calib-url-${sensor.id}`}
+                                  value={sensor.calibrationUrl}
+                                  onChange={(e) =>
+                                    setSensors((prev) =>
+                                      prev.map((s) =>
+                                        s.id === sensor.id ? { ...s, calibrationUrl: e.target.value } : s,
+                                      ),
+                                    )
+                                  }
+                                  placeholder="ipfs://… or https://…"
+                                  disabled={busy}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  disabled={
+                                    busy ||
+                                    Boolean(hashJobs[`sensor:${sensor.id}`]) ||
+                                    !sensor.calibrationUrl.trim()
+                                  }
+                                  onClick={async () => {
+                                    const res = await computeHashForUrl(`sensor:${sensor.id}`, sensor.calibrationUrl);
+                                    if (!res) return;
+                                    setSensors((prev) =>
+                                      prev.map((s) => (s.id === sensor.id ? { ...s, calibrationHash: res.sha256 } : s)),
+                                    );
+                                  }}
+                                >
+                                  {hashJobs[`sensor:${sensor.id}`] ? "Hashing…" : "Compute hash"}
+                                </Button>
+                              </div>
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <div className="grid gap-2">
+                                  <Label htmlFor={`sensor-calib-hash-${sensor.id}`}>Calibration hash (optional)</Label>
+                                  <Input
+                                    id={`sensor-calib-hash-${sensor.id}`}
+                                    value={sensor.calibrationHash}
+                                    onChange={(e) =>
+                                      setSensors((prev) =>
+                                        prev.map((s) =>
+                                          s.id === sensor.id ? { ...s, calibrationHash: e.target.value } : s,
+                                        ),
+                                      )
+                                    }
+                                    placeholder="0x…"
+                                    disabled={busy}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setSensors((prev) => [
+                            ...prev,
+                            {
+                              id: crypto.randomUUID(),
+                              sensorType: "rgb-camera",
+                              make: "",
+                              model: "",
+                              lens: "",
+                              calibrationUrl: "",
+                              calibrationHash: "",
+                            },
+                          ])
+                        }
+                        disabled={busy}
+                      >
+                        Add sensor
+                      </Button>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="labels-splits">
+                    <AccordionTrigger>Labels & splits</AccordionTrigger>
+                    <AccordionContent className="space-y-5">
+                      <CheckboxRow
+                        id="has-labels"
+                        checked={hasLabels}
+                        onChange={setHasLabels}
+                        title="Includes labels/annotations"
+                        description="Turn this on if you provide labeled data (boxes, masks, keypoints, pose, etc.)."
+                        disabled={busy}
+                      />
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                          <Label htmlFor="label-format">Label format</Label>
+                          <Input
+                            id="label-format"
+                            value={labelFormat}
+                            onChange={(e) => setLabelFormat(e.target.value)}
+                            placeholder="e.g. COCO, YOLO, custom"
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="labeling-tool">Labeling tool</Label>
+                          <Input
+                            id="labeling-tool"
+                            value={labelingTool}
+                            onChange={(e) => setLabelingTool(e.target.value)}
+                            placeholder="e.g. CVAT, Label Studio"
+                            disabled={busy}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="label-taxonomy">Label taxonomy</Label>
+                        <Textarea
+                          id="label-taxonomy"
+                          value={labelTaxonomy}
+                          onChange={(e) => setLabelTaxonomy(e.target.value)}
+                          placeholder="e.g. pedestrians, vehicles, signs, crosswalks"
+                          className="min-h-[80px]"
+                          disabled={busy}
+                        />
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="label-manifest-uri">Label manifest URL (optional)</Label>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <Input
+                            id="label-manifest-uri"
+                            value={labelManifestUri}
+                            onChange={(e) => setLabelManifestUri(e.target.value)}
+                            placeholder="ipfs://… or https://…"
+                            disabled={busy}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={busy || Boolean(hashJobs["labels:manifest"]) || !labelManifestUri.trim()}
+                            onClick={async () => {
+                              const res = await computeHashForUrl("labels:manifest", labelManifestUri);
+                              if (!res) return;
+                              setLabelManifestHash(res.sha256);
+                            }}
+                          >
+                            {hashJobs["labels:manifest"] ? "Hashing…" : "Compute hash"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="label-manifest-hash">Label manifest SHA-256 (optional)</Label>
+                        <Input
+                          id="label-manifest-hash"
+                          value={labelManifestHash}
+                          onChange={(e) => setLabelManifestHash(e.target.value)}
+                          placeholder="0x…"
+                          disabled={busy}
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="grid gap-2">
+                          <Label htmlFor="split-train">Train count</Label>
+                          <Input
+                            id="split-train"
+                            inputMode="numeric"
+                            value={splitTrain}
+                            onChange={(e) => setSplitTrain(e.target.value)}
+                            placeholder="e.g. 1200"
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="split-val">Val count</Label>
+                          <Input
+                            id="split-val"
+                            inputMode="numeric"
+                            value={splitVal}
+                            onChange={(e) => setSplitVal(e.target.value)}
+                            placeholder="e.g. 150"
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="grid gap-2">
+                          <Label htmlFor="split-test">Test count</Label>
+                          <Input
+                            id="split-test"
+                            inputMode="numeric"
+                            value={splitTest}
+                            onChange={(e) => setSplitTest(e.target.value)}
+                            placeholder="e.g. 150"
+                            disabled={busy}
+                          />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="artifacts-provenance">
+                    <AccordionTrigger>Artifacts & provenance</AccordionTrigger>
+                    <AccordionContent className="space-y-5">
+                      <div className="rounded-lg border border-border bg-muted/10 p-4 space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">Extra artifacts</p>
+                            <p className="text-xs text-muted-foreground">
+                              Provide public URLs with SHA-256. These are embedded into the pinned IPA metadata.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setArtifacts((prev) => [
+                                ...prev,
+                                {
+                                  id: crypto.randomUUID(),
+                                  role: "docs",
+                                  uri: "",
+                                  hash: "",
+                                  mimeType: "application/pdf",
+                                  sizeBytes: "",
+                                },
+                              ])
+                            }
+                            disabled={busy}
+                          >
+                            Add artifact
+                          </Button>
+                        </div>
+
+                        {artifacts.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No extra artifacts.</p>
+                        ) : (
+                          <div className="space-y-3">
+                            {artifacts.map((artifact) => (
+                              <div key={artifact.id} className="rounded-md border border-border bg-background p-3 space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-sm font-medium text-foreground">Artifact</p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setArtifacts((prev) => prev.filter((a) => a.id !== artifact.id))}
+                                    disabled={busy}
+                                  >
+                                    Remove
+                                  </Button>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor={`artifact-role-${artifact.id}`}>Role</Label>
+                                    <Select
+                                      value={artifact.role}
+                                      onValueChange={(value) =>
+                                        setArtifacts((prev) =>
+                                          prev.map((a) =>
+                                            a.id === artifact.id ? { ...a, role: value as ArtifactRole } : a,
+                                          ),
+                                        )
+                                      }
+                                    >
+                                      <SelectTrigger id={`artifact-role-${artifact.id}`} disabled={busy}>
+                                        <SelectValue placeholder="Select role" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {ARTIFACT_ROLE_OPTIONS.map((opt) => (
+                                          <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor={`artifact-mime-${artifact.id}`}>MIME type</Label>
+                                    <Input
+                                      id={`artifact-mime-${artifact.id}`}
+                                      value={artifact.mimeType}
+                                      onChange={(e) =>
+                                        setArtifacts((prev) =>
+                                          prev.map((a) =>
+                                            a.id === artifact.id ? { ...a, mimeType: e.target.value } : a,
+                                          ),
+                                        )
+                                      }
+                                      placeholder="e.g. application/pdf"
+                                      disabled={busy}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-2">
+                                  <Label htmlFor={`artifact-uri-${artifact.id}`}>URL</Label>
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                    <Input
+                                      id={`artifact-uri-${artifact.id}`}
+                                      value={artifact.uri}
+                                      onChange={(e) =>
+                                        setArtifacts((prev) =>
+                                          prev.map((a) =>
+                                            a.id === artifact.id ? { ...a, uri: e.target.value } : a,
+                                          ),
+                                        )
+                                      }
+                                      placeholder="ipfs://… or https://…"
+                                      disabled={busy}
+                                    />
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={busy || Boolean(hashJobs[`artifact:${artifact.id}`]) || !artifact.uri.trim()}
+                                      onClick={async () => {
+                                        const res = await computeHashForUrl(`artifact:${artifact.id}`, artifact.uri);
+                                        if (!res) return;
+                                        setArtifacts((prev) =>
+                                          prev.map((a) =>
+                                            a.id === artifact.id
+                                              ? {
+                                                  ...a,
+                                                  hash: res.sha256,
+                                                  sizeBytes: typeof res.bytes === "number" ? String(res.bytes) : a.sizeBytes,
+                                                  mimeType: res.contentType ?? a.mimeType,
+                                                }
+                                              : a,
+                                          ),
+                                        );
+                                      }}
+                                    >
+                                      {hashJobs[`artifact:${artifact.id}`] ? "Hashing…" : "Hash URL"}
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                  <div className="grid gap-2">
+                                    <Label htmlFor={`artifact-hash-${artifact.id}`}>SHA-256</Label>
+                                    <Input
+                                      id={`artifact-hash-${artifact.id}`}
+                                      value={artifact.hash}
+                                      onChange={(e) =>
+                                        setArtifacts((prev) =>
+                                          prev.map((a) => (a.id === artifact.id ? { ...a, hash: e.target.value } : a)),
+                                        )
+                                      }
+                                      placeholder="0x…"
+                                      disabled={busy}
+                                    />
+                                  </div>
+                                  <div className="grid gap-2">
+                                    <Label htmlFor={`artifact-size-${artifact.id}`}>Size (bytes)</Label>
+                                    <Input
+                                      id={`artifact-size-${artifact.id}`}
+                                      inputMode="numeric"
+                                      value={artifact.sizeBytes}
+                                      onChange={(e) =>
+                                        setArtifacts((prev) =>
+                                          prev.map((a) =>
+                                            a.id === artifact.id ? { ...a, sizeBytes: e.target.value } : a,
+                                          ),
+                                        )
+                                      }
+                                      placeholder="optional"
+                                      disabled={busy}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-muted/10 p-4 space-y-3">
+                        <p className="text-sm font-medium text-foreground">Provenance</p>
+                        <CheckboxRow
+                          id="capture-signed"
+                          checked={captureSigned}
+                          onChange={setCaptureSigned}
+                          title="Capture signed"
+                          description="Enable if you have cryptographic signing/provenance for the capture pipeline."
+                          disabled={busy}
+                        />
+
+                        <div className="grid gap-2">
+                          <Label htmlFor="device-signature">Device signature (optional)</Label>
+                          <Input
+                            id="device-signature"
+                            value={deviceSignature}
+                            onChange={(e) => setDeviceSignature(e.target.value)}
+                            placeholder="Signature or identifier"
+                            disabled={busy}
+                          />
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label htmlFor="c2pa-uri">C2PA manifest URL (optional)</Label>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <Input
+                              id="c2pa-uri"
+                              value={c2paManifestUri}
+                              onChange={(e) => setC2paManifestUri(e.target.value)}
+                              placeholder="ipfs://… or https://…"
+                              disabled={busy}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={busy || Boolean(hashJobs["c2pa:manifest"]) || !c2paManifestUri.trim()}
+                              onClick={async () => {
+                                const res = await computeHashForUrl("c2pa:manifest", c2paManifestUri);
+                                if (!res) return;
+                                setC2paManifestHash(res.sha256);
+                              }}
+                            >
+                              {hashJobs["c2pa:manifest"] ? "Hashing…" : "Compute hash"}
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                          <Label htmlFor="c2pa-hash">C2PA manifest SHA-256 (optional)</Label>
+                          <Input
+                            id="c2pa-hash"
+                            value={c2paManifestHash}
+                            onChange={(e) => setC2paManifestHash(e.target.value)}
+                            placeholder="0x…"
+                            disabled={busy}
+                          />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </CardContent>
+            </Card>
+          </div>
+
+          <aside className="space-y-6 lg:col-span-5 xl:col-span-4">
+            <div className="space-y-6 lg:sticky lg:top-24">
+              <Card id="dataset-review">
+                <CardHeader className="space-y-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <UploadCloud className="h-4 w-4" />
+                    Review & publish
+                  </CardTitle>
+                  <CardDescription>
+                    Choose license terms, confirm requirements, then register the dataset on Story.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {!address ? (
+                    <Alert variant="warning">
+                      <AlertTitle>Wallet required</AlertTitle>
+                      <AlertDescription>
+                        Connect your wallet to register on Story and list this dataset in the marketplace.
+                      </AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  <div className="grid gap-2 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Dataset type</span>
+                      <span className="font-medium text-foreground">{datasetTypeLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Capture method</span>
+                      <span className="font-medium text-foreground">{captureMethodLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Modalities</span>
+                      <span className="font-medium text-foreground">{modalities.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground">Tags</span>
+                      <span className="font-medium text-foreground">{tags.length}</span>
+                    </div>
+                  </div>
+
                   <div className="grid gap-2">
-                    <Label htmlFor={`sensor-type-${sensor.id}`}>Type</Label>
-                    <Select
-                      value={sensor.sensorType}
-                      onValueChange={(value) =>
-                        setSensors((prev) =>
-                          prev.map((s) =>
-                            s.id === sensor.id
-                              ? { ...s, sensorType: value as SensorType }
-                              : s,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger id={`sensor-type-${sensor.id}`}>
-                        <SelectValue placeholder="Select sensor type" />
+                    <p className="text-sm font-medium text-foreground">Jump to</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => jumpTo({ sectionId: "dataset-files", focusId: "dataset-file" })}
+                      >
+                        Files
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => jumpTo({ sectionId: "dataset-metadata", metadataTab: "basics" })}
+                      >
+                        Metadata
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => jumpTo({ sectionId: "dataset-rights" })}>
+                        Rights
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => jumpTo({ sectionId: "dataset-optional" })}>
+                        Optional
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label htmlFor="license-preset">License preset</Label>
+                    <Select value={licensePreset} onValueChange={(value) => setLicensePreset(value as LicensePreset)}>
+                      <SelectTrigger id="license-preset" disabled={busy}>
+                        <SelectValue placeholder="Select license preset" />
                       </SelectTrigger>
                       <SelectContent>
-                        {SENSOR_TYPE_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
+                        {(Object.keys(LICENSE_PRESETS) as LicensePreset[]).map((key) => (
+                          <SelectItem key={key} value={key}>
+                            {LICENSE_PRESETS[key].label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-muted-foreground">{licenseSummary}</p>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor={`sensor-make-${sensor.id}`}>Make</Label>
-                    <Input
-                      id={`sensor-make-${sensor.id}`}
-                      value={sensor.make}
-                      onChange={(e) =>
-                        setSensors((prev) =>
-                          prev.map((s) => (s.id === sensor.id ? { ...s, make: e.target.value } : s)),
-                        )
-                      }
-                      placeholder="e.g. DJI, GoPro"
-                    />
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-foreground">Requirements</p>
+                      <Badge variant="outline" className="tabular-nums">
+                        {missingCount === 0 ? "Ready" : `${missingCount} missing`}
+                      </Badge>
+                    </div>
+                    <ul className="space-y-1">
+                      {requirements.map((item) => (
+                        <li key={item.key}>
+                          {!item.ok ? (
+                            <button
+                              type="button"
+                              onClick={() => jumpTo(requirementTargets[item.key])}
+                              className="flex w-full gap-2 rounded-md p-1 text-left hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <CircleAlert className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                              <div className="min-w-0">
+                                <p className="text-sm text-muted-foreground">{item.title}</p>
+                                <p className="text-xs text-muted-foreground">{item.hint}</p>
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="flex gap-2 p-1">
+                              <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                              <p className="text-sm text-foreground">{item.title}</p>
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor={`sensor-model-${sensor.id}`}>Model</Label>
-                    <Input
-                      id={`sensor-model-${sensor.id}`}
-                      value={sensor.model}
-                      onChange={(e) =>
-                        setSensors((prev) =>
-                          prev.map((s) =>
-                            s.id === sensor.id ? { ...s, model: e.target.value } : s,
-                          ),
-                        )
-                      }
-                      placeholder="e.g. Air 3, HERO 12"
-                    />
-                  </div>
+                  {(uploadDatasetProgress || uploadThumbnailProgress) ? (
+                    <>
+                      <Separator />
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-foreground">Upload progress</p>
 
-                  <div className="grid gap-2">
-                    <Label htmlFor={`sensor-lens-${sensor.id}`}>Lens</Label>
-                    <Input
-                      id={`sensor-lens-${sensor.id}`}
-                      value={sensor.lens}
-                      onChange={(e) =>
-                        setSensors((prev) =>
-                          prev.map((s) => (s.id === sensor.id ? { ...s, lens: e.target.value } : s)),
-                        )
-                      }
-                      placeholder="e.g. wide, 24mm"
-                    />
-                  </div>
-                </div>
+                        {uploadDatasetProgress ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1.5">
+                                <FileText className="h-3.5 w-3.5" />
+                                Dataset sample
+                              </span>
+                              <span className="tabular-nums">
+                                {formatBytes(uploadDatasetProgress.uploadedBytes)} /{" "}
+                                {formatBytes(uploadDatasetProgress.totalBytes)}
+                              </span>
+                            </div>
+                            <Progress value={datasetUploadPercent ?? 0} />
+                            <p className="text-xs text-muted-foreground">
+                              Part {uploadDatasetProgress.partNumber} / {uploadDatasetProgress.totalParts}
+                            </p>
+                          </div>
+                        ) : null}
 
-                <div className="grid gap-2">
-                  <Label htmlFor={`sensor-calib-url-${sensor.id}`}>Calibration URL (optional)</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Input
-                      id={`sensor-calib-url-${sensor.id}`}
-                      value={sensor.calibrationUrl}
-                      onChange={(e) =>
-                        setSensors((prev) =>
-                          prev.map((s) =>
-                            s.id === sensor.id
-                              ? { ...s, calibrationUrl: e.target.value }
-                              : s,
-                          ),
-                        )
-                      }
-                      placeholder="ipfs://… or https://…"
-                    />
+                        {uploadThumbnailProgress ? (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1.5">
+                                <ImageIcon className="h-3.5 w-3.5" />
+                                Cover image
+                              </span>
+                              <span className="tabular-nums">
+                                {formatBytes(uploadThumbnailProgress.uploadedBytes)} /{" "}
+                                {formatBytes(uploadThumbnailProgress.totalBytes)}
+                              </span>
+                            </div>
+                            <Progress value={thumbnailUploadPercent ?? 0} />
+                            <p className="text-xs text-muted-foreground">
+                              Part {uploadThumbnailProgress.partNumber} / {uploadThumbnailProgress.totalParts}
+                            </p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {error ? (
+                    <Alert variant="destructive">
+                      <AlertTitle>Publish failed</AlertTitle>
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  {marketplaceSyncError ? (
+                    <Alert variant="warning">
+                      <AlertTitle>Marketplace sync failed</AlertTitle>
+                      <AlertDescription>{marketplaceSyncError}</AlertDescription>
+                    </Alert>
+                  ) : null}
+
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={onPublishClick} disabled={busy} variant={canPublish ? "default" : "secondary"}>
+                      {busy ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          {statusLabel}
+                        </>
+                      ) : canPublish ? (
+                        <>
+                          <UploadCloud className="h-4 w-4" />
+                          Register on Story
+                        </>
+                      ) : (
+                        <>
+                          <CircleAlert className="h-4 w-4" />
+                          Complete required fields
+                        </>
+                      )}
+                    </Button>
                     <Button
                       type="button"
                       variant="outline"
-                      disabled={Boolean(hashJobs[`sensor:${sensor.id}`]) || !sensor.calibrationUrl.trim()}
-                      onClick={async () => {
-                        const res = await computeHashForUrl(
-                          `sensor:${sensor.id}`,
-                          sensor.calibrationUrl,
-                        );
-                        if (!res) return;
-                        setSensors((prev) =>
-                          prev.map((s) =>
-                            s.id === sensor.id ? { ...s, calibrationHash: res.sha256 } : s,
-                          ),
-                        );
+                      onClick={() => {
+                        setDatasetId(crypto.randomUUID());
+                        setDatasetFile(null);
+                        setThumbnailFile(null);
+                        setTitle("");
+                        setDescription("");
+                        setDatasetType("pov-video");
+                        setDatasetVersion("1.0.0");
+                        setModalities(["video"]);
+                        setTagsInput("");
+                        setCaptureMethod("handheld");
+                        setCaptureDevice("");
+                        setCaptureEnvironment("");
+                        setCaptureLighting("");
+                        setCaptureFps("");
+                        setCaptureResolution("");
+                        setLocationPrivacy("coarse");
+                        setCaptureCountry("");
+                        setCaptureRegion("");
+                        setUsageNotes("");
+                        setContainsPeople(false);
+                        setContainsSensitiveData(false);
+                        setRightsConfirmed(false);
+                        setModelRelease(false);
+                        setPropertyRelease(false);
+                        setThirdPartyAudioCleared(false);
+                        setReleaseProofs([]);
+                        setSensors([]);
+                        setHasLabels(false);
+                        setLabelFormat("");
+                        setLabelTaxonomy("");
+                        setLabelingTool("");
+                        setLabelManifestUri("");
+                        setLabelManifestHash("");
+                        setSplitTrain("");
+                        setSplitVal("");
+                        setSplitTest("");
+                        setArtifacts([]);
+                        setCaptureSigned(false);
+                        setDeviceSignature("");
+                        setC2paManifestUri("");
+                        setC2paManifestHash("");
+                        setLicensePreset("commercial-5");
+                        setUploadDatasetProgress(null);
+                        setUploadThumbnailProgress(null);
+                        setError(null);
+                        setMarketplaceSyncError(null);
+                        setResult(null);
+                        setHashJobs({});
+                        setMetadataTab("basics");
+                        setShowValidation(false);
+                        setPendingScroll(null);
+                        setStatus("idle");
+                        toast.success("Reset form");
                       }}
+                      disabled={status !== "idle" && status !== "success" && status !== "error"}
                     >
-                      {hashJobs[`sensor:${sensor.id}`] ? "Hashing…" : "Compute hash"}
+                      <RefreshCw className="h-4 w-4" />
+                      Reset
                     </Button>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <div className="grid gap-2">
-                      <Label htmlFor={`sensor-calib-hash-${sensor.id}`}>Calibration hash (optional)</Label>
-                      <Input
-                        id={`sensor-calib-hash-${sensor.id}`}
-                        value={sensor.calibrationHash}
-                        onChange={(e) =>
-                          setSensors((prev) =>
-                            prev.map((s) =>
-                              s.id === sensor.id
-                                ? { ...s, calibrationHash: e.target.value }
-                                : s,
-                            ),
-                          )
-                        }
-                        placeholder="0x…"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setSensors((prev) => [
-                ...prev,
-                {
-                  id: crypto.randomUUID(),
-                  sensorType: "rgb-camera",
-                  make: "",
-                  model: "",
-                  lens: "",
-                  calibrationUrl: "",
-                  calibrationHash: "",
-                },
-              ])
-            }
-          >
-            Add sensor
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>4) Rights & releases</CardTitle>
-          <CardDescription>
-            Encode rights-clearing signals and release proofs into your dataset metadata.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3">
-          <CheckboxRow
-            id="rights-confirmed"
-            checked={rightsConfirmed}
-            onChange={setRightsConfirmed}
-            title="I have the rights to license this data sample"
-            description="You own the content and/or have releases/consent required to grant Story license terms."
-          />
-          <CheckboxRow
-            id="contains-people"
-            checked={containsPeople}
-            onChange={setContainsPeople}
-            title="Contains identifiable people"
-            description="Used to signal that releases/consent may be required for downstream use."
-          />
-          <CheckboxRow
-            id="contains-sensitive"
-            checked={containsSensitiveData}
-            onChange={setContainsSensitiveData}
-            title="Contains sensitive data"
-            description="Examples: medical info, biometrics, license plates, or other personal identifiers."
-          />
-          <CheckboxRow
-            id="model-release"
-            checked={modelRelease}
-            onChange={setModelRelease}
-            title="Model releases obtained (if applicable)"
-            description="Use when identifiable people appear and releases are required for licensing/training."
-          />
-          <CheckboxRow
-            id="property-release"
-            checked={propertyRelease}
-            onChange={setPropertyRelease}
-            title="Property releases obtained (if applicable)"
-            description="Use when private property requires clearance."
-          />
-          <CheckboxRow
-            id="audio-cleared"
-            checked={thirdPartyAudioCleared}
-            onChange={setThirdPartyAudioCleared}
-            title="Third-party audio cleared (if applicable)"
-            description="Use when music/voice content is present and cleared for licensing."
-          />
-
-          <div className="rounded-lg border border-border p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Release proofs (optional)</p>
-                <p className="text-xs text-muted-foreground">
-                  Add URLs to documents (IPFS or HTTPS). Hashing is recommended for verification.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setReleaseProofs((prev) => [
-                    ...prev,
-                    { id: crypto.randomUUID(), type: "model", uri: "", hash: "" },
-                  ])
-                }
-              >
-                Add proof
-              </Button>
+                </CardContent>
+              </Card>
             </div>
+          </aside>
+        </div>
 
-            {releaseProofs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No proofs added.</p>
-            ) : (
-              <div className="space-y-3">
-                {releaseProofs.map((proof) => (
-                  <div key={proof.id} className="rounded-md border border-border p-3 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-foreground">Proof</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setReleaseProofs((prev) => prev.filter((p) => p.id !== proof.id))
-                        }
-                      >
-                        Remove
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label htmlFor={`proof-type-${proof.id}`}>Type</Label>
-                        <Select
-                          value={proof.type}
-                          onValueChange={(value) =>
-                            setReleaseProofs((prev) =>
-                              prev.map((p) =>
-                                p.id === proof.id
-                                  ? { ...p, type: value as ReleaseProofType }
-                                  : p,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger id={`proof-type-${proof.id}`}>
-                            <SelectValue placeholder="Select proof type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {RELEASE_PROOF_TYPE_OPTIONS.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor={`proof-hash-${proof.id}`}>SHA-256 (optional)</Label>
-                        <Input
-                          id={`proof-hash-${proof.id}`}
-                          value={proof.hash}
-                          onChange={(e) =>
-                            setReleaseProofs((prev) =>
-                              prev.map((p) =>
-                                p.id === proof.id ? { ...p, hash: e.target.value } : p,
-                              ),
-                            )
-                          }
-                          placeholder="0x…"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor={`proof-uri-${proof.id}`}>URL</Label>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Input
-                          id={`proof-uri-${proof.id}`}
-                          value={proof.uri}
-                          onChange={(e) =>
-                            setReleaseProofs((prev) =>
-                              prev.map((p) =>
-                                p.id === proof.id ? { ...p, uri: e.target.value } : p,
-                              ),
-                            )
-                          }
-                          placeholder="ipfs://… or https://…"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={Boolean(hashJobs[`proof:${proof.id}`]) || !proof.uri.trim()}
-                          onClick={async () => {
-                            const res = await computeHashForUrl(`proof:${proof.id}`, proof.uri);
-                            if (!res) return;
-                            setReleaseProofs((prev) =>
-                              prev.map((p) =>
-                                p.id === proof.id ? { ...p, hash: res.sha256 } : p,
-                              ),
-                            );
-                          }}
-                        >
-                          {hashJobs[`proof:${proof.id}`] ? "Hashing…" : "Compute hash"}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>5) Labels & splits (optional)</CardTitle>
-          <CardDescription>
-            Add labeling pointers and dataset split counts for downstream training/evaluation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <CheckboxRow
-            id="has-labels"
-            checked={hasLabels}
-            onChange={setHasLabels}
-            title="Includes labels/annotations"
-            description="Turn this on if you provide labeled data (boxes, masks, keypoints, pose, etc.)."
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="label-format">Label format</Label>
-              <Input
-                id="label-format"
-                value={labelFormat}
-                onChange={(e) => setLabelFormat(e.target.value)}
-                placeholder="e.g. COCO, YOLO, custom"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="labeling-tool">Labeling tool</Label>
-              <Input
-                id="labeling-tool"
-                value={labelingTool}
-                onChange={(e) => setLabelingTool(e.target.value)}
-                placeholder="e.g. CVAT, Label Studio"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="label-taxonomy">Label taxonomy</Label>
-            <Textarea
-              id="label-taxonomy"
-              value={labelTaxonomy}
-              onChange={(e) => setLabelTaxonomy(e.target.value)}
-              placeholder="e.g. pedestrians, vehicles, signs, crosswalks"
-              className="min-h-[80px]"
-            />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="label-manifest-uri">Label manifest URL (optional)</Label>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <Input
-                id="label-manifest-uri"
-                value={labelManifestUri}
-                onChange={(e) => setLabelManifestUri(e.target.value)}
-                placeholder="ipfs://… or https://…"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={Boolean(hashJobs["labels:manifest"]) || !labelManifestUri.trim()}
-                onClick={async () => {
-                  const res = await computeHashForUrl("labels:manifest", labelManifestUri);
-                  if (!res) return;
-                  setLabelManifestHash(res.sha256);
-                }}
-              >
-                {hashJobs["labels:manifest"] ? "Hashing…" : "Compute hash"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="label-manifest-hash">Label manifest SHA-256 (optional)</Label>
-            <Input
-              id="label-manifest-hash"
-              value={labelManifestHash}
-              onChange={(e) => setLabelManifestHash(e.target.value)}
-              placeholder="0x…"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="grid gap-2">
-              <Label htmlFor="split-train">Train count</Label>
-              <Input
-                id="split-train"
-                inputMode="numeric"
-                value={splitTrain}
-                onChange={(e) => setSplitTrain(e.target.value)}
-                placeholder="e.g. 1200"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="split-val">Val count</Label>
-              <Input
-                id="split-val"
-                inputMode="numeric"
-                value={splitVal}
-                onChange={(e) => setSplitVal(e.target.value)}
-                placeholder="e.g. 150"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="split-test">Test count</Label>
-              <Input
-                id="split-test"
-                inputMode="numeric"
-                value={splitTest}
-                onChange={(e) => setSplitTest(e.target.value)}
-                placeholder="e.g. 150"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>6) Artifacts & provenance (optional)</CardTitle>
-          <CardDescription>
-            Add extra hashed files (labels, docs, checksums) and provenance pointers (C2PA).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <div className="rounded-lg border border-border p-4 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-foreground">Extra artifacts</p>
-                <p className="text-xs text-muted-foreground">
-                  Provide public URLs with SHA-256. These are embedded into the pinned IPA metadata.
-                </p>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setArtifacts((prev) => [
-                    ...prev,
-                    {
-                      id: crypto.randomUUID(),
-                      role: "docs",
-                      uri: "",
-                      hash: "",
-                      mimeType: "application/pdf",
-                      sizeBytes: "",
-                    },
-                  ])
-                }
-              >
-                Add artifact
-              </Button>
-            </div>
-
-            {artifacts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No extra artifacts.</p>
-            ) : (
-              <div className="space-y-3">
-                {artifacts.map((artifact) => (
-                  <div key={artifact.id} className="rounded-md border border-border p-3 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium text-foreground">Artifact</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setArtifacts((prev) => prev.filter((a) => a.id !== artifact.id))
-                        }
-                      >
-                        Remove
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label htmlFor={`artifact-role-${artifact.id}`}>Role</Label>
-                        <Select
-                          value={artifact.role}
-                          onValueChange={(value) =>
-                            setArtifacts((prev) =>
-                              prev.map((a) =>
-                                a.id === artifact.id
-                                  ? { ...a, role: value as ArtifactRole }
-                                  : a,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger id={`artifact-role-${artifact.id}`}>
-                            <SelectValue placeholder="Select role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ARTIFACT_ROLE_OPTIONS.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor={`artifact-mime-${artifact.id}`}>MIME type</Label>
-                        <Input
-                          id={`artifact-mime-${artifact.id}`}
-                          value={artifact.mimeType}
-                          onChange={(e) =>
-                            setArtifacts((prev) =>
-                              prev.map((a) =>
-                                a.id === artifact.id ? { ...a, mimeType: e.target.value } : a,
-                              ),
-                            )
-                          }
-                          placeholder="e.g. application/pdf"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor={`artifact-uri-${artifact.id}`}>URL</Label>
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <Input
-                          id={`artifact-uri-${artifact.id}`}
-                          value={artifact.uri}
-                          onChange={(e) =>
-                            setArtifacts((prev) =>
-                              prev.map((a) =>
-                                a.id === artifact.id ? { ...a, uri: e.target.value } : a,
-                              ),
-                            )
-                          }
-                          placeholder="ipfs://… or https://…"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={Boolean(hashJobs[`artifact:${artifact.id}`]) || !artifact.uri.trim()}
-                          onClick={async () => {
-                            const res = await computeHashForUrl(
-                              `artifact:${artifact.id}`,
-                              artifact.uri,
-                            );
-                            if (!res) return;
-                            setArtifacts((prev) =>
-                              prev.map((a) =>
-                                a.id === artifact.id
-                                  ? {
-                                      ...a,
-                                      hash: res.sha256,
-                                      sizeBytes: typeof res.bytes === "number" ? String(res.bytes) : a.sizeBytes,
-                                      mimeType: res.contentType ?? a.mimeType,
-                                    }
-                                  : a,
-                              ),
-                            );
-                          }}
-                        >
-                          {hashJobs[`artifact:${artifact.id}`] ? "Hashing…" : "Hash URL"}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="grid gap-2">
-                        <Label htmlFor={`artifact-hash-${artifact.id}`}>SHA-256</Label>
-                        <Input
-                          id={`artifact-hash-${artifact.id}`}
-                          value={artifact.hash}
-                          onChange={(e) =>
-                            setArtifacts((prev) =>
-                              prev.map((a) =>
-                                a.id === artifact.id ? { ...a, hash: e.target.value } : a,
-                              ),
-                            )
-                          }
-                          placeholder="0x…"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor={`artifact-size-${artifact.id}`}>Size (bytes)</Label>
-                        <Input
-                          id={`artifact-size-${artifact.id}`}
-                          inputMode="numeric"
-                          value={artifact.sizeBytes}
-                          onChange={(e) =>
-                            setArtifacts((prev) =>
-                              prev.map((a) =>
-                                a.id === artifact.id ? { ...a, sizeBytes: e.target.value } : a,
-                              ),
-                            )
-                          }
-                          placeholder="optional"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-border p-4 space-y-3">
-            <p className="text-sm font-medium text-foreground">Provenance</p>
-            <CheckboxRow
-              id="capture-signed"
-              checked={captureSigned}
-              onChange={setCaptureSigned}
-              title="Capture signed"
-              description="Enable if you have cryptographic signing/provenance for the capture pipeline."
-            />
-
-            <div className="grid gap-2">
-              <Label htmlFor="device-signature">Device signature (optional)</Label>
-              <Input
-                id="device-signature"
-                value={deviceSignature}
-                onChange={(e) => setDeviceSignature(e.target.value)}
-                placeholder="Signature or identifier"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="c2pa-uri">C2PA manifest URL (optional)</Label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  id="c2pa-uri"
-                  value={c2paManifestUri}
-                  onChange={(e) => setC2paManifestUri(e.target.value)}
-                  placeholder="ipfs://… or https://…"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={Boolean(hashJobs["c2pa:manifest"]) || !c2paManifestUri.trim()}
-                  onClick={async () => {
-                    const res = await computeHashForUrl("c2pa:manifest", c2paManifestUri);
-                    if (!res) return;
-                    setC2paManifestHash(res.sha256);
-                  }}
-                >
-                  {hashJobs["c2pa:manifest"] ? "Hashing…" : "Compute hash"}
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="c2pa-hash">C2PA manifest SHA-256 (optional)</Label>
-              <Input
-                id="c2pa-hash"
-                value={c2paManifestHash}
-                onChange={(e) => setC2paManifestHash(e.target.value)}
-                placeholder="0x…"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>7) License preset</CardTitle>
-          <CardDescription>Attached on-chain as PIL terms during registration.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-2">
-          {(Object.keys(LICENSE_PRESETS) as LicensePreset[]).map((key) => (
-            <Button
-              key={key}
-              type="button"
-              variant={licensePreset === key ? "default" : "outline"}
-              onClick={() => setLicensePreset(key)}
-              className="justify-start"
-            >
-              {LICENSE_PRESETS[key].label}
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/80 backdrop-blur lg:hidden">
+          <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
+            <Button type="button" variant="outline" size="sm" onClick={() => jumpTo({ sectionId: "dataset-review" })}>
+              Review
             </Button>
-          ))}
-        </CardContent>
-      </Card>
-      </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground">
+                {missingCount === 0 ? "Ready to publish" : `${missingCount} missing`}
+              </p>
+              <p className="text-xs text-muted-foreground">{busy ? statusLabel : licenseSummary}</p>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="shrink-0"
+              onClick={onPublishClick}
+              disabled={busy}
+              variant={canPublish ? "default" : "secondary"}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {status === "uploading" ? "Uploading" : "Publishing"}
+                </>
+              ) : canPublish ? (
+                <>
+                  <UploadCloud className="h-4 w-4" />
+                  Publish
+                </>
+              ) : (
+                <>
+                  <CircleAlert className="h-4 w-4" />
+                  Fix
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </main>
     </TooltipProvider>
   );
 }
