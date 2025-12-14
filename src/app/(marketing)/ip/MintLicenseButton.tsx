@@ -124,8 +124,8 @@ export function MintLicenseButton({ licensorIpId, licenseTermsId }: Props) {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Next: create a project, bring this clip into the Library (download
-            from the player above), edit your remix, then export and publish.
+            Next: use this IP in your downstream workflow (remix, licensing, or
+            training) while honoring the minted Story license terms.
           </p>
         </div>
       ) : null}

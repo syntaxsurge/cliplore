@@ -6,15 +6,29 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { buildB2PublicUrl, getB2Bucket, getB2S3Client } from "@/lib/storage/b2";
-import { buildExportObjectKey } from "@/lib/storage/keys";
+import {
+  buildDatasetObjectKey,
+  buildExportObjectKey,
+} from "@/lib/storage/keys";
 
 export const runtime = "nodejs";
 
+const scopeSchema = z.discriminatedUnion("scope", [
+  z.object({
+    scope: z.literal("export"),
+    projectId: z.string().min(1),
+    exportId: z.string().min(1),
+  }),
+  z.object({
+    scope: z.literal("dataset"),
+    datasetId: z.string().min(1),
+  }),
+]);
+
 const initSchema = z.object({
   wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "wallet must be an address"),
-  projectId: z.string().min(1),
-  exportId: z.string().min(1),
-  kind: z.enum(["video", "thumbnail"]),
+  scope: scopeSchema,
+  kind: z.enum(["video", "thumbnail", "dataset"]),
   fileName: z.string().min(1),
   contentType: z.string().min(1),
   sizeBytes: z.number().int().positive(),
@@ -57,15 +71,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const { wallet, projectId, exportId, kind, fileName, contentType, sizeBytes } =
-    parsed.data;
+  const { wallet, scope, kind, fileName, contentType, sizeBytes } = parsed.data;
 
-  if (kind === "video" && !contentType.startsWith("video/")) {
-    return NextResponse.json(
-      { error: "contentType must be video/* for kind=video" },
-      { status: 400 },
-    );
-  }
   if (kind === "thumbnail" && !contentType.startsWith("image/")) {
     return NextResponse.json(
       { error: "contentType must be image/* for kind=thumbnail" },
@@ -73,13 +80,41 @@ export async function POST(req: Request) {
     );
   }
 
-  const key = buildExportObjectKey({
-    wallet,
-    projectId,
-    exportId,
-    kind,
-    fileName,
-  });
+  let key: string;
+  if (scope.scope === "export") {
+    if (kind !== "video" && kind !== "thumbnail") {
+      return NextResponse.json(
+        { error: "kind must be video|thumbnail for export uploads" },
+        { status: 400 },
+      );
+    }
+    if (kind === "video" && !contentType.startsWith("video/")) {
+      return NextResponse.json(
+        { error: "contentType must be video/* for kind=video" },
+        { status: 400 },
+      );
+    }
+    key = buildExportObjectKey({
+      wallet,
+      projectId: scope.projectId,
+      exportId: scope.exportId,
+      kind,
+      fileName,
+    });
+  } else {
+    if (kind !== "dataset" && kind !== "thumbnail") {
+      return NextResponse.json(
+        { error: "kind must be dataset|thumbnail for dataset uploads" },
+        { status: 400 },
+      );
+    }
+    key = buildDatasetObjectKey({
+      wallet,
+      datasetId: scope.datasetId,
+      kind,
+      fileName,
+    });
+  }
 
   const client = getB2S3Client();
   const bucket = getB2Bucket();

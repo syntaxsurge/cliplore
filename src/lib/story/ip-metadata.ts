@@ -26,28 +26,44 @@ export const uploadIpMetadataSchema = z.object({
   description: z.string().min(5),
   creatorAddress: addressSchema,
   creatorName: z.string().min(1).max(32).optional(),
-  videoUri: uriSchema,
+  ipType: z.string().min(1).max(64).optional(),
+  tags: z.array(z.string().min(1).max(48)).max(32).optional(),
+  mediaUri: uriSchema,
   mediaHash: hashSchema.optional(),
   thumbnailUri: uriSchema.optional(),
   imageHash: hashSchema.optional(),
-  videoMimeType: z.string().min(1).optional(),
-  videoSizeBytes: z.number().int().positive().optional(),
-  videoDurationSeconds: z.number().positive().optional(),
-  videoFps: z.number().positive().optional(),
-  videoResolution: z.string().min(1).optional(),
+  mediaMimeType: z.string().min(1).optional(),
+  mediaSizeBytes: z.number().int().positive().optional(),
+  mediaDurationSeconds: z.number().positive().optional(),
+  mediaFps: z.number().positive().optional(),
+  mediaResolution: z.string().min(1).optional(),
   thumbnailMimeType: z.string().min(1).optional(),
   thumbnailSizeBytes: z.number().int().positive().optional(),
+  dataset: z
+    .object({
+      type: z.enum(["pov", "drone", "mocap", "robotics", "medical", "other"]),
+      tags: z.array(z.string().min(1).max(48)).max(32).optional(),
+      captureDevice: z.string().min(1).max(140).optional(),
+      captureLocation: z.string().min(1).max(140).optional(),
+      usageNotes: z.string().min(1).max(280).optional(),
+      containsPeople: z.boolean().optional(),
+      containsSensitiveData: z.boolean().optional(),
+      rightsConfirmed: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type UploadIpMetadataInput = z.infer<typeof uploadIpMetadataSchema>;
 
 export function buildStoryIpMetadata(input: UploadIpMetadataInput) {
   const createdAt = new Date().toISOString();
-  const mediaType = input.videoMimeType?.startsWith("audio/")
+  const mediaType = input.mediaMimeType?.startsWith("audio/")
     ? "audio"
-    : input.videoMimeType?.startsWith("image/")
+    : input.mediaMimeType?.startsWith("image/")
       ? "image"
-      : "video";
+      : input.mediaMimeType?.startsWith("video/")
+        ? "video"
+        : "other";
 
   const fallbackName = `${input.creatorAddress.slice(0, 6)}...${input.creatorAddress.slice(-4)}`;
   const creatorName = input.creatorName?.trim() || fallbackName;
@@ -56,7 +72,7 @@ export function buildStoryIpMetadata(input: UploadIpMetadataInput) {
     title: input.title,
     description: input.description,
     createdAt,
-    image: input.thumbnailUri ?? input.videoUri,
+    image: input.thumbnailUri ?? input.mediaUri,
     imageHash: input.imageHash as Hash | undefined,
     creators: [
       {
@@ -66,42 +82,50 @@ export function buildStoryIpMetadata(input: UploadIpMetadataInput) {
         role: "Creator",
       },
     ],
-    mediaUrl: input.videoUri,
+    mediaUrl: input.mediaUri,
     mediaHash: input.mediaHash as Hash | undefined,
     mediaType,
-    media: [
-      {
-        name: "Video",
-        url: input.videoUri,
-        mimeType: input.videoMimeType ?? "video/mp4",
-      },
-      ...(input.thumbnailUri
-        ? [
-            {
-              name: "Thumbnail",
-              url: input.thumbnailUri,
-              mimeType: input.thumbnailMimeType ?? "image/png",
-            },
-          ]
-        : []),
-    ],
   };
 
-  const videoDetails: Record<string, number | string> = {};
-  if (typeof input.videoSizeBytes === "number") {
-    videoDetails.sizeBytes = input.videoSizeBytes;
+  if (input.ipType) {
+    metadata.ipType = input.ipType;
   }
-  if (typeof input.videoDurationSeconds === "number") {
-    videoDetails.durationSeconds = Math.round(input.videoDurationSeconds * 100) / 100;
+  if (input.tags?.length) {
+    metadata.tags = input.tags;
   }
-  if (typeof input.videoFps === "number") {
-    videoDetails.fps = input.videoFps;
+  if (input.dataset) {
+    metadata.dataset = input.dataset;
+    const mergedTags = new Set<string>([...(metadata.tags ?? [])]);
+    for (const tag of input.dataset.tags ?? []) mergedTags.add(tag);
+    if (mergedTags.size) {
+      metadata.tags = Array.from(mergedTags);
+    }
   }
-  if (typeof input.videoResolution === "string" && input.videoResolution) {
-    videoDetails.resolution = input.videoResolution;
+
+  const primaryLabel =
+    input.ipType === "dataset"
+      ? "Dataset sample"
+      : mediaType === "audio"
+        ? "Audio"
+        : mediaType === "image"
+          ? "Image"
+          : "Video";
+
+  const primaryDetails: Record<string, number | string> = {};
+  if (typeof input.mediaSizeBytes === "number") {
+    primaryDetails.sizeBytes = input.mediaSizeBytes;
   }
-  if (typeof input.videoMimeType === "string" && input.videoMimeType) {
-    videoDetails.mimeType = input.videoMimeType;
+  if (typeof input.mediaDurationSeconds === "number") {
+    primaryDetails.durationSeconds = Math.round(input.mediaDurationSeconds * 100) / 100;
+  }
+  if (typeof input.mediaFps === "number") {
+    primaryDetails.fps = input.mediaFps;
+  }
+  if (typeof input.mediaResolution === "string" && input.mediaResolution) {
+    primaryDetails.resolution = input.mediaResolution;
+  }
+  if (typeof input.mediaMimeType === "string" && input.mediaMimeType) {
+    primaryDetails.mimeType = input.mediaMimeType;
   }
 
   const thumbnailDetails: Record<string, number | string> = {};
@@ -112,11 +136,34 @@ export function buildStoryIpMetadata(input: UploadIpMetadataInput) {
     thumbnailDetails.mimeType = input.thumbnailMimeType;
   }
 
-  if (Object.keys(videoDetails).length) {
-    metadata.video = videoDetails;
+  metadata.media = [
+    {
+      name: primaryLabel,
+      url: input.mediaUri,
+      mimeType:
+        input.mediaMimeType ??
+        (mediaType === "video"
+          ? "video/mp4"
+          : mediaType === "audio"
+            ? "audio/mpeg"
+            : "application/octet-stream"),
+    },
+    ...(input.thumbnailUri
+      ? [
+          {
+            name: "Thumbnail",
+            url: input.thumbnailUri,
+            mimeType: input.thumbnailMimeType ?? "image/png",
+          },
+        ]
+      : []),
+  ];
+
+  if (Object.keys(primaryDetails).length) {
+    metadata.mediaDetails = primaryDetails;
   }
   if (Object.keys(thumbnailDetails).length) {
-    metadata.thumbnail = thumbnailDetails;
+    metadata.thumbnailDetails = thumbnailDetails;
   }
 
   return metadata;
@@ -126,7 +173,7 @@ export function buildStoryNftMetadata(input: UploadIpMetadataInput) {
   return {
     name: `${input.title} – IP Ownership`,
     description: input.description,
-    image: input.thumbnailUri ?? input.videoUri,
+    image: input.thumbnailUri ?? input.mediaUri,
   };
 }
 

@@ -1,4 +1,8 @@
-export type StorageUploadKind = "video" | "thumbnail";
+export type StorageUploadScope =
+  | { scope: "export"; projectId: string; exportId: string }
+  | { scope: "dataset"; datasetId: string };
+
+export type StorageUploadKind = "video" | "thumbnail" | "dataset";
 
 type UploadInitResponse =
   | {
@@ -68,19 +72,17 @@ async function ensureBucketCorsForOrigin(origin: string) {
 
 function getUploadSessionStorageKey(input: {
   wallet: string;
-  projectId: string;
-  exportId: string;
+  scope: StorageUploadScope;
   kind: StorageUploadKind;
 }) {
-  return [
-    "cliplore",
-    "b2",
-    "multipart",
-    input.wallet.toLowerCase(),
-    input.projectId,
-    input.exportId,
-    input.kind,
-  ].join(":");
+  const parts = ["cliplore", "b2", "multipart", input.wallet.toLowerCase()];
+  if (input.scope.scope === "export") {
+    parts.push("export", input.scope.projectId, input.scope.exportId);
+  } else {
+    parts.push("dataset", input.scope.datasetId);
+  }
+  parts.push(input.kind);
+  return parts.join(":");
 }
 
 async function readJson<T>(res: Response): Promise<T> {
@@ -104,13 +106,14 @@ function formatFetchFailureMessage(err: unknown) {
 
 function inferContentType(kind: StorageUploadKind, file: File) {
   if (file.type) return file.type;
-  return kind === "video" ? "video/mp4" : "image/png";
+  if (kind === "thumbnail") return "image/png";
+  if (kind === "video") return "video/mp4";
+  return "application/octet-stream";
 }
 
 async function initUpload(input: {
   wallet: string;
-  projectId: string;
-  exportId: string;
+  scope: StorageUploadScope;
   kind: StorageUploadKind;
   fileName: string;
   contentType: string;
@@ -192,8 +195,7 @@ async function completeMultipart(input: {
 
 export async function uploadFileToB2(input: {
   wallet: `0x${string}`;
-  projectId: string;
-  exportId: string;
+  scope: StorageUploadScope;
   kind: StorageUploadKind;
   file: File;
   onProgress?: (progress: UploadProgress) => void;
@@ -209,8 +211,7 @@ export async function uploadFileToB2(input: {
     typeof window !== "undefined"
       ? getUploadSessionStorageKey({
           wallet: input.wallet,
-          projectId: input.projectId,
-          exportId: input.exportId,
+          scope: input.scope,
           kind: input.kind,
         })
       : null;
@@ -260,8 +261,7 @@ export async function uploadFileToB2(input: {
     existing ??
     (await initUpload({
       wallet: input.wallet,
-      projectId: input.projectId,
-      exportId: input.exportId,
+      scope: input.scope,
       kind: input.kind,
       fileName: input.file.name,
       contentType,

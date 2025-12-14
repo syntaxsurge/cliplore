@@ -9,6 +9,11 @@ import { getUserByWallet } from "./_helpers";
 
 function toIpAssetResponse(record: any) {
   return {
+    assetKind: record.assetKind ?? "video",
+    datasetType: record.datasetType ?? null,
+    tags: record.tags ?? [],
+    mediaMimeType: record.mediaMimeType ?? null,
+    mediaSizeBytes: record.mediaSizeBytes ?? null,
     ipId: record.ipId,
     title: record.title,
     summary: record.summary,
@@ -37,6 +42,11 @@ export const create = mutation({
     wallet: v.string(),
     localProjectId: v.optional(v.string()),
     projectTitle: v.optional(v.string()),
+    assetKind: v.optional(v.string()),
+    datasetType: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    mediaMimeType: v.optional(v.string()),
+    mediaSizeBytes: v.optional(v.number()),
     ipId: v.string(),
     title: v.string(),
     summary: v.string(),
@@ -61,6 +71,11 @@ export const create = mutation({
       wallet,
       localProjectId,
       projectTitle,
+      assetKind,
+      datasetType,
+      tags,
+      mediaMimeType,
+      mediaSizeBytes,
       ipId,
       title,
       summary,
@@ -82,6 +97,11 @@ export const create = mutation({
       wallet: string;
       localProjectId?: string;
       projectTitle?: string;
+      assetKind?: string;
+      datasetType?: string;
+      tags?: string[];
+      mediaMimeType?: string;
+      mediaSizeBytes?: number;
       ipId: string;
       title: string;
       summary: string;
@@ -108,6 +128,14 @@ export const create = mutation({
 
     const now = Date.now();
     const normalizedIpId = ipId.toLowerCase();
+    const normalizedAssetKind = assetKind?.trim().toLowerCase() || "video";
+    const normalizedDatasetType = datasetType?.trim().toLowerCase();
+    const normalizedTags = tags
+      ? tags
+          .map((tag) => tag.trim())
+          .filter((tag) => Boolean(tag))
+          .slice(0, 32)
+      : undefined;
     const normalizedVideoSha256 = videoSha256?.toLowerCase();
     const normalizedThumbnailSha256 = thumbnailSha256?.toLowerCase();
 
@@ -125,6 +153,14 @@ export const create = mutation({
         licensorWallet: wallet,
         updatedAt: now,
       };
+
+      patch.assetKind = normalizedAssetKind;
+      if (normalizedDatasetType !== undefined) {
+        patch.datasetType = normalizedDatasetType;
+      }
+      if (normalizedTags !== undefined) patch.tags = normalizedTags;
+      if (mediaMimeType !== undefined) patch.mediaMimeType = mediaMimeType;
+      if (mediaSizeBytes !== undefined) patch.mediaSizeBytes = mediaSizeBytes;
 
       if (thumbnailUrl !== undefined) patch.thumbnailUrl = thumbnailUrl;
       if (normalizedVideoSha256 !== undefined) {
@@ -148,37 +184,40 @@ export const create = mutation({
       return { id: existing._id };
     }
 
-    if (!localProjectId) {
-      throw new Error(
-        "localProjectId is required when registering a new IP asset.",
-      );
-    }
+    let projectId: any | undefined;
+    if (normalizedAssetKind !== "dataset") {
+      if (!localProjectId) {
+        throw new Error(
+          "localProjectId is required when registering a new project IP asset.",
+        );
+      }
 
-    let project = await db
-      .query("projects")
-      .withIndex("by_owner_localId", (q: any) =>
-        q.eq("owner", user._id).eq("localId", localProjectId),
-      )
-      .unique();
+      let project = await db
+        .query("projects")
+        .withIndex("by_owner_localId", (q: any) =>
+          q.eq("owner", user._id).eq("localId", localProjectId),
+        )
+        .unique();
 
-    if (!project) {
-      const projectId = await db.insert("projects", {
-        owner: user._id,
-        localId: localProjectId,
-        title: projectTitle ?? title,
-        status: "draft",
-        createdAt: now,
-        updatedAt: now,
-      });
-      project = await db.get(projectId);
-    }
+      if (!project) {
+        const insertedProjectId = await db.insert("projects", {
+          owner: user._id,
+          localId: localProjectId,
+          title: projectTitle ?? title,
+          status: "draft",
+          createdAt: now,
+          updatedAt: now,
+        });
+        project = await db.get(insertedProjectId);
+      }
 
-    if (!project) {
-      throw new Error("Project not found for this wallet.");
+      if (!project) {
+        throw new Error("Project not found for this wallet.");
+      }
+      projectId = project._id;
     }
 
     const insert: any = {
-      projectId: project._id,
       ipId: normalizedIpId,
       title,
       summary,
@@ -188,6 +227,13 @@ export const create = mutation({
       createdAt: now,
       updatedAt: now,
     };
+
+    if (projectId) insert.projectId = projectId;
+    insert.assetKind = normalizedAssetKind;
+    if (normalizedDatasetType !== undefined) insert.datasetType = normalizedDatasetType;
+    if (normalizedTags !== undefined) insert.tags = normalizedTags;
+    if (mediaMimeType !== undefined) insert.mediaMimeType = mediaMimeType;
+    if (mediaSizeBytes !== undefined) insert.mediaSizeBytes = mediaSizeBytes;
 
     if (thumbnailUrl !== undefined) insert.thumbnailUrl = thumbnailUrl;
     if (normalizedVideoSha256 !== undefined) {
@@ -216,6 +262,19 @@ export const listMarketplace = query({
   args: {},
   handler: async ({ db }: QueryCtx) => {
     const records = await db.query("ipAssets").order("desc").collect();
+    return records.map(toIpAssetResponse);
+  },
+});
+
+export const listByAssetKind = query({
+  args: { assetKind: v.string() },
+  handler: async ({ db }: QueryCtx, { assetKind }: { assetKind: string }) => {
+    const normalized = assetKind.trim().toLowerCase();
+    const records = await db
+      .query("ipAssets")
+      .withIndex("by_assetKind", (q: any) => q.eq("assetKind", normalized))
+      .order("desc")
+      .collect();
     return records.map(toIpAssetResponse);
   },
 });

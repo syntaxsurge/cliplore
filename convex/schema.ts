@@ -28,7 +28,12 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_project", ["projectId"]),
   ipAssets: defineTable({
-    projectId: v.id("projects"),
+    projectId: v.optional(v.id("projects")),
+    assetKind: v.optional(v.string()), // video | dataset
+    datasetType: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    mediaMimeType: v.optional(v.string()),
+    mediaSizeBytes: v.optional(v.number()),
     ipId: v.string(),
     title: v.string(),
     summary: v.string(),
@@ -52,6 +57,7 @@ export default defineSchema({
   })
     .index("by_project", ["projectId"])
     .index("by_ipId", ["ipId"])
+    .index("by_assetKind", ["assetKind"])
     .index("by_licensorWallet", ["licensorWallet"])
     .index("by_videoSha256", ["videoSha256"])
     .index("by_thumbnailSha256", ["thumbnailSha256"]),

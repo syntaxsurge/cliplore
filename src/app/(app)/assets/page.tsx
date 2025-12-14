@@ -32,6 +32,11 @@ type LocalPublishedAsset = {
 };
 
 type MarketplaceAsset = {
+  assetKind?: string;
+  datasetType?: string | null;
+  tags?: string[] | null;
+  mediaMimeType?: string | null;
+  mediaSizeBytes?: number | null;
   ipId: string;
   title: string;
   summary: string;
@@ -356,7 +361,13 @@ export default function AssetsPage() {
                   </Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
-                  <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>
+                  <Link
+                    href={
+                      asset.assetKind === "dataset"
+                        ? `/datasets/${encodeURIComponent(asset.ipId)}`
+                        : `/ip/${encodeURIComponent(asset.ipId)}`
+                    }
+                  >
                     Public page
                   </Link>
                 </Button>

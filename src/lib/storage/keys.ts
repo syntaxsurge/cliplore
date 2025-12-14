@@ -30,3 +30,21 @@ export function buildExportObjectKey(input: {
   ].join("/");
 }
 
+export function buildDatasetObjectKey(input: {
+  wallet: string;
+  datasetId: string;
+  kind: "dataset" | "thumbnail";
+  fileName: string;
+}) {
+  const wallet = input.wallet.trim().toLowerCase();
+  const fileName = sanitizeObjectKeyComponent(input.fileName);
+  const suffix = crypto.randomUUID();
+
+  return [
+    "datasets",
+    wallet,
+    input.datasetId.trim(),
+    input.kind,
+    `${suffix}-${fileName}`,
+  ].join("/");
+}

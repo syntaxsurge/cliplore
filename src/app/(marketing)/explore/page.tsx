@@ -24,6 +24,8 @@ export default async function ExplorePage() {
     ipAssets = [];
   }
 
+  ipAssets = (ipAssets ?? []).filter((asset) => asset?.assetKind !== "dataset");
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
       <div className="space-y-2">

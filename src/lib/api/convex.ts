@@ -73,10 +73,15 @@ export async function createConvexProject(input: {
   return handleResponse<{ project: { id: string } }>(res);
 }
 
-export async function fetchConvexIpAssets(params?: { wallet?: string }) {
-  const url = params?.wallet
-    ? `/api/convex/ip-assets?wallet=${encodeURIComponent(params.wallet)}`
-    : "/api/convex/ip-assets";
+export async function fetchConvexIpAssets(params?: {
+  wallet?: string;
+  assetKind?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params?.wallet) search.set("wallet", params.wallet);
+  if (params?.assetKind) search.set("assetKind", params.assetKind);
+  const suffix = search.toString();
+  const url = suffix ? `/api/convex/ip-assets?${suffix}` : "/api/convex/ip-assets";
   const res = await fetch(url, {
     method: "GET",
     cache: "no-store",
@@ -104,6 +109,11 @@ export async function createConvexIpAsset(input: {
   wallet: string;
   localProjectId?: string;
   projectTitle?: string;
+  assetKind?: "video" | "dataset";
+  datasetType?: "pov" | "drone" | "mocap" | "robotics" | "medical" | "other";
+  tags?: string[];
+  mediaMimeType?: string;
+  mediaSizeBytes?: number;
   ipId: string;
   title: string;
   summary: string;

@@ -25,6 +25,7 @@ export default function Header() {
   const marketingItems = [
     { href: "/", label: "Home" },
     { href: "/explore", label: "Explore" },
+    { href: "/datasets", label: "Datasets" },
     { href: "/demo", label: "Demo" },
   ] as const;
 

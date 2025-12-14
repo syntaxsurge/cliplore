@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { MintLicenseButton } from "../MintLicenseButton";
 import { getConvexClient } from "@/lib/db/convex/client";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +30,10 @@ export default async function IpDetailPage({ params }: Props) {
 
   if (!asset) {
     return notFound();
+  }
+
+  if (asset.assetKind === "dataset") {
+    redirect(`/datasets/${encodeURIComponent(asset.ipId)}`);
   }
 
   return (

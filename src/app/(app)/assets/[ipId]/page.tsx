@@ -26,6 +26,11 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Copy, ExternalLink, Globe, Loader2 } from "lucide-react";
 
 type IpAssetRecord = {
+  assetKind: string;
+  datasetType: string | null;
+  tags: string[];
+  mediaMimeType: string | null;
+  mediaSizeBytes: number | null;
   ipId: string;
   title: string;
   summary: string;
@@ -124,6 +129,11 @@ async function findLocalAssetByIpId(ipId: string) {
 
       const candidate = {
         asset: {
+          assetKind: "video",
+          datasetType: null,
+          tags: [],
+          mediaMimeType: null,
+          mediaSizeBytes: null,
           ipId: normalized,
           title: publish.title,
           summary: publish.summary,
@@ -685,6 +695,15 @@ export default function AssetDetailPage() {
 
   const tabHref = (next: TabKey) =>
     `/assets/${encodeURIComponent(asset.ipId)}?tab=${encodeURIComponent(next)}`;
+  const publicPath =
+    asset.assetKind === "dataset" ? `/datasets/${asset.ipId}` : `/ip/${asset.ipId}`;
+  const publicHref =
+    asset.assetKind === "dataset"
+      ? `/datasets/${encodeURIComponent(asset.ipId)}`
+      : `/ip/${encodeURIComponent(asset.ipId)}`;
+  const mediaHref = ipfsUriToGatewayUrl(asset.videoUrl);
+  const mediaMimeType =
+    asset.mediaMimeType ?? (asset.assetKind === "dataset" ? "" : "video/mp4");
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
@@ -721,7 +740,7 @@ export default function AssetDetailPage() {
 	            Copy IP ID
 	          </Button>
 	          <Button size="sm" asChild>
-	            <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>
+	            <Link href={publicHref}>
 	              <Globe className="h-4 w-4" />
 	              Public page
 	            </Link>
@@ -745,7 +764,7 @@ export default function AssetDetailPage() {
             <CardTitle>Marketplace sync</CardTitle>
             <CardDescription>
               This asset is stored locally but isn’t listed in Convex yet. Sync to make it appear on
-              `/explore` and `/ip/[ipId]`.
+              {asset.assetKind === "dataset" ? "`/datasets`" : "`/explore`"} and its public detail page.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap items-center gap-2">
@@ -814,11 +833,27 @@ export default function AssetDetailPage() {
         <div className="grid gap-6 lg:grid-cols-12">
           <Card className="lg:col-span-8 overflow-hidden">
             <div className="aspect-video border-b border-border bg-black">
-              <video
-                src={ipfsUriToGatewayUrl(asset.videoUrl)}
-                controls
-                className="h-full w-full object-contain"
-              />
+              {mediaMimeType.startsWith("video/") ? (
+                <video src={mediaHref} controls className="h-full w-full object-contain" />
+              ) : mediaMimeType.startsWith("audio/") ? (
+                <div className="flex h-full w-full items-center justify-center p-6">
+                  <audio src={mediaHref} controls className="w-full" />
+                </div>
+              ) : mediaMimeType.startsWith("image/") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={mediaHref} alt={asset.title} className="h-full w-full object-contain" />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    This file is not previewable in-browser.
+                  </p>
+                  <Button asChild>
+                    <a href={mediaHref} target="_blank" rel="noreferrer">
+                      Open file
+                    </a>
+                  </Button>
+                </div>
+              )}
             </div>
             {asset.thumbnailUrl ? (
               <CardContent className="pt-4">
@@ -853,18 +888,18 @@ export default function AssetDetailPage() {
                 <div className="space-y-2">
 	                  <Label>Public page</Label>
 	                  <div className="flex items-center gap-2">
-	                    <Input readOnly value={`/ip/${asset.ipId}`} />
+	                    <Input readOnly value={publicPath} />
 	                    <Button
 	                      type="button"
 	                      size="icon"
 	                      variant="outline"
 	                      aria-label="Copy public page path"
-	                      onClick={() => void handleCopy(`/ip/${asset.ipId}`)}
+	                      onClick={() => void handleCopy(publicPath)}
 	                    >
 	                      <Copy className="h-4 w-4" />
 	                    </Button>
 	                    <Button asChild type="button" size="icon" variant="outline" aria-label="Open public page">
-	                      <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>
+	                      <Link href={publicHref}>
 	                        <Globe className="h-4 w-4" />
 	                      </Link>
 	                    </Button>
@@ -986,7 +1021,8 @@ export default function AssetDetailPage() {
             <CardHeader>
               <CardTitle>License minting</CardTitle>
               <CardDescription>
-                The public `/ip/[ipId]` page uses `licenseTermsId` to enable minting.
+                The public {asset.assetKind === "dataset" ? "`/datasets/[ipId]`" : "`/ip/[ipId]`"} page
+                uses `licenseTermsId` to enable minting.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -995,7 +1031,7 @@ export default function AssetDetailPage() {
                 the public page.
               </p>
               <Button asChild variant="secondary">
-                <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>Open public page</Link>
+                <Link href={publicHref}>Open public page</Link>
               </Button>
             </CardContent>
           </Card>
@@ -1061,7 +1097,7 @@ export default function AssetDetailPage() {
 	                  </p>
 	                  <div className="flex flex-wrap items-center gap-2">
 	                    <Button asChild variant="secondary">
-	                      <Link href={`/ip/${encodeURIComponent(asset.ipId)}`}>Open public page</Link>
+	                      <Link href={publicHref}>Open public page</Link>
 	                    </Button>
 	                    <Button asChild variant="outline">
 	                      <a

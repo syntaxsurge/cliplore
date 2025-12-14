@@ -1,11 +1,50 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getConvexClient } from "@/lib/db/convex/client";
+
+const datasetTypeSchema = z.enum([
+  "pov",
+  "drone",
+  "mocap",
+  "robotics",
+  "medical",
+  "other",
+]);
+
+const createSchema = z.object({
+  wallet: z.string().min(1),
+  localProjectId: z.string().min(1).optional(),
+  projectTitle: z.string().min(1).optional(),
+  assetKind: z.enum(["video", "dataset"]).optional(),
+  datasetType: datasetTypeSchema.optional(),
+  tags: z.array(z.string().min(1).max(48)).max(32).optional(),
+  mediaMimeType: z.string().min(1).optional(),
+  mediaSizeBytes: z.number().int().positive().optional(),
+  ipId: z.string().min(1),
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  terms: z.string().min(1),
+  videoUrl: z.string().min(1),
+  thumbnailUrl: z.string().min(1).optional(),
+  videoSha256: z.string().min(1).optional(),
+  thumbnailSha256: z.string().min(1).optional(),
+  licenseTermsId: z.string().min(1).optional(),
+  txHash: z.string().min(1).optional(),
+  chainId: z.number().int().positive().optional(),
+  ipMetadataUri: z.string().min(1).optional(),
+  ipMetadataHash: z.string().min(1).optional(),
+  nftMetadataUri: z.string().min(1).optional(),
+  nftMetadataHash: z.string().min(1).optional(),
+  videoKey: z.string().min(1).optional(),
+  thumbnailKey: z.string().min(1).optional(),
+});
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const wallet = searchParams.get("wallet");
   const ipId = searchParams.get("ipId");
   const sha256 = searchParams.get("sha256");
+  const assetKind = searchParams.get("assetKind");
 
   try {
     const client = getConvexClient();
@@ -20,6 +59,14 @@ export async function GET(req: Request) {
         ipId: ipId.toLowerCase(),
       });
       return NextResponse.json({ ipAsset });
+    }
+
+    if (assetKind) {
+      const ipAssets = await (client as any).query(
+        "functions/ipAssets:listByAssetKind",
+        { assetKind },
+      );
+      return NextResponse.json({ ipAssets });
     }
 
     if (wallet) {
@@ -42,11 +89,33 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    body = null;
+  }
+
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        error: "Invalid request",
+        details: parsed.error.flatten(),
+      },
+      { status: 400 },
+    );
+  }
+
   const {
     wallet,
     localProjectId,
     projectTitle,
+    assetKind,
+    datasetType,
+    tags,
+    mediaMimeType,
+    mediaSizeBytes,
     ipId,
     title,
     summary,
@@ -64,37 +133,7 @@ export async function POST(req: Request) {
     nftMetadataHash,
     videoKey,
     thumbnailKey,
-  } = body as {
-    wallet?: string;
-    localProjectId?: string;
-    projectTitle?: string;
-    ipId?: string;
-    title?: string;
-    summary?: string;
-    terms?: string;
-    videoUrl?: string;
-    thumbnailUrl?: string;
-    videoSha256?: string;
-    thumbnailSha256?: string;
-    licenseTermsId?: string;
-    txHash?: string;
-    chainId?: number;
-    ipMetadataUri?: string;
-    ipMetadataHash?: string;
-    nftMetadataUri?: string;
-    nftMetadataHash?: string;
-    videoKey?: string;
-    thumbnailKey?: string;
-  };
-
-  if (!wallet || !ipId || !title || !summary || !terms || !videoUrl) {
-    return NextResponse.json(
-      {
-        error: "wallet, ipId, title, summary, terms, and videoUrl are required",
-      },
-      { status: 400 },
-    );
-  }
+  } = parsed.data;
 
   try {
     const client = getConvexClient();
@@ -105,6 +144,11 @@ export async function POST(req: Request) {
         wallet,
         localProjectId,
         projectTitle,
+        assetKind,
+        datasetType,
+        tags,
+        mediaMimeType,
+        mediaSizeBytes,
         ipId,
         title,
         summary,

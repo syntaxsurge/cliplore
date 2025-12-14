@@ -93,7 +93,6 @@ export const stats = query({
       .collect();
 
     let assetsCount = 0;
-    let ipAssetsCount = 0;
 
     for (const project of projects) {
       const assets = await db
@@ -101,13 +100,16 @@ export const stats = query({
         .withIndex("by_project", (q: any) => q.eq("projectId", project._id))
         .collect();
       assetsCount += assets.length;
-
-      const ipAssets = await db
-        .query("ipAssets")
-        .withIndex("by_project", (q: any) => q.eq("projectId", project._id))
-        .collect();
-      ipAssetsCount += ipAssets.length;
     }
+
+    const ipAssetsCount = (
+      await db
+        .query("ipAssets")
+        .withIndex("by_licensorWallet", (q: any) =>
+          q.eq("licensorWallet", wallet),
+        )
+        .collect()
+    ).length;
 
     return {
       projects: projects.length,

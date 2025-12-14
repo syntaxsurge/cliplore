@@ -471,8 +471,7 @@ export default function PublishClient({
         ? { url: existingUpload.videoUrl, key: existingUpload.videoKey }
         : await uploadFileToB2({
             wallet,
-            projectId,
-            exportId: selectedExportId as string,
+            scope: { scope: "export", projectId, exportId: selectedExportId as string },
             kind: "video",
             file: exportFile as File,
             onProgress: (progress) => {
@@ -483,8 +482,7 @@ export default function PublishClient({
     const thumbnailUpload = thumbnailFile
       ? await uploadFileToB2({
           wallet,
-          projectId,
-          exportId: selectedExportId as string,
+          scope: { scope: "export", projectId, exportId: selectedExportId as string },
           kind: "thumbnail",
           file: thumbnailFile,
           onProgress: (progress) => {
@@ -647,15 +645,16 @@ export default function PublishClient({
         description: summary.trim(),
         creatorAddress: address,
         creatorName: creatorName.trim() || undefined,
-        videoUri: videoUpload.url,
+        mediaUri: videoUpload.url,
         mediaHash,
         thumbnailUri: thumbnailUpload.url,
         imageHash,
-        videoMimeType: exportFile.type || "video/mp4",
-        videoSizeBytes: exportFile.size,
-        videoDurationSeconds: selectedExport.durationSeconds,
-        videoFps: selectedExport.config.fps,
-        videoResolution: selectedExport.config.resolution,
+        ipType: "video",
+        mediaMimeType: exportFile.type || "video/mp4",
+        mediaSizeBytes: exportFile.size,
+        mediaDurationSeconds: selectedExport.durationSeconds,
+        mediaFps: selectedExport.config.fps,
+        mediaResolution: selectedExport.config.resolution,
         thumbnailMimeType: thumbnailFile?.type,
         thumbnailSizeBytes: thumbnailFile?.size,
       });
@@ -743,6 +742,9 @@ export default function PublishClient({
           wallet: address,
           localProjectId: projectId,
           projectTitle: baseProject.projectName,
+          assetKind: "video",
+          mediaMimeType: exportFile.type || "video/mp4",
+          mediaSizeBytes: exportFile.size,
           ipId,
           title: publishRecord.title,
           summary: publishRecord.summary,
