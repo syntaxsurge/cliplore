@@ -64,7 +64,7 @@ export async function POST(req: Request) {
           app: "cliplore",
           kind: "enforcement-evidence",
           schema: evidence.schema,
-          },
+        },
       },
     });
 

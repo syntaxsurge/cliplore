@@ -180,12 +180,38 @@ export function ReportCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(validated),
       });
-      if (!pinRes.ok) throw new Error(await pinRes.text());
-      const pinned = (await pinRes.json()) as {
+
+      const pinBodyText = await pinRes.text();
+      let pinBody: any = null;
+      try {
+        pinBody = pinBodyText ? (JSON.parse(pinBodyText) as unknown) : null;
+      } catch {
+        pinBody = null;
+      }
+
+      if (!pinRes.ok) {
+        const message =
+          (pinBody &&
+            typeof pinBody === "object" &&
+            typeof (pinBody as any).details === "string" &&
+            (pinBody as any).details) ||
+          (pinBody &&
+            typeof pinBody === "object" &&
+            typeof (pinBody as any).error === "string" &&
+            (pinBody as any).error) ||
+          pinBodyText ||
+          `Pin evidence failed (${pinRes.status} ${pinRes.statusText})`;
+        throw new Error(message);
+      }
+
+      const pinned = pinBody as {
         uri: string;
         cid: string;
         sha256: `0x${string}`;
       };
+      if (!pinned?.cid || !pinned?.uri) {
+        throw new Error("Pin evidence returned an invalid response.");
+      }
 
       setStatus({ tone: "info", message: "Submitting Story dispute…" });
       const disputeRes = await client.dispute.raiseDispute({
