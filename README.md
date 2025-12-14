@@ -32,19 +32,9 @@ Or build and start in production mode:
 pnpm run build
 pnpm start
 ```
+Then navigate to [http://localhost:3000](http://localhost:3000)
 
 Convex endpoints (profile + project stats) use `NEXT_PUBLIC_CONVEX_URL`. Point this at your Convex deployment URL; the project includes functions for users and projects under `convex/functions`.
-
-Alternatively, use Docker:
-
-```bash
-# Build the Docker image
-docker build -t cliplore .
-
-# Run the container
-docker run -p 3000:3000 cliplore
-```
-Then navigate to [http://localhost:3000](http://localhost:3000)
 
 ### Environment
 
