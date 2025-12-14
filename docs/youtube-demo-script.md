@@ -145,10 +145,8 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
      - Recipient = [RECIPIENT_WALLET=0xYOUR_SECOND_WALLET]
      - Percent (%) = [PERCENT=5]
      Click “Transfer” — confirm MetaMask opens → click “Confirm” — wait for a success toast.
-  11. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Files & metadata” tab → confirm Storage URLs and IPFS metadata URIs/hashes are visible for audit.
-  12. **Verify on-screen:** Confirm the transfer action shows a success confirmation (toast or tx hash displayed) and the Files tab shows ipfs:// URIs and SHA-256 0x… hashes.
 - **Voiceover:**
-  > “Back in the creator asset dashboard, royalties are activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 0.2 IP into WIP, send a 0.2 WIP tip, refresh claimable, claim the revenue, and fractionalize 5% of the royalty tokens to my second wallet—all confirmed on-chain in MetaMask. Then I open Files & metadata to show the storage URLs, IPFS URIs, and SHA-256 hashes for audit.”
+  > “Back in the creator asset dashboard, royalties are activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 0.2 IP into WIP, send a 0.2 WIP tip, refresh claimable, claim the revenue, and fractionalize 5% of the royalty tokens to my second wallet.”
 
 ## 10. Data track: datasets marketplace, publish a dataset, and open dataset detail
 - **URL:** https://cliplore.com/datasets
