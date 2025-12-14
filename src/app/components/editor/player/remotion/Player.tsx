@@ -37,34 +37,52 @@ export const PreviewPlayer = () => {
   const safeFps =
     typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : 30;
   const playerFrame = useCurrentPlayerFrame(player);
-  const playheadTime = playerFrame / safeFps;
+  const safeCurrentTime =
+    typeof currentTime === "number" && Number.isFinite(currentTime)
+      ? Math.max(0, currentTime)
+      : 0;
+  const playheadTime = !player || !isPlaying ? safeCurrentTime : playerFrame / safeFps;
   const [volume, setVolume] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const hasSyncedInitialFrameRef = useRef(false);
+
+  const durationSeconds = useMemo(() => {
+    const safe = typeof duration === "number" && Number.isFinite(duration) ? duration : 0;
+    return Math.max(0, safe);
+  }, [duration]);
+
+  const durationInFrames = useMemo(() => {
+    const safeDurationSeconds = Math.max(0, durationSeconds);
+    return Math.floor((safeDurationSeconds > 0 ? safeDurationSeconds : 1) * safeFps) + 1;
+  }, [durationSeconds, safeFps]);
+
+  const initialFrame = useMemo(() => {
+    const desired = Math.round(safeCurrentTime * safeFps);
+    return Math.max(0, Math.min(durationInFrames - 1, desired));
+  }, [durationInFrames, safeCurrentTime, safeFps]);
 
   // update frame when current time with marker
   useEffect(() => {
-    const safeTime =
-      typeof currentTime === "number" && Number.isFinite(currentTime)
-        ? currentTime
-        : 0;
-    const desiredFrame = Math.round(safeTime * safeFps);
-    const player = playerRef.current;
     if (!player || isPlaying) return;
+    const desiredFrame = Math.max(
+      0,
+      Math.min(durationInFrames - 1, Math.round(safeCurrentTime * safeFps)),
+    );
     player.pause();
     const currentFrame = player.getCurrentFrame();
-    if (currentFrame !== desiredFrame) {
+    if (!hasSyncedInitialFrameRef.current || currentFrame !== desiredFrame) {
       player.seekTo(desiredFrame);
+      hasSyncedInitialFrameRef.current = true;
     }
-  }, [currentTime, isPlaying, playerRef, safeFps]);
+  }, [durationInFrames, isPlaying, player, safeCurrentTime, safeFps]);
 
   useEffect(() => {
-    const player = playerRef.current;
     if (!player) return;
 
     const handlePlay = () => dispatch(setIsPlaying(true));
     const handlePause = () => {
       dispatch(setIsPlaying(false));
-      const frame = playerRef.current?.getCurrentFrame() ?? 0;
+      const frame = player.getCurrentFrame();
       dispatch(setCurrentTime(frame / safeFps));
     };
 
@@ -74,26 +92,26 @@ export const PreviewPlayer = () => {
       player.removeEventListener("play", handlePlay);
       player.removeEventListener("pause", handlePause);
     };
-  }, [dispatch, playerRef, safeFps]);
+  }, [dispatch, player, safeFps]);
 
   // to control with keyboard
   useEffect(() => {
-    if (!playerRef.current) return;
+    if (!player) return;
     if (isPlaying) {
-      playerRef.current.play();
+      player.play();
     } else {
-      playerRef.current.pause();
+      player.pause();
     }
-  }, [isPlaying, playerRef]);
+  }, [isPlaying, player]);
 
   useEffect(() => {
-    if (!playerRef.current) return;
+    if (!player) return;
     if (isMuted) {
-      playerRef.current.mute();
+      player.mute();
     } else {
-      playerRef.current.unmute();
+      player.unmute();
     }
-  }, [isMuted, playerRef]);
+  }, [isMuted, player]);
 
   useEffect(() => {
     if (!player) return;
@@ -112,11 +130,6 @@ export const PreviewPlayer = () => {
     document.addEventListener("fullscreenchange", update);
     return () => document.removeEventListener("fullscreenchange", update);
   }, [playerRef]);
-
-  const durationSeconds = useMemo(() => {
-    const safe = typeof duration === "number" && Number.isFinite(duration) ? duration : 0;
-    return Math.max(0, safe);
-  }, [duration]);
 
   const baseCompositionWidth =
     typeof resolution?.width === "number" && Number.isFinite(resolution.width) && resolution.width > 0
@@ -142,11 +155,6 @@ export const PreviewPlayer = () => {
     () => ({ mediaFiles, textElements, renderScale: previewScale }),
     [mediaFiles, previewScale, textElements],
   );
-
-  const durationInFrames = useMemo(() => {
-    const safeDurationSeconds = Math.max(0, durationSeconds);
-    return Math.floor((safeDurationSeconds > 0 ? safeDurationSeconds : 1) * safeFps) + 1;
-  }, [durationSeconds, safeFps]);
 
   const compositionWidth = Math.max(1, Math.round(baseCompositionWidth * previewScale));
   const compositionHeight = Math.max(1, Math.round(baseCompositionHeight * previewScale));
@@ -211,6 +219,7 @@ export const PreviewPlayer = () => {
           compositionWidth={compositionWidth}
           compositionHeight={compositionHeight}
           fps={safeFps}
+          initialFrame={initialFrame}
         />
         <MoveableOverlay />
       </div>
@@ -272,23 +281,22 @@ export const PreviewPlayer = () => {
           </div>
 
           <div className="min-w-0 flex-1">
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, durationSeconds)}
-              step={1 / safeFps}
-              value={Math.min(durationSeconds, playheadTime)}
-              onChange={(e) => {
-                const player = playerRef.current;
-                const nextTime = Number(e.target.value);
-                if (!player || !Number.isFinite(nextTime)) return;
-                dispatch(setIsPlaying(false));
-                dispatch(setCurrentTime(nextTime));
-                player.seekTo(Math.round(nextTime * safeFps));
-              }}
-              className="h-2 w-full cursor-pointer accent-white/80"
-              aria-label="Seek"
-            />
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, durationSeconds)}
+            step={1 / safeFps}
+            value={Math.min(durationSeconds, playheadTime)}
+            onChange={(e) => {
+              const nextTime = Number(e.target.value);
+              if (!player || !Number.isFinite(nextTime)) return;
+              dispatch(setIsPlaying(false));
+              dispatch(setCurrentTime(nextTime));
+              player.seekTo(Math.round(nextTime * safeFps));
+            }}
+            className="h-2 w-full cursor-pointer accent-white/80"
+            aria-label="Seek"
+          />
           </div>
 
           <Button

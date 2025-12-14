@@ -14,24 +14,32 @@ import { MediaFile, TextElement, TimelineTrack } from "@/app/types";
 import { throttle } from "lodash";
 import { Type } from "lucide-react";
 import {
+  buildTimelineSnapEdges,
   computeRipplePlacement,
+  findContainingClipAtTime,
   findNeighborLimits,
+  findNearestSnapEdge,
   moveArrayItem,
+  type TimelineClipBounds,
 } from "@/app/components/editor/timeline/ops";
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
+const SNAP_THRESHOLD_PX = 10;
+
 type Props = {
   trackId: string;
   fallbackTrackId: string | null;
   onDragHoverTrackId?: (trackId: string | null) => void;
+  onSnapGuideTimeChange?: (timeSec: number | null) => void;
 };
 
 function TextTimeline({
   trackId,
   fallbackTrackId,
   onDragHoverTrackId,
+  onSnapGuideTimeChange,
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [, forceUpdate] = useReducer((v) => v + 1, 0);
@@ -62,6 +70,7 @@ function TextTimeline({
   const dispatch = useDispatch();
   const moveableRef = useRef<Record<string, Moveable | null>>({});
   const lastHoverTrackIdRef = useRef<string | null>(null);
+  const lastSnapGuideTimeRef = useRef<number | null>(null);
   const zoom =
     isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
 
@@ -150,6 +159,17 @@ function TextTimeline({
     onDragHoverTrackId(next);
   };
 
+  const reportSnapGuideTime = (timeSec: number | null) => {
+    if (!onSnapGuideTimeChange) return;
+    const normalized =
+      typeof timeSec === "number" && Number.isFinite(timeSec)
+        ? Math.round(timeSec * 1000) / 1000
+        : null;
+    if (lastSnapGuideTimeRef.current === normalized) return;
+    lastSnapGuideTimeRef.current = normalized;
+    onSnapGuideTimeChange(normalized);
+  };
+
   const handleResize = (
     clip: TextElement,
     target: HTMLElement,
@@ -216,6 +236,22 @@ function TextTimeline({
           start: clip.positionStart,
           end: clip.positionEnd,
         })),
+    ];
+    return bounds;
+  };
+
+  const getAllTimelineBounds = (): TimelineClipBounds[] => {
+    const bounds: TimelineClipBounds[] = [
+      ...mediaFilesRef.current.map((clip) => ({
+        id: clip.id,
+        start: clip.positionStart,
+        end: clip.positionEnd,
+      })),
+      ...textElementsRef.current.map((clip) => ({
+        id: clip.id,
+        start: clip.positionStart,
+        end: clip.positionEnd,
+      })),
     ];
     return bounds;
   };
@@ -289,13 +325,52 @@ function TextTimeline({
               controlPadding={6}
               onDragStart={() => {
                 dispatch(beginHistoryTransaction());
+                reportSnapGuideTime(null);
               }}
               onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
                 handleClick("text", clip.id);
-                handleDragWithDrop(clip, target as HTMLElement, left, top);
-                reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
+                const hoverTrackId = findTrackIdAtPoint(clientX, clientY);
+                reportHoverTrackId(hoverTrackId);
+
+                const currentTrackId = clip.trackId ?? fallbackTrackId ?? trackId;
+                const targetTrackId =
+                  hoverTrackId && !hoverTrackId.startsWith("__new-layer")
+                    ? hoverTrackId
+                    : currentTrackId;
+
+                const constrainedLeft = Math.max(left, 0);
+                const candidateStart = constrainedLeft / zoom;
+
+                const bounds = getTrackBounds(targetTrackId);
+                const overlapHit = findContainingClipAtTime({
+                  clips: bounds,
+                  time: candidateStart,
+                  ignoreId: clip.id,
+                });
+
+                const snapThresholdSeconds = SNAP_THRESHOLD_PX / zoom;
+                const allEdges = buildTimelineSnapEdges(getAllTimelineBounds());
+                const nearestEdge =
+                  !overlapHit && snapThresholdSeconds > 0
+                    ? findNearestSnapEdge({
+                        edges: allEdges,
+                        time: candidateStart,
+                        threshold: snapThresholdSeconds,
+                        ignoreClipId: clip.id,
+                      })
+                    : null;
+
+                const snappedStart = overlapHit
+                  ? overlapHit.end
+                  : nearestEdge
+                    ? nearestEdge.time
+                    : candidateStart;
+
+                reportSnapGuideTime(overlapHit ? overlapHit.end : nearestEdge?.time ?? null);
+                handleDragWithDrop(clip, target as HTMLElement, snappedStart * zoom, top);
               }}
               onDragEnd={({ target, clientX, clientY }) => {
+                reportSnapGuideTime(null);
                 reportHoverTrackId(null);
                 try {
                   if (!target) return;

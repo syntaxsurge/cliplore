@@ -80,6 +80,7 @@ export const Timeline = () => {
     textElements,
     duration,
     isPlaying,
+    currentTime,
     tracks,
     markers,
     fps,
@@ -90,7 +91,6 @@ export const Timeline = () => {
   const safeFps =
     typeof fps === "number" && Number.isFinite(fps) && fps > 0 ? fps : 30;
   const playerFrame = useCurrentPlayerFrame(player);
-  const playheadTime = playerFrame / safeFps;
   const timelineRef = useRef<HTMLDivElement>(null);
   const [isDraggingMarker, setIsDraggingMarker] = useState(false);
   const [draggingTimelineMarkerId, setDraggingTimelineMarkerId] = useState<
@@ -102,9 +102,15 @@ export const Timeline = () => {
   >(null);
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
   const [timelineHelpOpen, setTimelineHelpOpen] = useState(false);
+  const [snapGuideTime, setSnapGuideTime] = useState<number | null>(null);
 
   const zoom = isFiniteNumber(timelineZoom) && timelineZoom > 0 ? timelineZoom : 60;
   const safeDuration = isFiniteNumber(duration) && duration > 0 ? duration : 0;
+  const safeCurrentTime =
+    isFiniteNumber(currentTime) && currentTime >= 0
+      ? Math.max(0, Math.min(safeDuration, currentTime))
+      : 0;
+  const playheadTime = !player || !isPlaying ? safeCurrentTime : playerFrame / safeFps;
 
   const markerSnapSeconds = Math.max(0.04, 1 / safeFps);
   const markerAtPlayhead = useMemo(() => {
@@ -154,6 +160,10 @@ export const Timeline = () => {
           ? "bottom"
           : null;
     setLayerInsertPreview((prev) => (prev === next ? prev : next));
+  }, []);
+
+  const handleSnapGuideTimeChange = useCallback((time: number | null) => {
+    setSnapGuideTime((prev) => (prev === time ? prev : time));
   }, []);
 
   const getTrackBounds = useCallback(
@@ -1170,6 +1180,15 @@ export const Timeline = () => {
             </div>
           ))}
 
+          {typeof snapGuideTime === "number" && Number.isFinite(snapGuideTime) ? (
+            <div
+              className="pointer-events-none absolute top-0 bottom-0 z-40 w-[2px] bg-blue-500/80"
+              style={{
+                left: `${TRACK_LABEL_WIDTH_PX + snapGuideTime * zoom}px`,
+              }}
+            />
+          ) : null}
+
           <div
             className="pointer-events-none absolute top-0 bottom-0 z-50 w-[2px] bg-red-500"
             style={{
@@ -1274,11 +1293,13 @@ export const Timeline = () => {
                     fallbackTrackIdForType={fallbackTrackIdForType}
                     fallbackTextTrackId={fallbackTextTrackId}
                     onDragHoverTrackId={handleDragHoverTrackId}
+                    onSnapGuideTimeChange={handleSnapGuideTimeChange}
                   />
                   <TextTimeline
                     trackId={track.id}
                     fallbackTrackId={fallbackTextTrackId}
                     onDragHoverTrackId={handleDragHoverTrackId}
+                    onSnapGuideTimeChange={handleSnapGuideTimeChange}
                   />
                 </div>
               </div>

@@ -503,6 +503,11 @@ const projectStateSlice = createSlice({
         rawActiveSection === "export"
           ? (rawActiveSection as any)
           : "media";
+      next.isPlaying = false;
+      next.currentTime =
+        typeof next.currentTime === "number" && Number.isFinite(next.currentTime)
+          ? Math.max(0, next.currentTime)
+          : 0;
       next.historyLockDepth = 0;
       next.soraJobs = Array.isArray((action.payload as any).soraJobs)
         ? ((action.payload as any).soraJobs as unknown[])

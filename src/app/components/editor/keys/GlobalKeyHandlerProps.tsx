@@ -1,6 +1,6 @@
 "use client";
 import { useAppSelector } from "@/app/store";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   addMarker,
   deleteMarker,
@@ -48,29 +48,22 @@ const GlobalKeyHandler = ({
     markersRef.current = projectState.markers;
   }, [projectState]);
 
-  const [hasInteracted, setHasInteracted] = useState(false);
-
   useEffect(() => {
-    const handleClick = () => setHasInteracted(true);
-    window.addEventListener("click", handleClick, { once: true });
-    return () => window.removeEventListener("click", handleClick);
-  }, []);
-
-  useEffect(() => {
-    if (!hasInteracted) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isTyping =
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
+        target.tagName === "SELECT" ||
         target.isContentEditable;
 
       if (isTyping) return;
 
       switch (e.code) {
         case "Space":
+          if (e.repeat) return;
           e.preventDefault();
+          e.stopPropagation();
           dispatch(setIsPlaying(!isPlayingRef.current));
           break;
         case "KeyU":
@@ -78,6 +71,7 @@ const GlobalKeyHandler = ({
           dispatch(setIsMuted(!isMutedRef.current));
           break;
         case "KeyM":
+          if (e.repeat) return;
           e.preventDefault();
           {
             const frame =
@@ -103,19 +97,23 @@ const GlobalKeyHandler = ({
           }
           break;
         case "KeyD":
+          if (e.repeat) return;
           e.preventDefault();
           handleDuplicate();
           break;
         case "KeyS":
+          if (e.repeat) return;
           e.preventDefault();
           handleSplit();
           break;
         case "Delete":
         case "Backspace":
+          if (e.repeat) return;
           e.preventDefault();
           handleDelete();
           break;
         case "KeyF":
+          if (e.repeat) return;
           e.preventDefault();
           dispatch(setMarkerTrack(!enableMarkerTrackingRef.current));
           break;
@@ -141,10 +139,10 @@ const GlobalKeyHandler = ({
           break;
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, [
-    hasInteracted,
     handleDelete,
     handleDuplicate,
     handleSplit,

@@ -11,13 +11,14 @@ type CanvasPlayerProps = {
   compositionWidth: number;
   compositionHeight: number;
   inputProps: CompositionProps;
+  initialFrame?: number;
 };
 
 const playerStyle: React.CSSProperties = { width: "100%", height: "100%" };
 
 export const CanvasPlayer = memo(
   forwardRef<PlayerRef, CanvasPlayerProps>(function CanvasPlayer(
-    { durationInFrames, fps, compositionWidth, compositionHeight, inputProps },
+    { durationInFrames, fps, compositionWidth, compositionHeight, inputProps, initialFrame },
     ref,
   ) {
     return (
@@ -32,7 +33,11 @@ export const CanvasPlayer = memo(
         style={playerStyle}
         controls={false}
         clickToPlay={false}
+        spaceKeyToPlayOrPause={false}
         audioLatencyHint="playback"
+        {...(typeof initialFrame === "number" && Number.isFinite(initialFrame)
+          ? { initialFrame }
+          : {})}
         acknowledgeRemotionLicense
       />
     );

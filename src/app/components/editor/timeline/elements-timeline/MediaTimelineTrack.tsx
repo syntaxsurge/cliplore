@@ -22,9 +22,13 @@ import React, {
 } from "react";
 import { Image as ImageIcon, Music, Video } from "lucide-react";
 import {
+  buildTimelineSnapEdges,
   computeRipplePlacement,
+  findContainingClipAtTime,
   findNeighborLimits,
+  findNearestSnapEdge,
   moveArrayItem,
+  type TimelineClipBounds,
 } from "@/app/components/editor/timeline/ops";
 
 type Props = {
@@ -33,7 +37,10 @@ type Props = {
   fallbackTrackIdForType: Record<MediaType, string | null>;
   fallbackTextTrackId: string | null;
   onDragHoverTrackId?: (trackId: string | null) => void;
+  onSnapGuideTimeChange?: (timeSec: number | null) => void;
 };
+
+const SNAP_THRESHOLD_PX = 10;
 
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
@@ -54,6 +61,7 @@ export function MediaTimelineTrack({
   fallbackTrackIdForType,
   fallbackTextTrackId,
   onDragHoverTrackId,
+  onSnapGuideTimeChange,
 }: Props) {
   const targetRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const moveableRef = useRef<Record<string, Moveable | null>>({});
@@ -81,6 +89,7 @@ export function MediaTimelineTrack({
     [forceUpdate],
   );
   const lastHoverTrackIdRef = useRef<string | null>(null);
+  const lastSnapGuideTimeRef = useRef<number | null>(null);
   const { mediaFiles, textElements, tracks, activeElement, activeElementIndex, timelineZoom } =
     useAppSelector((state) => state.projectState);
   const dispatch = useDispatch();
@@ -153,6 +162,17 @@ export function MediaTimelineTrack({
     onDragHoverTrackId(next);
   };
 
+  const reportSnapGuideTime = (timeSec: number | null) => {
+    if (!onSnapGuideTimeChange) return;
+    const normalized =
+      typeof timeSec === "number" && Number.isFinite(timeSec)
+        ? Math.round(timeSec * 1000) / 1000
+        : null;
+    if (lastSnapGuideTimeRef.current === normalized) return;
+    lastSnapGuideTimeRef.current = normalized;
+    onSnapGuideTimeChange(normalized);
+  };
+
   const getTrackBounds = (targetTrackId: string) => {
     const bounds = [
       ...mediaFilesRef.current
@@ -179,7 +199,23 @@ export function MediaTimelineTrack({
     return bounds;
   };
 
-	  const handleRightResize = (
+  const getAllTimelineBounds = (): TimelineClipBounds[] => {
+    const bounds: TimelineClipBounds[] = [
+      ...mediaFilesRef.current.map((clip) => ({
+        id: clip.id,
+        start: clip.positionStart,
+        end: clip.positionEnd,
+      })),
+      ...textElementsRef.current.map((clip) => ({
+        id: clip.id,
+        start: clip.positionStart,
+        end: clip.positionEnd,
+      })),
+    ];
+    return bounds;
+  };
+
+ 	  const handleRightResize = (
 	    clip: MediaFile,
 	    target: HTMLElement,
 	    width: number,
@@ -389,13 +425,58 @@ export function MediaTimelineTrack({
                 controlPadding={6}
                 onDragStart={() => {
                   dispatch(beginHistoryTransaction());
+                  reportSnapGuideTime(null);
                 }}
                 onDrag={({ target, left, top, clientX, clientY }: OnDrag) => {
                   handleClick(clip.id);
-                  handleDrag(clip, target as HTMLElement, left, top);
-                  reportHoverTrackId(findTrackIdAtPoint(clientX, clientY));
+                  const hoverTrackId = findTrackIdAtPoint(clientX, clientY);
+                  reportHoverTrackId(hoverTrackId);
+
+                  const currentTrackId =
+                    clip.trackId ?? fallbackTrackIdForType[clip.type] ?? trackId;
+                  const targetTrackId =
+                    hoverTrackId && !hoverTrackId.startsWith("__new-layer")
+                      ? hoverTrackId
+                      : currentTrackId;
+
+                  const constrainedLeft = Math.max(left, 0);
+                  const candidateStart = constrainedLeft / zoom;
+
+                  const bounds = getTrackBounds(targetTrackId);
+                  const overlapHit = findContainingClipAtTime({
+                    clips: bounds,
+                    time: candidateStart,
+                    ignoreId: clip.id,
+                  });
+
+                  const snapThresholdSeconds = SNAP_THRESHOLD_PX / zoom;
+                  const allEdges = buildTimelineSnapEdges(getAllTimelineBounds());
+                  const nearestEdge =
+                    !overlapHit && snapThresholdSeconds > 0
+                      ? findNearestSnapEdge({
+                          edges: allEdges,
+                          time: candidateStart,
+                          threshold: snapThresholdSeconds,
+                          ignoreClipId: clip.id,
+                        })
+                      : null;
+
+                  const snappedStart = overlapHit
+                    ? overlapHit.end
+                    : nearestEdge
+                      ? nearestEdge.time
+                      : candidateStart;
+
+                  reportSnapGuideTime(overlapHit ? overlapHit.end : nearestEdge?.time ?? null);
+                  handleDrag(
+                    clip,
+                    target as HTMLElement,
+                    snappedStart * zoom,
+                    top,
+                  );
                 }}
                 onDragEnd={({ target, clientX, clientY }) => {
+                  reportSnapGuideTime(null);
                   reportHoverTrackId(null);
                   try {
                     if (!target) return;

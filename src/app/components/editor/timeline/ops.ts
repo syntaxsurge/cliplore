@@ -4,6 +4,11 @@ export type TimelineClipBounds = {
   end: number;
 };
 
+export type TimelineSnapEdge = {
+  clipId: string;
+  time: number;
+};
+
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
@@ -94,4 +99,65 @@ export function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number)
   const insertAt = Math.max(0, Math.min(next.length, Math.floor(toIndex)));
   next.splice(insertAt, 0, item);
   return next;
+}
+
+export function findContainingClipAtTime(params: {
+  clips: TimelineClipBounds[];
+  time: number;
+  ignoreId?: string;
+}): TimelineClipBounds | null {
+  const { clips, time, ignoreId } = params;
+  if (!isFiniteNumber(time)) return null;
+  return (
+    clips
+      .filter((clip) => clip.id !== ignoreId)
+      .find(
+        (clip) =>
+          isFiniteNumber(clip.start) &&
+          isFiniteNumber(clip.end) &&
+          clip.end > clip.start &&
+          time >= clip.start &&
+          time < clip.end,
+      ) ?? null
+  );
+}
+
+export function buildTimelineSnapEdges(clips: TimelineClipBounds[]): TimelineSnapEdge[] {
+  const edges: TimelineSnapEdge[] = [];
+  for (const clip of clips) {
+    if (!clip) continue;
+    if (typeof clip.id !== "string" || clip.id.length === 0) continue;
+    if (!isFiniteNumber(clip.start) || !isFiniteNumber(clip.end)) continue;
+    if (clip.end <= clip.start) continue;
+    edges.push({ clipId: clip.id, time: clip.start });
+    edges.push({ clipId: clip.id, time: clip.end });
+  }
+  return edges;
+}
+
+export function findNearestSnapEdge(params: {
+  edges: TimelineSnapEdge[];
+  time: number;
+  threshold: number;
+  ignoreClipId?: string;
+}): TimelineSnapEdge | null {
+  const { edges, time, threshold, ignoreClipId } = params;
+  if (!isFiniteNumber(time)) return null;
+  if (!isFiniteNumber(threshold) || threshold <= 0) return null;
+
+  let best: TimelineSnapEdge | null = null;
+  let bestDist = Number.POSITIVE_INFINITY;
+
+  for (const edge of edges) {
+    if (!edge) continue;
+    if (ignoreClipId && edge.clipId === ignoreClipId) continue;
+    if (!isFiniteNumber(edge.time)) continue;
+    const dist = Math.abs(edge.time - time);
+    if (dist <= threshold && dist < bestDist) {
+      best = edge;
+      bestDist = dist;
+    }
+  }
+
+  return best;
 }
