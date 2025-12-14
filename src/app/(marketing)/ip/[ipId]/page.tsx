@@ -108,20 +108,6 @@ export default async function IpDetailPage({ params }: Props) {
 
           <p className="max-w-3xl text-muted-foreground">{asset.summary}</p>
         </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button asChild size="sm" variant="secondary">
-            <Link href={remixHref}>
-              <Sparkles />
-              Remix
-            </Link>
-          </Button>
-          <Button asChild size="sm" variant="outline">
-            <a href={storyIpaUrl} target="_blank" rel="noreferrer noopener">
-              Open in Explorer
-            </a>
-          </Button>
-        </div>
       </div>
 
       <OwnerDashboardCallout
