@@ -128,9 +128,9 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **Voiceover:**
   > “To prove IPFi, I switch to another browser with a different wallet. On the same public IP page, I connect my second MetaMask and mint a license token. You’ll see the MetaMask confirmation, and then a success state on the page—this shows real, on-chain licensing from a separate user.”
 
-## 9. Assets dashboard + IPFi actions: royalties activate, tip, claim, wrap/unwrap
+## 9. Assets dashboard + IPFi actions: wrap, tip, claim, fractionalize
 - **URL:** https://cliplore.com/assets
-- **Shot:** Creator Assets list → asset dashboard → Royalties tab showing Royalty Vault address, tip form, claim section, and wrap/unwrap controls.
+- **Shot:** Creator Assets list → asset dashboard → Royalties tab showing Royalty Vault address, wrap/unwrap controls, tip form, claim section, and fractionalize controls → Files & metadata audit.
 - **Steps:**
   1. **Current page:** New browser https://cliplore.com/ip/[ipId] — confirm the license mint succeeded (toast / tx link).
   2. **Current page:** Original browser https://cliplore.com/ip/[ipId] — **Navigate:** Click “Assets” in the header → lands on https://cliplore.com/assets — confirm heading “Assets” is visible.
@@ -138,28 +138,19 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
   4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Royalties” tab → confirm “Royalties vault” is visible and the vault address is NOT 0x000…000.
   5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Wrap / unwrap WIP” → **Enter values:** Wrap IP → WIP = [WRAP_AMOUNT_IP=0.2] → click “Wrap” → MetaMask → “Confirm”.
   6. **Current page:** https://cliplore.com/assets/[ipId] — **Enter values:** In “Tip this IP”, Amount (WIP) = [TIP_WIP=0.2] → click “Send tip” → MetaMask → “Confirm”.
-  7. **Verify on-screen:** In “Claim revenue”, leave “Claim as” = “IP account” (default) → click “Refresh claimable” and confirm “Claimable” updates from “—” to a value.
-- **Voiceover:**
-  > “Back in the creator asset dashboard, royalties are now activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 0.2 IP into WIP, then send a 0.2 WIP tip to the IP vault, refresh claimable, and you can see revenue appear—this demonstrates the full IPFi loop.”
-
-## 10. IPFi claim + fractionalize (transfer royalty tokens)
-- **URL:** https://cliplore.com/assets/[ipId]
-- **Shot:** Asset dashboard Royalties tab showing “Claim revenue” and “Fractionalize royalties (transfer Royalty Tokens)” with recipient + percent.
-- **Steps:**
-  1. **Current page:** https://cliplore.com/assets/[ipId] — confirm you’re on the “Royalties” tab and “Claim revenue” is visible.
-  2. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Leave “Claim as” = “IP account” (default) → click “Refresh claimable” → confirm “Claimable” shows a number (not “—”).
-  3. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Claim revenue” — confirm MetaMask opens a transaction → click “Confirm” — wait for a success toast.
-  4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Refresh claimable” again → confirm “Claimable” decreases or resets.
-  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Fractionalize royalties” → **Enter values:**
+  7. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** In “Claim revenue”, leave “Claim as” = “IP account” (default) → click “Refresh claimable” → confirm “Claimable” shows a number (not “—”).
+  8. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Claim revenue” — confirm MetaMask opens a transaction → click “Confirm” — wait for a success toast.
+  9. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Refresh claimable” again → confirm “Claimable” decreases or resets.
+  10. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Fractionalize royalties” → **Enter values:**
      - Recipient = [RECIPIENT_WALLET=0xYOUR_SECOND_WALLET]
      - Percent (%) = [PERCENT=5]
      Click “Transfer” — confirm MetaMask opens → click “Confirm” — wait for a success toast.
-  6. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Files & metadata” tab → confirm Storage URLs and IPFS metadata URIs/hashes are visible for audit.
-  7. **Verify on-screen:** Confirm the transfer action shows a success confirmation (toast or tx hash displayed) and the Files tab shows ipfs:// URIs and SHA-256 0x… hashes.
+  11. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Files & metadata” tab → confirm Storage URLs and IPFS metadata URIs/hashes are visible for audit.
+  12. **Verify on-screen:** Confirm the transfer action shows a success confirmation (toast or tx hash displayed) and the Files tab shows ipfs:// URIs and SHA-256 0x… hashes.
 - **Voiceover:**
-  > “Now I claim the revenue to my wallet with one click and confirm the MetaMask transaction. Then I fractionalize royalties by transferring 5% of the royalty tokens to my second wallet—again confirmed on-chain. This shows licensing, revenue, claiming, and fractional rights in one end-to-end flow.”
+  > “Back in the creator asset dashboard, royalties are activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 0.2 IP into WIP, send a 0.2 WIP tip, refresh claimable, claim the revenue, and fractionalize 5% of the royalty tokens to my second wallet—all confirmed on-chain in MetaMask. Then I open Files & metadata to show the storage URLs, IPFS URIs, and SHA-256 hashes for audit.”
 
-## 11. Data track: datasets marketplace, publish a dataset, and open dataset detail
+## 10. Data track: datasets marketplace, publish a dataset, and open dataset detail
 - **URL:** https://cliplore.com/datasets
 - **Shot:** Datasets marketplace list, “Publish a dataset” CTA, dataset publisher form, then dataset detail with Story and IPFS references.
 - **Steps:**
@@ -184,7 +175,7 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **Voiceover:**
   > “ClipLore also ships the Data track: rights-cleared dataset samples registered as Story IP. I publish a dataset in one flow and open the dataset detail page where Story and IPFS references make the provenance auditable.”
 
-## 12. Enforcement: verify a file hash and submit an IPFS evidence report (IP Detection & Enforcement)
+## 11. Enforcement: verify a file hash and submit an IPFS evidence report (IP Detection & Enforcement)
 - **URL:** https://cliplore.com/enforcement
 - **Shot:** Enforcement page with Verify panel (SHA-256 output) and Report panel (“Target IP ID (dispute target)”, suspect URL/file, “Pin evidence & raise dispute”), then evidence URI shown.
 - **Steps:**
@@ -204,7 +195,7 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **Voiceover:**
   > “For IP Detection & Enforcement, ClipLore verifies suspicious content by SHA-256, pins an evidence bundle to IPFS, and raises a Story dispute. That makes enforcement actionable, not just informational.”
 
-## 13. Dashboard quick check (creator overview)
+## 12. Dashboard quick check (creator overview)
 - **URL:** https://cliplore.com/dashboard
 - **Shot:** Creator dashboard with stats/cards showing project count and published asset stats (Convex-backed).
 - **Steps:**
