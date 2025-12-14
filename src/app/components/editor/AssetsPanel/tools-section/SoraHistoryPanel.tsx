@@ -16,6 +16,13 @@ import type { SoraJob } from "@/app/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
+  isSoraSizeAllowed,
+  SORA_DEFAULTS,
+  SORA_MODELS,
+  type SoraModel,
+  type SoraSize,
+} from "@/features/ai/sora/capabilities";
+import {
   CheckCircle2,
   Loader2,
   RotateCcw,
@@ -39,6 +46,14 @@ export function SoraHistoryPanel() {
   const { soraJobs, mediaFiles } = useAppSelector((state) => state.projectState);
 
   const jobs = useMemo(() => soraJobs ?? [], [soraJobs]);
+  const modelLabel = (job: SoraJob) => {
+    const size = job.size as SoraSize;
+    const inferredModel: SoraModel =
+      (job.model as SoraModel | undefined) ??
+      (isSoraSizeAllowed(SORA_DEFAULTS.model, size) ? SORA_DEFAULTS.model : "sora-2-pro");
+
+    return SORA_MODELS[inferredModel].label;
+  };
 
   const statusTone = (job: SoraJob) => {
     switch (job.status) {
@@ -141,7 +156,7 @@ export function SoraHistoryPanel() {
                     {job.prompt || "Untitled prompt"}
                   </div>
                   <div className="text-xs text-white/55">
-                    {job.seconds}s • {job.size}
+                    {modelLabel(job)} • {job.seconds}s • {job.size}
                     {job.message ? (
                       <>
                         {" "}
@@ -222,4 +237,3 @@ export function SoraHistoryPanel() {
     </div>
   );
 }
-

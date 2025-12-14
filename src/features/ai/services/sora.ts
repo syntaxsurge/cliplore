@@ -1,6 +1,14 @@
+import "server-only";
+
+import {
+  SORA_DEFAULTS,
+  type SoraModel,
+  type SoraSeconds,
+  type SoraSize,
+} from "@/features/ai/sora/capabilities";
+
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 
-type SoraSeconds = 4 | 8 | 12;
 type SoraSecondsString = `${SoraSeconds}`;
 
 function toSoraSecondsString(seconds: SoraSeconds): SoraSecondsString {
@@ -40,18 +48,18 @@ export type SoraJob = {
 };
 
 export async function createSoraJob(params: {
-  model?: "sora-2" | "sora-2-pro";
+  model?: SoraModel;
   prompt: string;
   seconds?: SoraSeconds;
-  size?: "720x1280" | "1280x720" | "1024x1792" | "1792x1024";
+  size?: SoraSize;
 }, auth: OpenAIAuth) {
   const job = await openaiJson<{ id: string }>(auth.apiKey, "/videos", {
     method: "POST",
     body: JSON.stringify({
-      model: params.model ?? "sora-2",
+      model: params.model ?? SORA_DEFAULTS.model,
       prompt: params.prompt,
-      seconds: toSoraSecondsString(params.seconds ?? 8),
-      size: params.size ?? "1280x720",
+      seconds: toSoraSecondsString(params.seconds ?? SORA_DEFAULTS.seconds),
+      size: params.size ?? SORA_DEFAULTS.size,
     }),
   });
 

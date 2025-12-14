@@ -15,6 +15,13 @@ import {
   TimelineMarker,
   TrackKind,
 } from "../../types";
+import {
+  isSoraSizeAllowed,
+  SORA_DEFAULTS,
+  type SoraModel,
+  type SoraSeconds,
+  type SoraSize,
+} from "@/features/ai/sora/capabilities";
 
 const MAX_HISTORY = 50;
 
@@ -500,49 +507,62 @@ const projectStateSlice = createSlice({
       next.soraJobs = Array.isArray((action.payload as any).soraJobs)
         ? ((action.payload as any).soraJobs as unknown[])
             .filter((job) => job && typeof job === "object")
-            .map((job) => ({
-              id: typeof (job as any).id === "string" ? (job as any).id : crypto.randomUUID(),
-              jobId: typeof (job as any).jobId === "string" ? (job as any).jobId : undefined,
-              model:
-                (job as any).model === "sora-2" || (job as any).model === "sora-2-pro"
-                  ? (job as any).model
-                  : undefined,
-              prompt: typeof (job as any).prompt === "string" ? (job as any).prompt : "",
-              seconds:
-                (job as any).seconds === 4 || (job as any).seconds === 8 || (job as any).seconds === 12
-                  ? (job as any).seconds
-                  : 8,
-              size:
+            .map((job) => {
+              const size: SoraSize =
                 (job as any).size === "720x1280" ||
                 (job as any).size === "1280x720" ||
                 (job as any).size === "1024x1792" ||
                 (job as any).size === "1792x1024"
                   ? (job as any).size
-                  : "1280x720",
-              status:
-                (job as any).status === "queued" ||
-                (job as any).status === "creating" ||
-                (job as any).status === "polling" ||
-                (job as any).status === "downloading" ||
-                (job as any).status === "completed" ||
-                (job as any).status === "failed"
-                  ? (job as any).status
-                  : "failed",
-              createdAt:
-                typeof (job as any).createdAt === "string"
-                  ? (job as any).createdAt
-                  : new Date().toISOString(),
-              updatedAt:
-                typeof (job as any).updatedAt === "string"
-                  ? (job as any).updatedAt
-                  : new Date().toISOString(),
-              message: typeof (job as any).message === "string" ? (job as any).message : undefined,
-              error: typeof (job as any).error === "string" ? (job as any).error : undefined,
-              contentUrl:
-                typeof (job as any).contentUrl === "string" ? (job as any).contentUrl : null,
-              fileId: typeof (job as any).fileId === "string" ? (job as any).fileId : undefined,
-              mediaId: typeof (job as any).mediaId === "string" ? (job as any).mediaId : undefined,
-            }))
+                  : SORA_DEFAULTS.size;
+
+              const seconds: SoraSeconds =
+                (job as any).seconds === 4 ||
+                (job as any).seconds === 8 ||
+                (job as any).seconds === 12
+                  ? (job as any).seconds
+                  : SORA_DEFAULTS.seconds;
+
+              const rawModel = (job as any).model as unknown;
+              const model: SoraModel =
+                rawModel === "sora-2" || rawModel === "sora-2-pro"
+                  ? rawModel
+                  : isSoraSizeAllowed(SORA_DEFAULTS.model, size)
+                    ? SORA_DEFAULTS.model
+                    : "sora-2-pro";
+
+              return {
+                id: typeof (job as any).id === "string" ? (job as any).id : crypto.randomUUID(),
+                jobId: typeof (job as any).jobId === "string" ? (job as any).jobId : undefined,
+                model,
+                prompt: typeof (job as any).prompt === "string" ? (job as any).prompt : "",
+                seconds,
+                size,
+                status:
+                  (job as any).status === "queued" ||
+                  (job as any).status === "creating" ||
+                  (job as any).status === "polling" ||
+                  (job as any).status === "downloading" ||
+                  (job as any).status === "completed" ||
+                  (job as any).status === "failed"
+                    ? (job as any).status
+                    : "failed",
+                createdAt:
+                  typeof (job as any).createdAt === "string"
+                    ? (job as any).createdAt
+                    : new Date().toISOString(),
+                updatedAt:
+                  typeof (job as any).updatedAt === "string"
+                    ? (job as any).updatedAt
+                    : new Date().toISOString(),
+                message: typeof (job as any).message === "string" ? (job as any).message : undefined,
+                error: typeof (job as any).error === "string" ? (job as any).error : undefined,
+                contentUrl:
+                  typeof (job as any).contentUrl === "string" ? (job as any).contentUrl : null,
+                fileId: typeof (job as any).fileId === "string" ? (job as any).fileId : undefined,
+                mediaId: typeof (job as any).mediaId === "string" ? (job as any).mediaId : undefined,
+              };
+            })
             .slice(0, 50)
         : [];
 

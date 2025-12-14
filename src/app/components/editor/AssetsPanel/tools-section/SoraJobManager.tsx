@@ -12,6 +12,7 @@ import {
   updateSoraJob,
 } from "@/app/store/slices/projectSlice";
 import { createMediaFileFromFile } from "@/lib/media/ingest";
+import { SORA_DEFAULTS } from "@/features/ai/sora/capabilities";
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 60;
@@ -123,8 +124,8 @@ export function SoraJobManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: job?.prompt ?? "",
-          seconds: job?.seconds ?? 8,
-          size: job?.size ?? "1280x720",
+          seconds: job?.seconds ?? SORA_DEFAULTS.seconds,
+          size: job?.size ?? SORA_DEFAULTS.size,
           ...(job?.model ? { model: job.model } : {}),
         }),
       });

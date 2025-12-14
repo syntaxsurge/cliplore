@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createSoraJob, getSoraJob } from "@/features/ai/services/sora";
 import { getOpenAIKeyCookie } from "@/lib/openai/byok-cookie";
+import { soraCreateRequestSchema } from "@/features/ai/sora/schema";
 
 export const runtime = "nodejs";
-
-const createSchema = z.object({
-  model: z.enum(["sora-2", "sora-2-pro"]).optional(),
-  prompt: z.string().min(1),
-  seconds: z.union([z.literal(4), z.literal(8), z.literal(12)]).optional(),
-  size: z
-    .enum(["720x1280", "1280x720", "1024x1792", "1792x1024"])
-    .optional(),
-});
 
 export async function POST(req: Request) {
   const apiKey = await getOpenAIKeyCookie();
@@ -24,10 +15,19 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const parsed = createSchema.safeParse(body);
+  const parsed = soraCreateRequestSchema.safeParse(body);
   if (!parsed.success) {
+    const flattened = parsed.error.flatten();
+    const message =
+      flattened.formErrors[0] ??
+      flattened.fieldErrors.prompt?.[0] ??
+      flattened.fieldErrors.model?.[0] ??
+      flattened.fieldErrors.seconds?.[0] ??
+      flattened.fieldErrors.size?.[0] ??
+      "Invalid input";
+
     return NextResponse.json(
-      { error: parsed.error.flatten().formErrors.join(", ") || "Invalid input" },
+      { error: message },
       { status: 400 },
     );
   }

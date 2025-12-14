@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAppDispatch } from "@/app/store";
 import { addSoraJob } from "@/app/store/slices/projectSlice";
@@ -8,6 +8,14 @@ import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import type { SoraJob } from "@/app/types";
 import { ensureOpenAIKeyOrRedirect } from "@/features/ai/byok/require-openai-key";
+import {
+  SORA_DEFAULTS,
+  SORA_MODELS,
+  SORA_SECONDS,
+  type SoraModel,
+  type SoraSeconds,
+  type SoraSize,
+} from "@/features/ai/sora/capabilities";
 
 type Props = {
   onGenerated?: () => void;
@@ -21,10 +29,19 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
   const searchParams = useSearchParams();
   const dispatch = useAppDispatch();
   const [prompt, setPrompt] = useState("");
-  const [seconds, setSeconds] = useState<4 | 8 | 12>(8);
-  const [size, setSize] = useState<
-    "720x1280" | "1280x720" | "1024x1792" | "1792x1024"
-  >("1280x720");
+  const [model, setModel] = useState<SoraModel>(SORA_DEFAULTS.model);
+  const [seconds, setSeconds] = useState<SoraSeconds>(SORA_DEFAULTS.seconds);
+  const [size, setSize] = useState<SoraSize>(SORA_DEFAULTS.size);
+
+  const allowedSizes = useMemo(() => {
+    return SORA_MODELS[model].sizes as readonly SoraSize[];
+  }, [model]);
+
+  useEffect(() => {
+    if (!allowedSizes.includes(size)) {
+      setSize(allowedSizes[0] ?? SORA_DEFAULTS.size);
+    }
+  }, [allowedSizes, size]);
 
   const nextPath = useMemo(() => {
     const queryString = searchParams.toString();
@@ -51,6 +68,7 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
     const now = new Date().toISOString();
     const job: SoraJob = {
       id: crypto.randomUUID(),
+      model,
       prompt: prompt.trim(),
       seconds,
       size,
@@ -93,23 +111,33 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label className="space-y-1 text-sm text-white/80">
+            <span className="text-xs text-white/60">Model</span>
+            <select
+              className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+              value={model}
+              onChange={(e) => setModel(e.target.value as SoraModel)}
+            >
+              {Object.entries(SORA_MODELS).map(([id, info]) => (
+                <option key={id} value={id} className="text-black">
+                  {info.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="space-y-1 text-sm text-white/80">
             <span className="text-xs text-white/60">Duration</span>
             <select
               className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
               value={seconds}
-              onChange={(e) => setSeconds(Number(e.target.value) as 4 | 8 | 12)}
+              onChange={(e) => setSeconds(Number(e.target.value) as SoraSeconds)}
             >
-              <option value={4} className="text-black">
-                4s
-              </option>
-              <option value={8} className="text-black">
-                8s
-              </option>
-              <option value={12} className="text-black">
-                12s
-              </option>
+              {SORA_SECONDS.map((value) => (
+                <option key={value} value={value} className="text-black">
+                  {value}s
+                </option>
+              ))}
             </select>
           </label>
           <label className="space-y-1 text-sm text-white/80">
@@ -117,20 +145,13 @@ export function SoraPanel({ onGenerated, hideHeader = false, className }: Props)
             <select
               className="w-full rounded-md border border-white/15 bg-black/40 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
               value={size}
-              onChange={(e) => setSize(e.target.value as any)}
+              onChange={(e) => setSize(e.target.value as SoraSize)}
             >
-              <option value="1280x720" className="text-black">
-                1280 x 720 (16:9)
-              </option>
-              <option value="720x1280" className="text-black">
-                720 x 1280 (9:16)
-              </option>
-              <option value="1024x1792" className="text-black">
-                1024 x 1792
-              </option>
-              <option value="1792x1024" className="text-black">
-                1792 x 1024
-              </option>
+              {allowedSizes.map((value) => (
+                <option key={value} value={value} className="text-black">
+                  {value}
+                </option>
+              ))}
             </select>
           </label>
         </div>
