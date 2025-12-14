@@ -15,6 +15,7 @@ import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { wagmiConfig, queryClient } from "@/lib/web3/wagmi-config";
 import { useEffect } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -33,7 +34,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
         <WagmiProvider config={wagmiConfig}>
           <QueryClientProvider client={queryClient}>
-            <RainbowKitProvider>{children}</RainbowKitProvider>
+            <RainbowKitProvider>
+              <TooltipProvider delayDuration={250}>{children}</TooltipProvider>
+            </RainbowKitProvider>
           </QueryClientProvider>
         </WagmiProvider>
       </ThemeProvider>
