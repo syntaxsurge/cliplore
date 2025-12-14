@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
+import { PageLoader } from "@/components/feedback/PageLoader";
 import {
   Card,
   CardContent,
@@ -13,7 +15,24 @@ import {
 } from "@/components/ui/card";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { isConnected } = useAccount();
+  const { isConnected, status } = useAccount();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const isCheckingWallet =
+    !isMounted || status === "connecting" || status === "reconnecting";
+
+  if (isCheckingWallet) {
+    return (
+      <PageLoader
+        title="Loading your wallet"
+        description="Checking your connection to continue…"
+      />
+    );
+  }
 
   if (!isConnected) {
     return (

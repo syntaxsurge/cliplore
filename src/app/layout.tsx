@@ -7,6 +7,7 @@ import Header from "./components/header/Header";
 import Footer from "./components/footer/Footer";
 import { Toaster } from "react-hot-toast";
 import { Analytics } from "@vercel/analytics/next";
+import { RouteTopLoader } from "@/components/feedback/RouteTopLoader";
 
 if (process.env.NODE_ENV !== "production") {
   const globalAny = globalThis as any;
@@ -47,6 +48,7 @@ window.litIssuedWarnings.add('dev-mode');`}
         className={`min-h-screen flex flex-col bg-background text-foreground font-sans antialiased ${geistSans.variable} ${geistMono.variable}`}
       >
         <Providers>
+          <RouteTopLoader />
           <Header />
           <main id="main" className="flex-grow">
             <Toaster
