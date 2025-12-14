@@ -4,15 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Menu } from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import ThemeSwitch from "../buttons/ThemeSwitch";
 
 export default function Header() {
@@ -22,24 +24,34 @@ export default function Header() {
     return null;
   }
 
-  const marketingItems = [
+  const discoverItems = [
     { href: "/", label: "Home" },
     { href: "/explore", label: "Explore" },
     { href: "/datasets", label: "Datasets" },
     { href: "/demo", label: "Demo" },
   ] as const;
 
-  const appItems = [
+  const workspaceItems = [
     { href: "/projects", label: "Studio" },
+    { href: "/datasets/new", label: "Publish dataset" },
     { href: "/assets", label: "Assets" },
     { href: "/enforcement", label: "Enforcement" },
     { href: "/settings", label: "Settings" },
   ] as const;
 
-  const navItems = [...marketingItems, ...appItems] as const;
+  const isActive = (href: string) => {
+    if (href === "/") return pathname === "/";
+    if (href === "/datasets") {
+      return (
+        pathname === "/datasets" ||
+        (pathname.startsWith("/datasets/") && !pathname.startsWith("/datasets/new"))
+      );
+    }
+    return pathname.startsWith(href);
+  };
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const isGroupActive = (items: ReadonlyArray<{ href: string }>) =>
+    items.some((item) => isActive(item.href));
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur">
@@ -70,18 +82,69 @@ export default function Header() {
 
         <nav className="flex items-center gap-2" aria-label="Primary">
           <ul className="hidden items-center gap-1 md:flex">
-            {navItems.map((item) => (
-              <li key={item.href}>
-                <Button
-                  asChild
-                  size="sm"
-                  variant={isActive(item.href) ? "secondary" : "ghost"}
-                  className="px-3"
-                >
-                  <Link href={item.href}>{item.label}</Link>
-                </Button>
-              </li>
-            ))}
+            <li>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isGroupActive(discoverItems) ? "secondary" : "ghost"}
+                    className="px-3"
+                    aria-label="Open Discover menu"
+                  >
+                    Discover <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {discoverItems.map((item) => (
+                    <DropdownMenuItem
+                      key={item.href}
+                      asChild
+                      className={cn("cursor-pointer", isActive(item.href) && "bg-accent")}
+                    >
+                      <Link
+                        href={item.href}
+                        aria-current={isActive(item.href) ? "page" : undefined}
+                      >
+                        {item.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
+
+            <li>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isGroupActive(workspaceItems) ? "secondary" : "ghost"}
+                    className="px-3"
+                    aria-label="Open Workspace menu"
+                  >
+                    Workspace <ChevronDown className="ml-1 h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  {workspaceItems.map((item) => (
+                    <DropdownMenuItem
+                      key={item.href}
+                      asChild
+                      className={cn("cursor-pointer", isActive(item.href) && "bg-accent")}
+                    >
+                      <Link
+                        href={item.href}
+                        aria-current={isActive(item.href) ? "page" : undefined}
+                      >
+                        {item.label}
+                      </Link>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </li>
           </ul>
 
           <div className="flex items-center gap-2">
@@ -110,11 +173,14 @@ export default function Header() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                {marketingItems.map((item) => (
+                <DropdownMenuLabel className="text-xs tracking-wide text-muted-foreground">
+                  Discover
+                </DropdownMenuLabel>
+                {discoverItems.map((item) => (
                   <DropdownMenuItem
                     key={item.href}
                     asChild
-                    className="cursor-pointer"
+                    className={cn("cursor-pointer", isActive(item.href) && "bg-accent")}
                   >
                     <Link
                       href={item.href}
@@ -125,11 +191,14 @@ export default function Header() {
                   </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                {appItems.map((item) => (
+                <DropdownMenuLabel className="text-xs tracking-wide text-muted-foreground">
+                  Workspace
+                </DropdownMenuLabel>
+                {workspaceItems.map((item) => (
                   <DropdownMenuItem
                     key={item.href}
                     asChild
-                    className="cursor-pointer"
+                    className={cn("cursor-pointer", isActive(item.href) && "bg-accent")}
                   >
                     <Link
                       href={item.href}
