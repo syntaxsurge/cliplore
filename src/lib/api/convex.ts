@@ -39,19 +39,6 @@ export async function upsertConvexUser(input: {
   return handleResponse<{ user: any }>(res);
 }
 
-export async function fetchConvexStats(wallet: string) {
-  const res = await fetch(
-    `/api/convex/stats?wallet=${encodeURIComponent(wallet)}`,
-    {
-      method: "GET",
-      cache: "no-store",
-    },
-  );
-  return handleResponse<{
-    stats: { projects: number; assets: number; ipAssets: number };
-  }>(res);
-}
-
 export async function fetchConvexProjects(wallet: string) {
   const res = await fetch(
     `/api/convex/projects?wallet=${encodeURIComponent(wallet)}`,

@@ -8,6 +8,11 @@ import toast from "react-hot-toast";
 import { listProjects } from "@/app/store";
 import type { ProjectState } from "@/app/types";
 import {
+  collectLocalPublishedAssets,
+  mergeCreatorAssetRows,
+} from "@/lib/ip-assets/creator";
+import type { MarketplaceAsset } from "@/lib/ip-assets/types";
+import {
   fetchConvexIpAssets,
   setConvexIpAssetArchived,
   upsertConvexIpAsset,
@@ -49,53 +54,6 @@ import {
   XCircle,
 } from "lucide-react";
 import AssetCard from "./AssetCard";
-import type { AssetRow, LocalPublishedAsset, MarketplaceAsset } from "./types";
-
-function collectLocalPublishedAssets(projects: ProjectState[]) {
-  const assets: LocalPublishedAsset[] = [];
-  for (const project of projects) {
-    for (const exp of project.exports) {
-      if (!exp.publish?.ipId) continue;
-      assets.push({
-        ipId: exp.publish.ipId,
-        projectId: project.id,
-        projectName: project.projectName,
-        exportId: exp.id,
-        exportName: exp.name,
-        publish: exp.publish,
-      });
-    }
-  }
-
-  return assets.sort(
-    (a, b) =>
-      new Date(b.publish.createdAt).getTime() -
-      new Date(a.publish.createdAt).getTime(),
-  );
-}
-
-function toMarketplaceAssetFromLocal(
-  local: LocalPublishedAsset,
-  wallet: string,
-): MarketplaceAsset {
-  return {
-    ipId: local.publish.ipId.toLowerCase(),
-    archived: false,
-    archivedAt: null,
-    archivedBy: null,
-    title: local.publish.title,
-    summary: local.publish.summary,
-    terms: local.publish.terms,
-    videoUrl: local.publish.videoUrl,
-    thumbnailUrl: local.publish.thumbnailUrl ?? null,
-    licenseTermsId: local.publish.licenseTermsId ?? null,
-    txHash: local.publish.txHash ?? null,
-    chainId: clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID,
-    licensorWallet: wallet,
-    createdAt: new Date(local.publish.createdAt).getTime(),
-    updatedAt: new Date(local.publish.createdAt).getTime(),
-  };
-}
 
 type SortKey = "newest" | "oldest";
 type SourceFilter = "all" | "listed" | "local-only" | "remote-only";
@@ -139,39 +97,12 @@ export default function AssetsPage() {
   );
 
   const mergedRows = useMemo(() => {
-    const rows = new Map<string, AssetRow>();
-
-    for (const asset of remoteAssets) {
-      const key = asset.ipId.toLowerCase();
-      rows.set(key, {
-        asset,
-        hasLocal: false,
-        hasRemote: true,
-      });
-    }
-
-    for (const local of localPublished) {
-      const key = local.publish.ipId.toLowerCase();
-      const existing = rows.get(key);
-      if (existing) {
-        existing.hasLocal = true;
-        existing.local = local;
-        continue;
-      }
-
-      rows.set(key, {
-        asset: toMarketplaceAssetFromLocal(local, address ?? ""),
-        hasLocal: true,
-        hasRemote: false,
-        local,
-      });
-    }
-
-    return Array.from(rows.values()).sort(
-      (a, b) =>
-        (b.asset.updatedAt ?? b.asset.createdAt) -
-        (a.asset.updatedAt ?? a.asset.createdAt),
-    );
+    return mergeCreatorAssetRows({
+      localPublished,
+      remoteAssets,
+      wallet: address ?? "",
+      chainId: clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID,
+    });
   }, [address, localPublished, remoteAssets]);
 
   const archiveCounts = useMemo(() => {

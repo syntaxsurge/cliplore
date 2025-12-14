@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getConvexClient } from "@/lib/db/convex/client";
 import { datasetTypeSchema as datasetTypeSchemaZod } from "@/lib/story/dataset-metadata";
+import { getWalletSearchVariants } from "@/lib/web3/address";
 
 const upsertSchema = z.object({
   wallet: z.string().min(1),
@@ -71,11 +72,37 @@ export async function GET(req: Request) {
     }
 
     if (wallet) {
-      const ipAssets = await (client as any).query(
-        "functions/ipAssets:listByWallet",
-        { wallet, includeArchived },
+      const walletCandidates = getWalletSearchVariants(wallet);
+      if (!walletCandidates.length) return NextResponse.json({ ipAssets: [] });
+
+      const getAssetTime = (asset: any) =>
+        Number(asset?.updatedAt ?? asset?.createdAt ?? 0) || 0;
+
+      const responses = await Promise.all(
+        walletCandidates.map((candidateWallet) =>
+          (client as any).query("functions/ipAssets:listByWallet", {
+            wallet: candidateWallet,
+            includeArchived,
+          }),
+        ),
       );
-      return NextResponse.json({ ipAssets });
+
+      const bestByIpId = new Map<string, any>();
+      for (const ipAssets of responses) {
+        for (const asset of ipAssets ?? []) {
+          const key = String(asset?.ipId ?? "").toLowerCase();
+          if (!key) continue;
+          const existing = bestByIpId.get(key);
+          if (!existing || getAssetTime(asset) > getAssetTime(existing)) {
+            bestByIpId.set(key, asset);
+          }
+        }
+      }
+
+      const merged = Array.from(bestByIpId.values()).sort(
+        (a, b) => getAssetTime(b) - getAssetTime(a),
+      );
+      return NextResponse.json({ ipAssets: merged });
     }
 
     const ipAssets = await (client as any).query("functions/ipAssets:listMarketplace", {});

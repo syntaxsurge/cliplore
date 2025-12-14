@@ -38,3 +38,4 @@ export type AssetRow = {
   hasRemote: boolean;
   local?: LocalPublishedAsset;
 };
+

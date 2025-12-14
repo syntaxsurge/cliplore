@@ -60,7 +60,7 @@ import {
   Tag,
   Wallet,
 } from "lucide-react";
-import type { AssetRow } from "./types";
+import type { AssetRow } from "@/lib/ip-assets/types";
 
 function getSampleKind(mime: string | null) {
   const value = mime ?? "";

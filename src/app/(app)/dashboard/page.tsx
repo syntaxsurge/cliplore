@@ -12,13 +12,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CopyIconButton } from "@/components/data-display/CopyIconButton";
 import { ExternalLinkIconButton } from "@/components/data-display/ExternalLinkIconButton";
 import { TruncatedCode } from "@/components/data-display/TruncatedCode";
+import { clientEnv } from "@/lib/env/client";
 import {
   fetchConvexIpAssets,
   fetchConvexProjects,
-  fetchConvexStats,
 } from "@/lib/api/convex";
 import { listProjects } from "@/app/store";
 import { ProjectState } from "@/app/types";
+import { collectLocalPublishedAssets, mergeCreatorAssetRows } from "@/lib/ip-assets/creator";
+import type { MarketplaceAsset } from "@/lib/ip-assets/types";
 import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
 import { formatShortHash } from "@/lib/utils";
 import {
@@ -31,19 +33,10 @@ import {
   Wallet,
 } from "lucide-react";
 
-type Stats = {
-  projects: number;
-  assets: number;
-  ipAssets: number;
-};
-
-type DashboardAsset = {
-  ipId: string;
+type RemoteProject = {
+  id: string;
+  localId: string | null;
   title: string;
-  assetKind?: string;
-  chainId?: number | null;
-  createdAt?: number;
-  updatedAt?: number;
 };
 
 function formatLocalDate(value: string | number) {
@@ -62,56 +55,65 @@ function formatLocalDate(value: string | number) {
 
 export default function DashboardPage() {
   const { address } = useAccount();
-  const [stats, setStats] = useState<Stats | null>(null);
   const [projects, setProjects] = useState<ProjectState[]>([]);
-  const [recentAssets, setRecentAssets] = useState<DashboardAsset[]>([]);
+  const [remoteProjects, setRemoteProjects] = useState<RemoteProject[]>([]);
+  const [remoteAssets, setRemoteAssets] = useState<MarketplaceAsset[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
         const localProjects = await listProjects();
+        if (cancelled) return;
         setProjects(localProjects);
 
-        if (address) {
-          const [{ stats }, { projects }, { ipAssets }] = await Promise.all([
-            fetchConvexStats(address),
-            fetchConvexProjects(address),
-            fetchConvexIpAssets({ wallet: address }),
-          ]);
-          setStats(stats);
-          setRecentAssets(
-            (ipAssets ?? [])
-              .filter((asset: any) => asset?.ipId && asset?.title)
-              .slice(0, 6),
-          );
+        if (!address) return;
 
-          // Merge remote metadata titles into local projects if missing
-          if (projects?.length) {
-            setProjects((prev) =>
-              prev.map((p) => {
-                const match = projects.find((rp: any) => rp.id === p.id);
-                if (match && match.title !== p.projectName) {
-                  return { ...p, projectName: match.title };
-                }
-                return p;
-              }),
-            );
-          }
+        const [{ projects: convexProjects }, { ipAssets }] = await Promise.all([
+          fetchConvexProjects(address),
+          fetchConvexIpAssets({ wallet: address, includeArchived: true }),
+        ]);
+        if (cancelled) return;
+
+        setRemoteProjects((convexProjects ?? []) as RemoteProject[]);
+        setRemoteAssets((ipAssets ?? []) as MarketplaceAsset[]);
+
+        // Merge remote metadata titles into local projects if present
+        if (convexProjects?.length) {
+          setProjects((prev) =>
+            prev.map((project) => {
+              const match = convexProjects.find(
+                (remoteProject: any) => remoteProject.localId === project.id,
+              );
+              if (match?.title && match.title !== project.projectName) {
+                return { ...project, projectName: match.title };
+              }
+              return project;
+            }),
+          );
         }
       } catch (err: any) {
         setError(err?.message ?? "Failed to load dashboard data.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-    load();
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [address]);
 
-  const walletLabel = useMemo(() => (address ? formatShortHash(address) : null), [address]);
+  const walletLabel = useMemo(
+    () => (address ? formatShortHash(address) : null),
+    [address],
+  );
 
   const sortedProjects = useMemo(() => {
     return [...projects].sort(
@@ -119,6 +121,27 @@ export default function DashboardPage() {
         new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime(),
     );
   }, [projects]);
+
+  const localPublished = useMemo(() => collectLocalPublishedAssets(projects), [projects]);
+
+  const assetRows = useMemo(() => {
+    return mergeCreatorAssetRows({
+      localPublished,
+      remoteAssets,
+      wallet: address ?? "",
+      chainId: clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID,
+    });
+  }, [address, localPublished, remoteAssets]);
+
+  const assetCounts = useMemo(() => {
+    const total = assetRows.length;
+    const listed = assetRows.filter((row) => row.hasRemote && !row.asset.archived).length;
+    const archived = assetRows.filter((row) => row.hasRemote && row.asset.archived).length;
+    const localOnly = assetRows.filter((row) => row.hasLocal && !row.hasRemote).length;
+    return { total, listed, archived, localOnly };
+  }, [assetRows]);
+
+  const recentAssetRows = useMemo(() => assetRows.slice(0, 6), [assetRows]);
 
   return (
     <div className="mx-auto max-w-7xl space-y-10 px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
@@ -137,7 +160,7 @@ export default function DashboardPage() {
             ) : null}
           </div>
           <p className="max-w-3xl text-muted-foreground">
-            Jump into the studio, track published IP, and keep listings in sync.
+            Create projects, publish IP assets to Story, and manage marketplace listings.
           </p>
         </div>
 
@@ -167,6 +190,16 @@ export default function DashboardPage() {
         </Alert>
       ) : null}
 
+      <Alert variant="info">
+        <AlertTitle>IP assets vs marketplace listings</AlertTitle>
+        <AlertDescription>
+          A Story IP asset is the onchain record (IP ID) created when you publish. A marketplace
+          listing is the offchain Convex record that makes it visible on Explore/Datasets. Local-only
+          means it exists in this browser but isn’t synced to Convex yet — archiving a listing hides
+          it without changing the onchain IP.
+        </AlertDescription>
+      </Alert>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader>
@@ -179,11 +212,11 @@ export default function DashboardPage() {
             {loading ? (
               <Skeleton className="h-9 w-16" />
             ) : (
-              <p className="text-3xl font-semibold">
-                {stats ? stats.projects : projects.length}
-              </p>
+              <p className="text-3xl font-semibold">{projects.length}</p>
             )}
-            <p className="text-sm text-muted-foreground">Tracked in Convex</p>
+            <p className="text-sm text-muted-foreground">
+              Synced to Convex: {remoteProjects.length}
+            </p>
           </CardContent>
         </Card>
 
@@ -191,16 +224,18 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-muted-foreground" />
-              Assets
+              IP assets
             </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
               <Skeleton className="h-9 w-16" />
             ) : (
-              <p className="text-3xl font-semibold">{stats ? stats.assets : 0}</p>
+              <p className="text-3xl font-semibold">{assetCounts.total}</p>
             )}
-            <p className="text-sm text-muted-foreground">Published + listed</p>
+            <p className="text-sm text-muted-foreground">
+              Local-only: {assetCounts.localOnly}
+            </p>
           </CardContent>
         </Card>
 
@@ -208,16 +243,16 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cloud className="h-4 w-4 text-muted-foreground" />
-              IP on Story
+              Marketplace listings
             </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
               <Skeleton className="h-9 w-16" />
             ) : (
-              <p className="text-3xl font-semibold">{stats ? stats.ipAssets : 0}</p>
+              <p className="text-3xl font-semibold">{assetCounts.listed}</p>
             )}
-            <p className="text-sm text-muted-foreground">Registered onchain</p>
+            <p className="text-sm text-muted-foreground">Archived: {assetCounts.archived}</p>
           </CardContent>
         </Card>
       </div>
@@ -308,16 +343,17 @@ export default function DashboardPage() {
                     <Skeleton className="h-16 w-full" />
                     <Skeleton className="h-16 w-full" />
                   </div>
-                ) : recentAssets.length === 0 ? (
+                ) : recentAssetRows.length === 0 ? (
                   <div className="rounded-2xl border border-border bg-muted/30 p-6">
                     <p className="text-sm text-muted-foreground">
-                      No published IP assets found for this wallet yet.
+                      No published IP assets found yet. Publish an export to Story to get an IP ID,
+                      then optionally sync it to the marketplace.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button asChild>
                         <Link href="/assets">
                           <LayoutDashboard />
-                          Open assets
+                          Open IP assets
                         </Link>
                       </Button>
                       <Button asChild variant="outline">
@@ -330,7 +366,8 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {recentAssets.map((asset) => {
+                    {recentAssetRows.map((row) => {
+                      const asset = row.asset;
                       const dashboardHref = `/assets/${encodeURIComponent(asset.ipId)}`;
                       const explorerHref = getStoryIpaExplorerUrl({
                         ipId: asset.ipId,
@@ -340,6 +377,12 @@ export default function DashboardPage() {
                         (asset.assetKind ?? "video").toLowerCase() === "dataset"
                           ? "Dataset"
                           : "Video";
+
+                      const listingStatus = row.hasRemote
+                        ? asset.archived
+                          ? { variant: "outline" as const, label: "Archived" }
+                          : { variant: "success" as const, label: "Listed" }
+                        : { variant: "warning" as const, label: "Local-only" };
 
                       return (
                         <div
@@ -352,6 +395,7 @@ export default function DashboardPage() {
                                 {asset.title}
                               </p>
                               <Badge variant="outline">{kindLabel}</Badge>
+                              <Badge variant={listingStatus.variant}>{listingStatus.label}</Badge>
                             </div>
 
                             <div className="flex min-w-0 items-center gap-2 text-sm">
@@ -400,7 +444,7 @@ export default function DashboardPage() {
               <Link href="/assets">
                 <span className="flex items-center gap-2">
                   <LayoutDashboard />
-                  View assets
+                  View IP assets
                 </span>
                 <ArrowRight />
               </Link>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getConvexClient } from "@/lib/db/convex/client";
+import { getWalletSearchVariants } from "@/lib/web3/address";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -10,11 +11,36 @@ export async function GET(req: Request) {
 
   try {
     const client = getConvexClient();
-    const projects = await (client as any).query(
-      "functions/projects:listByWallet",
-      { wallet },
+    const walletCandidates = getWalletSearchVariants(wallet);
+    if (!walletCandidates.length) return NextResponse.json({ projects: [] });
+
+    const getProjectTime = (project: any) =>
+      Number(project?.updatedAt ?? project?.createdAt ?? 0) || 0;
+
+    const responses = await Promise.all(
+      walletCandidates.map((candidateWallet) =>
+        (client as any).query("functions/projects:listByWallet", {
+          wallet: candidateWallet,
+        }),
+      ),
     );
-    return NextResponse.json({ projects });
+
+    const bestByKey = new Map<string, any>();
+    for (const projects of responses) {
+      for (const project of projects ?? []) {
+        const key = String(project?.localId ?? project?.id ?? "");
+        if (!key) continue;
+        const existing = bestByKey.get(key);
+        if (!existing || getProjectTime(project) > getProjectTime(existing)) {
+          bestByKey.set(key, project);
+        }
+      }
+    }
+
+    const merged = Array.from(bestByKey.values()).sort(
+      (a, b) => getProjectTime(b) - getProjectTime(a),
+    );
+    return NextResponse.json({ projects: merged });
   } catch (error) {
     console.error("Convex projects:listByWallet error", error);
     return NextResponse.json(

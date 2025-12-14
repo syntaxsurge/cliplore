@@ -368,7 +368,7 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
   - `/ip/[ipId]`: IP asset detail + license minting + remix project CTA + owner-only dashboard shortcut
   - `/datasets/[ipId]`: dataset detail + license minting + Story/IPFS references + owner-only dashboard shortcut
 - **App routes (wallet-gated)**
-  - `/dashboard`: creator dashboard + Convex stats
+  - `/dashboard`: creator dashboard (projects + IP assets + marketplace listing status)
   - `/projects`: project list (local drafts + optional Convex metadata sync)
   - `/projects/[id]`: full-screen editor (header/footer hidden)
   - `/projects/[id]/publish`: publish wizard (upload export to B2, pin Story metadata to IPFS, register on Story)
@@ -394,7 +394,6 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
   - `/api/storage/multipart/abort` (`POST` abort multipart upload)
   - `/api/convex/users` (`GET` fetch user, `POST` upsert user)
   - `/api/convex/projects` (`GET` list projects, `POST` create project)
-  - `/api/convex/stats` (`GET` project/IP stats)
   - `/api/convex/ip-assets` (`GET` list marketplace assets / find by SHA-256 / list by wallet (`includeArchived=1`), `POST` upsert asset, `PATCH` archive/unarchive listing)
   - `/api/convex/enforcement-reports` (`GET` list reports, `POST` create report)
 
