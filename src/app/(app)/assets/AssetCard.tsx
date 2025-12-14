@@ -7,7 +7,6 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -285,109 +284,142 @@ export default function AssetCard(props: {
               {formatShortHash(row.asset.ipId)}
             </Badge>
 
-            {canManageArchive ? (
-              <>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Open asset actions"
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  aria-label="Open asset actions"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={dashboardHref}
+                    className="flex w-full items-center gap-2"
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    Open dashboard
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link
+                    href={publicHref}
+                    className="flex w-full items-center gap-2"
+                  >
+                    <Globe className="h-4 w-4" />
+                    Public page
+                  </Link>
+                </DropdownMenuItem>
+                {!isDataset ? (
+                  <DropdownMenuItem asChild>
+                    <Link
+                      href={remixHref}
+                      className="flex w-full items-center gap-2"
                     >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel>Marketplace visibility</DropdownMenuLabel>
+                      <Sparkles className="h-4 w-4" />
+                      Remix
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
+
+                {canManageArchive ? (
+                  <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onSelect={() => setArchiveDialogOpen(true)}
                       className={
                         isArchived
-                          ? undefined
-                          : "text-destructive focus:text-destructive"
+                          ? "text-emerald-700 focus:bg-emerald-600 focus:text-white dark:text-emerald-300 dark:focus:bg-emerald-500"
+                          : "text-red-600 focus:bg-red-600 focus:text-white dark:text-red-300 dark:focus:bg-red-500"
                       }
                     >
                       <Archive className="h-4 w-4" />
                       {isArchived ? "Restore from archive" : "Archive"}
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-                <AlertDialog
-                  open={archiveDialogOpen}
-                  onOpenChange={(open) => {
-                    if (archiveSubmitting) return;
-                    setArchiveDialogOpen(open);
-                  }}
-                >
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        {isArchived ? "Restore this asset?" : "Archive this asset?"}
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {isArchived
-                          ? "Restoring makes this asset visible in Explore again."
-                          : "Archiving hides this asset from the Explore marketplace."}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
+            {canManageArchive ? (
+              <AlertDialog
+                open={archiveDialogOpen}
+                onOpenChange={(open) => {
+                  if (archiveSubmitting) return;
+                  setArchiveDialogOpen(open);
+                }}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      {isArchived ? "Restore this asset?" : "Archive this asset?"}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {isArchived
+                        ? "Restoring makes this asset visible in Explore again."
+                        : "Archiving hides this asset from the Explore marketplace."}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
 
-                    <div className="grid gap-3 text-sm">
-                      <div className="rounded-xl border border-border bg-muted/30 p-3">
-                        <p className="font-medium text-foreground">
-                          {row.asset.title}
-                        </p>
-                        <p className="mt-1 font-mono text-xs text-muted-foreground">
-                          {row.asset.ipId}
-                        </p>
-                      </div>
-
-                      <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                        <li>Removes it from marketplace lists (Explore / Datasets).</li>
-                        <li>Keeps the on-chain Story registration unchanged.</li>
-                        <li>Still accessible via direct links and your dashboard.</li>
-                        <li>You can restore it anytime from the Archived tab.</li>
-                      </ul>
+                  <div className="grid gap-3 text-sm">
+                    <div className="rounded-xl border border-border bg-muted/30 p-3">
+                      <p className="font-medium text-foreground">
+                        {row.asset.title}
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-muted-foreground">
+                        {row.asset.ipId}
+                      </p>
                     </div>
 
-                    <AlertDialogFooter>
-                      <AlertDialogCancel disabled={archiveSubmitting}>
-                        Cancel
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        disabled={archiveSubmitting}
-                        className={
-                          isArchived
-                            ? undefined
-                            : buttonVariants({ variant: "destructive" })
+                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                      <li>Removes it from marketplace lists (Explore / Datasets).</li>
+                      <li>Keeps the on-chain Story registration unchanged.</li>
+                      <li>Still accessible via direct links and your dashboard.</li>
+                      <li>You can restore it anytime from the Archived tab.</li>
+                    </ul>
+                  </div>
+
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={archiveSubmitting}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={archiveSubmitting}
+                      className={
+                        isArchived
+                          ? "bg-emerald-600 text-white hover:bg-emerald-600/90 dark:bg-emerald-500 dark:hover:bg-emerald-500/90"
+                          : `${buttonVariants({ variant: "destructive" })} bg-red-600 hover:bg-red-600/90 dark:bg-red-500 dark:hover:bg-red-500/90`
+                      }
+                      onClick={async (event) => {
+                        event.preventDefault();
+                        if (!onSetArchived) return;
+                        setArchiveSubmitting(true);
+                        try {
+                          const ok = await onSetArchived({
+                            ipId: row.asset.ipId,
+                            archived: !isArchived,
+                          });
+                          if (ok) setArchiveDialogOpen(false);
+                        } finally {
+                          setArchiveSubmitting(false);
                         }
-                        onClick={async (event) => {
-                          event.preventDefault();
-                          if (!onSetArchived) return;
-                          setArchiveSubmitting(true);
-                          try {
-                            const ok = await onSetArchived({
-                              ipId: row.asset.ipId,
-                              archived: !isArchived,
-                            });
-                            if (ok) setArchiveDialogOpen(false);
-                          } finally {
-                            setArchiveSubmitting(false);
-                          }
-                        }}
-                      >
-                        {archiveSubmitting
-                          ? "Working…"
-                          : isArchived
-                            ? "Restore"
-                            : "Archive"}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </>
+                      }}
+                    >
+                      {archiveSubmitting
+                        ? "Working…"
+                        : isArchived
+                          ? "Restore"
+                          : "Archive"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             ) : null}
           </div>
         </div>
@@ -509,29 +541,6 @@ export default function AssetCard(props: {
           ) : null}
         </div>
       </CardContent>
-
-      <CardFooter className="flex flex-wrap gap-2">
-        <Button asChild size="sm" variant="secondary">
-          <Link href={dashboardHref}>
-            <LayoutDashboard />
-            Open dashboard
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link href={publicHref}>
-            <Globe />
-            Public page
-          </Link>
-        </Button>
-        {!isDataset ? (
-          <Button asChild size="sm" variant="outline">
-            <Link href={remixHref}>
-              <Sparkles />
-              Remix
-            </Link>
-          </Button>
-        ) : null}
-      </CardFooter>
     </Card>
   );
 }
