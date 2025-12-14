@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { CopyIconButton } from "@/components/data-display/CopyIconButton";
 import { ExternalLinkIconButton } from "@/components/data-display/ExternalLinkIconButton";
+import { OwnerDashboardCallout } from "@/components/data-display/OwnerDashboardCallout";
 import { TruncatedCode } from "@/components/data-display/TruncatedCode";
 import { formatShortHash, ipfsUriToGatewayUrl } from "@/lib/utils";
 import {
@@ -122,6 +123,11 @@ export default async function IpDetailPage({ params }: Props) {
           </Button>
         </div>
       </div>
+
+      <OwnerDashboardCallout
+        ipId={asset.ipId}
+        licensorWallet={asset.licensorWallet}
+      />
 
       <div className="grid gap-6 lg:grid-cols-12">
         <Card className="lg:col-span-8 overflow-hidden">

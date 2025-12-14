@@ -365,8 +365,8 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
   - `/datasets`: dataset marketplace list (Convex-backed)
   - `/demo`: demo hub (genre cards with video/prompt links)
   - `/demo/[slug]`: demo detail (YouTube embed, Story links, exact prompts)
-  - `/ip/[ipId]`: IP asset detail + license minting + remix project CTA
-  - `/datasets/[ipId]`: dataset detail + license minting + Story/IPFS references
+  - `/ip/[ipId]`: IP asset detail + license minting + remix project CTA + owner-only dashboard shortcut
+  - `/datasets/[ipId]`: dataset detail + license minting + Story/IPFS references + owner-only dashboard shortcut
 - **App routes (wallet-gated)**
   - `/dashboard`: creator dashboard + Convex stats
   - `/projects`: project list (local drafts + optional Convex metadata sync)

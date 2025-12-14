@@ -6,6 +6,7 @@ import { formatBytes, ipfsUriToGatewayUrl } from "@/lib/utils";
 import { MintLicenseButton } from "@/app/(marketing)/ip/MintLicenseButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { OwnerDashboardCallout } from "@/components/data-display/OwnerDashboardCallout";
 import {
   Card,
   CardContent,
@@ -36,6 +37,7 @@ type DatasetAsset = {
   ipMetadataHash: string | null;
   nftMetadataUri: string | null;
   nftMetadataHash: string | null;
+  licensorWallet: string | null;
 };
 
 function getIpfsGatewayLink(uri: string) {
@@ -116,6 +118,11 @@ export default async function DatasetDetailPage({ params }: Props) {
           </div>
         ) : null}
       </div>
+
+      <OwnerDashboardCallout
+        ipId={asset.ipId}
+        licensorWallet={asset.licensorWallet}
+      />
 
       <Card className="overflow-hidden">
         <div className="border-b border-border bg-black">

@@ -826,30 +826,15 @@ export default function AssetDetailPage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <CopyIconButton value={asset.ipId} label="Copy IP Asset ID" />
-            <Button size="sm" asChild>
-              <Link href={publicHref}>
-                <Globe className="h-4 w-4" />
-                Public page
-              </Link>
-            </Button>
-            <Button size="sm" variant="outline" asChild>
-              <a href={storyIpaUrl} target="_blank" rel="noreferrer noopener">
-                <ExternalLink className="h-4 w-4" />
-                Story Explorer
-              </a>
-            </Button>
-            {storyTxUrl ? (
-              <Button size="sm" variant="outline" asChild>
-                <a href={storyTxUrl} target="_blank" rel="noreferrer noopener">
-                  <ExternalLink className="h-4 w-4" />
-                  Registration tx
-                </a>
-              </Button>
-            ) : null}
-          </div>
-        </div>
+	          <div className="flex flex-wrap items-center gap-2">
+	            <Button size="sm" variant="secondary" asChild>
+	              <Link href={publicHref}>
+	                <Globe className="h-4 w-4" />
+	                Public page
+	              </Link>
+	            </Button>
+	          </div>
+	        </div>
 
         {!isListedInConvex ? (
           <Card>
@@ -899,18 +884,35 @@ export default function AssetDetailPage() {
           </Card>
         ) : null}
 
-        <Tabs
-          value={tab}
-          onValueChange={(next) =>
-            router.replace(tabHref(parseTab(next)), { scroll: false })
-          }
-        >
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="licensing">Licensing</TabsTrigger>
-            <TabsTrigger value="royalties">Royalties</TabsTrigger>
-            <TabsTrigger value="files">Files & metadata</TabsTrigger>
-          </TabsList>
+	        <Tabs
+	          value={tab}
+	          onValueChange={(next) =>
+	            router.replace(tabHref(parseTab(next)), { scroll: false })
+	          }
+	        >
+	          <TabsList className="h-12 w-full justify-start bg-muted/60 p-1.5 text-foreground/80 shadow-sm sm:w-fit">
+	            <TabsTrigger
+	              value="overview"
+	              className="px-4 py-2 text-sm sm:text-base"
+	            >
+	              Overview
+	            </TabsTrigger>
+	            <TabsTrigger
+	              value="licensing"
+	              className="px-4 py-2 text-sm sm:text-base"
+	            >
+	              Licensing
+	            </TabsTrigger>
+	            <TabsTrigger
+	              value="royalties"
+	              className="px-4 py-2 text-sm sm:text-base"
+	            >
+	              Royalties
+	            </TabsTrigger>
+	            <TabsTrigger value="files" className="px-4 py-2 text-sm sm:text-base">
+	              Files & metadata
+	            </TabsTrigger>
+	          </TabsList>
 
           <TabsContent value="overview">
             <div className="grid gap-6 lg:grid-cols-12">
