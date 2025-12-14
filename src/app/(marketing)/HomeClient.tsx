@@ -35,7 +35,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { cn, getYouTubeVideoId } from "@/lib/utils";
 
 type AccessType = "public" | "wallet";
 
@@ -411,9 +411,17 @@ function ProductMapCard({
   );
 }
 
-export default function HomeClient() {
+type HomeClientProps = {
+  demoVideoUrl: string;
+};
+
+export default function HomeClient({ demoVideoUrl }: HomeClientProps) {
   const reduceMotion = useReducedMotion();
   const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
+  const demoVideoId = getYouTubeVideoId(demoVideoUrl.trim());
+  const demoEmbedSrc = demoVideoId
+    ? `https://www.youtube-nocookie.com/embed/${demoVideoId}?rel=0&modestbranding=1`
+    : null;
 
   const fadeUp = (delay = 0) => ({
     initial: { opacity: 0, y: 14 },
@@ -548,6 +556,62 @@ export default function HomeClient() {
           </motion.div>
         </div>
       </section>
+
+      {demoEmbedSrc ? (
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-muted/10 p-6 sm:p-8 lg:p-10">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_60%)]" />
+
+            <div className="relative space-y-10">
+              <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
+                <motion.div {...fadeUp(0)} className="space-y-3 lg:col-span-8">
+                  <p className="text-sm font-medium text-muted-foreground">Demo video</p>
+                  <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                    Watch Cliplore in action
+                  </h2>
+                  <p className="max-w-2xl text-muted-foreground">
+                    A quick walkthrough of Sora generation, timeline editing, Story publishing, and
+                    enforcement—end to end.
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  {...fadeUp(0.05)}
+                  className="flex flex-col gap-3 sm:flex-row lg:col-span-4 lg:justify-end"
+                >
+                  <Button asChild size="lg">
+                    <a href={demoVideoUrl} target="_blank" rel="noreferrer">
+                      Watch on YouTube
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                  </Button>
+                  <Button asChild size="lg" variant="outline">
+                    <Link href="/demo">More demos</Link>
+                  </Button>
+                </motion.div>
+              </div>
+
+              <motion.div {...fadeUp(0.1)} className="relative">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_center,rgba(120,119,198,0.20),transparent_65%)]"
+                />
+                <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-border bg-black shadow-2xl">
+                  <iframe
+                    className="absolute inset-0 h-full w-full"
+                    src={demoEmbedSrc}
+                    title="Cliplore demo video"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-muted/10 p-6 sm:p-8 lg:p-10">

@@ -3,5 +3,6 @@ import HomeClient from "./HomeClient";
 export const dynamic = "force-dynamic";
 
 export default function MarketingHomePage() {
-  return <HomeClient />;
+  const demoVideoUrl = process.env.DEMO_VIDEO_URL?.trim() ?? "";
+  return <HomeClient demoVideoUrl={demoVideoUrl} />;
 }

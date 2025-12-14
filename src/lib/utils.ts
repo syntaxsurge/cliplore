@@ -5,6 +5,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function getYouTubeVideoId(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.hostname === "youtu.be") {
+      const id = parsed.pathname.replace("/", "").trim();
+      return id || null;
+    }
+
+    if (parsed.hostname.endsWith("youtube.com")) {
+      const watchId = parsed.searchParams.get("v");
+      if (watchId) return watchId;
+
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parts[0] === "embed" && parts[1]) return parts[1];
+      if (parts[0] === "shorts" && parts[1]) return parts[1];
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function stableJsonStringify(value: unknown) {
   const seen = new WeakSet<object>();
 

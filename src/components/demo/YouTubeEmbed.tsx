@@ -1,28 +1,4 @@
-import { cn } from "@/lib/utils";
-
-function getYouTubeId(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-
-    if (parsed.hostname === "youtu.be") {
-      const id = parsed.pathname.replace("/", "").trim();
-      return id || null;
-    }
-
-    if (parsed.hostname.endsWith("youtube.com")) {
-      const watchId = parsed.searchParams.get("v");
-      if (watchId) return watchId;
-
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      if (parts[0] === "embed" && parts[1]) return parts[1];
-      if (parts[0] === "shorts" && parts[1]) return parts[1];
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
+import { cn, getYouTubeVideoId } from "@/lib/utils";
 
 export function YouTubeEmbed({
   url,
@@ -33,7 +9,7 @@ export function YouTubeEmbed({
   title: string;
   className?: string;
 }) {
-  const id = getYouTubeId(url);
+  const id = getYouTubeVideoId(url);
   if (!id) return null;
 
   return (
@@ -55,4 +31,3 @@ export function YouTubeEmbed({
     </div>
   );
 }
-
