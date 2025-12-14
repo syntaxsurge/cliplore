@@ -52,7 +52,7 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **Steps:**
   1. **Current page:** https://cliplore.com/projects/[id] — confirm the Generate modal is open with a “Prompt” field visible.
   2. **Current page:** https://cliplore.com/projects/[id] — **Enter values:**
-     - Prompt = [SORA_PROMPT="Premium minimalist studio commercial, clean UI scan animation, proof seal stamp moment, cinematic lighting, no logos"]
+     - Prompt = [SORA_PROMPT="Neon-lit cyberpunk courier sprinting through rainy city streets, tracking shot, cinematic lighting, neon reflections on wet pavement, shallow depth of field, high detail, no text, no logos"]
      - Duration = [SECONDS=8]
      - Size = [SIZE="1280 x 720 (16:9)"]
      Click “Generate clip” — confirm toast “Sora job queued. Track it in History.” → wait for the job to complete.
