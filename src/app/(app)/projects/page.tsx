@@ -1,27 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useAppDispatch, useAppSelector } from "../../store";
+import { useAppDispatch, useAppSelector } from "@/app/store";
 import {
   addProject,
   deleteProject,
   rehydrateProjects,
   setCurrentProject,
-} from "../../store/slices/projectsSlice";
+} from "@/app/store/slices/projectsSlice";
 import {
   listProjects,
   storeProject,
   deleteProject as deleteProjectFromDB,
   exportProjectBundle,
   importProjectBundle,
-} from "../../store";
-import { ProjectState } from "../../types";
+} from "@/app/store";
+import type { ProjectState } from "@/app/types";
 import { toast } from "react-hot-toast";
 import { createConvexProject } from "@/lib/api/convex";
 import { useAccount } from "wagmi";
-import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -29,21 +31,61 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileDown, Film, PlusCircle, Trash2, Upload } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Calendar,
+  FileDown,
+  Film,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createProjectState } from "@/app/store/slices/projectSlice";
+
+type SortKey = "updated" | "created" | "name";
+
+function formatLocalDate(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+}
+
 export default function Projects() {
   const { address } = useAccount();
   const searchParams = useSearchParams();
@@ -51,38 +93,56 @@ export default function Projects() {
   const { projects, currentProjectId } = useAppSelector(
     (state) => state.projects,
   );
+
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isImporting, setIsImporting] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("updated");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCreateProject = async () => {
-    if (!newProjectName.trim()) return;
+  const handleCreateProject = useCallback(async () => {
+    const title = newProjectName.trim();
+    if (!title) return;
     if (!address) {
       toast.error("Connect a wallet to create a project.");
       return;
     }
+    if (isCreatingProject) return;
 
-    const newProject: ProjectState = createProjectState({
-      projectName: newProjectName,
-    });
-
-    await storeProject(newProject);
-    dispatch(addProject(newProject));
+    setIsCreatingProject(true);
     try {
-      await createConvexProject({
-        wallet: address,
-        title: newProjectName,
-        localId: newProject.id,
+      const newProject: ProjectState = createProjectState({
+        projectName: title,
       });
-    } catch {
-      toast.error("Cloud sync failed. Your project is still saved locally.");
+
+      await storeProject(newProject);
+      dispatch(addProject(newProject));
+
+      try {
+        await createConvexProject({
+          wallet: address,
+          title,
+          localId: newProject.id,
+        });
+      } catch {
+        toast.error("Cloud sync failed. Your project is still saved locally.");
+      }
+
+      setNewProjectName("");
+      setIsCreating(false);
+      toast.success("Project created");
+    } finally {
+      setIsCreatingProject(false);
     }
-    setNewProjectName("");
-    setIsCreating(false);
-    toast.success("Project created successfully");
-  };
+  }, [address, dispatch, isCreatingProject, newProjectName]);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -113,6 +173,23 @@ export default function Projects() {
     }
   }, [isCreating]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/") return;
+
+      const activeTag = (document.activeElement as HTMLElement | null)?.tagName ?? "";
+      const isTypingTarget =
+        activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT";
+      if (isTypingTarget) return;
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const handleExportProject = async (projectId: string, name: string) => {
     try {
       const bundle = await exportProjectBundle(projectId);
@@ -138,9 +215,7 @@ export default function Projects() {
     }
   };
 
-  const handleImportFile = async (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setIsImporting(true);
@@ -162,128 +237,248 @@ export default function Projects() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    await deleteProjectFromDB(projectId);
-    dispatch(deleteProject(projectId));
-    const storedProjects = await listProjects();
-    dispatch(rehydrateProjects(storedProjects));
-    toast.success("Project deleted successfully");
+    try {
+      await deleteProjectFromDB(projectId);
+      dispatch(deleteProject(projectId));
+      const storedProjects = await listProjects();
+      dispatch(rehydrateProjects(storedProjects));
+      toast.success("Project deleted");
+    } catch (error) {
+      console.error("Delete failed", error);
+      toast.error("Failed to delete project");
+    }
   };
 
-  const sortedProjects = [...projects].sort(
-    (a, b) =>
-      new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime(),
-  );
+  const visibleProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = normalizedQuery
+      ? projects.filter((p) => p.projectName.toLowerCase().includes(normalizedQuery))
+      : projects;
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortKey === "name") {
+        return a.projectName.localeCompare(b.projectName);
+      }
+
+      const aDate = new Date(
+        sortKey === "created" ? a.createdAt : a.lastModified,
+      ).getTime();
+      const bDate = new Date(
+        sortKey === "created" ? b.createdAt : b.lastModified,
+      ).getTime();
+      return bDate - aDate;
+    });
+
+    return sorted;
+  }, [projects, query, sortKey]);
+
+  const projectCountLabel = useMemo(() => {
+    if (isLoading) return "…";
+    return String(projects.length);
+  }, [isLoading, projects.length]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Creator workspace</p>
-          <h1 className="text-4xl font-semibold text-foreground">Projects</h1>
-          <p className="text-muted-foreground">
-            Start a new timeline, remix an IP asset, or continue a draft.
-          </p>
-        </div>
+    <TooltipProvider>
+      <main
+        id="main"
+        className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 sm:py-12 lg:px-8"
+      >
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Creator workspace</p>
+            <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+              <h1 className="text-4xl font-semibold tracking-tight text-foreground">
+                Projects
+              </h1>
+              <Badge variant="outline" className="tabular-nums">
+                {projectCountLabel}
+              </Badge>
+            </div>
+            <p className="max-w-2xl text-muted-foreground">
+              Start a new timeline, remix an IP asset, or continue a draft. Projects save locally
+              in your browser and sync to the cloud when possible.
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Dialog open={isCreating} onOpenChange={setIsCreating}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setIsCreating(true)}>
-                <PlusCircle className="h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-2">
+            <Dialog open={isCreating} onOpenChange={setIsCreating}>
+              <Button type="button" onClick={() => setIsCreating(true)}>
+                <Plus className="h-4 w-4" />
                 New project
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create new project</DialogTitle>
-                <DialogDescription>
-                  Give your timeline a short, memorable title.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-2">
-                <Label htmlFor="newProjectName">Project name</Label>
-                <Input
-                  id="newProjectName"
-                  ref={inputRef}
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      void handleCreateProject();
-                    } else if (e.key === "Escape") {
-                      setIsCreating(false);
-                    }
-                  }}
-                  placeholder="Project title"
-                />
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsCreating(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => void handleCreateProject()}
-                  disabled={!newProjectName.trim()}
-                >
-                  Create
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-          <Button
-            asChild
-            type="button"
-            variant="outline"
-            disabled={isImporting}
-          >
-            <label className="cursor-pointer">
-              <Upload className="h-4 w-4" />
-              {isImporting ? "Importing…" : "Import project"}
-              <input
-                type="file"
-                accept="application/json"
-                className="hidden"
-                onChange={handleImportFile}
-                disabled={isImporting}
-              />
-            </label>
-          </Button>
-        </div>
-      </div>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create new project</DialogTitle>
+                </DialogHeader>
 
-      {isLoading && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-[140px] rounded-2xl" />
-          ))}
-        </div>
-      )}
+                <div className="space-y-2">
+                  <Label htmlFor="newProjectName">Project name</Label>
+                  <Input
+                    id="newProjectName"
+                    ref={inputRef}
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void handleCreateProject();
+                      if (e.key === "Escape") setIsCreating(false);
+                    }}
+                    placeholder="Project title"
+                    disabled={isCreatingProject}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tip: include a short subject + version (e.g., “Trailer v2”).
+                  </p>
+                </div>
 
-      {!isLoading && sortedProjects.length === 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>No projects yet</CardTitle>
-            <CardDescription>
-              Create your first timeline to start editing.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setIsCreating(true)}>
-              <PlusCircle className="h-4 w-4" />
-              New project
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsCreating(false)}
+                    disabled={isCreatingProject}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => void handleCreateProject()}
+                    disabled={!newProjectName.trim() || isCreatingProject}
+                  >
+                    {isCreatingProject ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Creating…
+                      </>
+                    ) : (
+                      "Create"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={handleImportFile}
+              disabled={isImporting}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isImporting}
+              onClick={() => importInputRef.current?.click()}
+            >
+              {isImporting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="h-4 w-4" />
+              )}
+              {isImporting ? "Importing…" : "Import"}
             </Button>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </div>
 
-      {!isLoading && sortedProjects.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {sortedProjects.map(
-            ({ id, projectName, createdAt, lastModified }) => (
+        <div className="grid gap-3 rounded-2xl border border-border bg-card p-4 lg:grid-cols-12">
+          <div className="lg:col-span-7">
+            <Label htmlFor="projectSearch" className="sr-only">
+              Search projects
+            </Label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="projectSearch"
+                type="search"
+                ref={searchInputRef}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search projects…"
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="lg:col-span-3">
+            <Label htmlFor="projectSort" className="sr-only">
+              Sort projects
+            </Label>
+            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+              <SelectTrigger id="projectSort">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="updated">Recently updated</SelectItem>
+                <SelectItem value="created">Recently created</SelectItem>
+                <SelectItem value="name">Name (A–Z)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="lg:col-span-2 flex items-center justify-end">
+            {query.trim() ? (
+              <Button type="button" variant="ghost" onClick={() => setQuery("")}>
+                Clear
+              </Button>
+            ) : (
+              <div className="text-xs text-muted-foreground">
+                Press <span className="font-mono">/</span> to search
+              </div>
+            )}
+          </div>
+        </div>
+
+        <Alert variant="info">
+          <AlertTitle>Local-first drafts</AlertTitle>
+          <AlertDescription>
+            Projects are stored in your browser. Cloud sync is best-effort and never blocks
+            creation or editing.
+          </AlertDescription>
+        </Alert>
+
+        {isLoading ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-[164px] rounded-2xl" />
+            ))}
+          </div>
+        ) : projects.length === 0 ? (
+          <Card>
+            <CardHeader className="space-y-2">
+              <CardTitle>No projects yet</CardTitle>
+              <CardDescription>
+                Create your first timeline to start editing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" onClick={() => setIsCreating(true)}>
+                <Plus className="h-4 w-4" />
+                New project
+              </Button>
+            </CardContent>
+          </Card>
+        ) : visibleProjects.length === 0 ? (
+          <Card>
+            <CardHeader className="space-y-2">
+              <CardTitle>No results</CardTitle>
+              <CardDescription>
+                No projects match <span className="font-mono">“{query.trim()}”</span>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" onClick={() => setQuery("")}>
+                Clear search
+              </Button>
+              <Button type="button" onClick={() => setIsCreating(true)}>
+                <Plus className="h-4 w-4" />
+                New project
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleProjects.map(({ id, projectName, createdAt, lastModified }) => (
               <Card
                 key={id}
                 className={cn(
@@ -296,54 +491,113 @@ export default function Projects() {
                   onClick={() => dispatch(setCurrentProject(id))}
                   className="block h-full"
                 >
-                  <CardHeader className="space-y-1 pr-16">
-                    <CardTitle className="flex items-center gap-2 truncate">
-                      <Film className="h-4 w-4 text-muted-foreground" />
-                      {projectName}
-                    </CardTitle>
-                    <CardDescription>
-                      Updated {new Date(lastModified).toLocaleDateString()}
+                  <CardHeader className="space-y-2 pr-14">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="flex min-w-0 items-center gap-2 text-base">
+                        <Film className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{projectName}</span>
+                      </CardTitle>
+                      {id === currentProjectId ? (
+                        <Badge variant="outline">Current</Badge>
+                      ) : null}
+                    </div>
+                    <CardDescription className="flex items-center gap-2">
+                      Updated {formatLocalDate(lastModified)}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground">
-                    Created {new Date(createdAt).toLocaleDateString()}
+                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Created {formatLocalDate(createdAt)}
+                    </div>
                   </CardContent>
                 </Link>
 
-                <div className="absolute right-3 top-3 flex items-center gap-1">
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Export project"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      void handleExportProject(id, projectName);
-                    }}
-                  >
-                    <FileDown className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    aria-label="Delete project"
-                    className="text-red-400 hover:text-red-300"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      void handleDeleteProject(id);
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                <div className="absolute right-3 top-3">
+                  <DropdownMenu>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            aria-label="Project actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent>Actions</TooltipContent>
+                    </Tooltip>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem asChild>
+                        <Link
+                          href={`/projects/${id}`}
+                          onClick={() => dispatch(setCurrentProject(id))}
+                        >
+                          <Film className="h-4 w-4" />
+                          Open
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          void handleExportProject(id, projectName);
+                        }}
+                      >
+                        <FileDown className="h-4 w-4" />
+                        Export JSON
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          setDeleteTarget({ id, name: projectName });
+                        }}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </Card>
-            ),
-          )}
-        </div>
-      )}
-    </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      <AlertDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes <span className="font-medium">{deleteTarget?.name}</span> from your
+              browser storage. This action can’t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "destructive" })}
+              onClick={() => {
+                if (!deleteTarget) return;
+                void handleDeleteProject(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </TooltipProvider>
   );
 }

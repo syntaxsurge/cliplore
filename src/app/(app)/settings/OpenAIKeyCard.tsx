@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-hot-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ExternalLink, Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 
 function safeNextPath(next: string | null): string | null {
   if (!next) return null;
@@ -41,7 +43,13 @@ export function OpenAIKeyCard() {
   useEffect(() => {
     if (focus !== "openai") return;
     const el = document.getElementById("openai-byok-card");
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const prefersReduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el?.scrollIntoView({
+      behavior: prefersReduced ? "auto" : "smooth",
+      block: "start",
+    });
   }, [focus]);
 
   useEffect(() => {
@@ -55,6 +63,12 @@ export function OpenAIKeyCard() {
   const statusLabel = useMemo(() => {
     if (hasKey === null) return "Checking…";
     return hasKey ? "Key saved on this device." : "No key saved yet.";
+  }, [hasKey]);
+
+  const statusBadge = useMemo(() => {
+    if (hasKey === null) return { variant: "outline" as const, label: "Checking" };
+    if (hasKey) return { variant: "success" as const, label: "Saved" };
+    return { variant: "warning" as const, label: "Missing" };
   }, [hasKey]);
 
   const saveKey = () => {
@@ -104,15 +118,24 @@ export function OpenAIKeyCard() {
 
   return (
     <Card id="openai-byok-card">
-      <CardHeader>
-        <CardTitle>AI (Bring your own OpenAI key)</CardTitle>
+      <CardHeader className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <KeyRound className="h-4 w-4" />
+            AI (Bring your own OpenAI key)
+          </CardTitle>
+          <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+        </div>
         <CardDescription>
           Enter your OpenAI API key to enable Sora generation. It’s stored on this
           device as an encrypted, HTTP-only cookie.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="text-sm text-muted-foreground">{statusLabel}</div>
+        <Alert variant={hasKey ? "success" : hasKey === false ? "warning" : "info"}>
+          <AlertTitle>{hasKey ? "Ready for Sora generation" : "Add an OpenAI key"}</AlertTitle>
+          <AlertDescription>{statusLabel}</AlertDescription>
+        </Alert>
 
         <div className="space-y-2">
           <Label htmlFor="openaiApiKey">OpenAI API key</Label>
@@ -138,9 +161,19 @@ export function OpenAIKeyCard() {
               {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Use a Project API key from your OpenAI dashboard and keep it private.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+            <p>Use a Project API key from your OpenAI dashboard and keep it private.</p>
+            <Button asChild variant="link" size="sm" className="h-auto p-0 text-xs">
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                OpenAI API keys
+              </a>
+            </Button>
+          </div>
         </div>
       </CardContent>
       <CardFooter className="flex flex-wrap justify-end gap-2">
@@ -150,7 +183,14 @@ export function OpenAIKeyCard() {
           disabled={isPending || apiKey.trim().length === 0}
           className="min-w-[140px]"
         >
-          {isPending ? "Saving…" : "Save key"}
+          {isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Saving…
+            </>
+          ) : (
+            "Save key"
+          )}
         </Button>
         <Button
           type="button"
@@ -165,4 +205,3 @@ export function OpenAIKeyCard() {
     </Card>
   );
 }
-
