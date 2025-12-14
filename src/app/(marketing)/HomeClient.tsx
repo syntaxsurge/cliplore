@@ -12,11 +12,14 @@ import {
   Database,
   FolderPlus,
   Gavel,
+  Globe,
   LayoutDashboard,
+  PlayCircle,
   Settings,
   Sparkles,
   SquarePen,
   Store,
+  Wallet,
   WandSparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -82,17 +85,32 @@ const PRODUCT_TONE_STYLES = {
 
 const PRODUCT_MAP: readonly ProductMapItem[] = [
   {
-    title: "Studio",
+    title: "Demo hub",
     description:
-      "Generate with Sora and edit timelines in your browser—no installs, no render queue.",
-    href: "/projects",
-    cta: "Open studio",
-    access: "wallet",
-    icon: WandSparkles,
+      "Watch polished demo cuts and copy exact prompts—each demo includes Story links and references.",
+    href: "/demo",
+    cta: "Open demos",
+    access: "public",
+    icon: Clapperboard,
     highlights: [
-      "Projects list + full-screen editor",
-      "AI Studio generation history",
-      "Export + publish flow inside the editor",
+      "Genre cards with demo timelines",
+      "YouTube embeds + Story explorer links",
+      "Copy-ready prompts for each clip",
+    ],
+    tone: "amber",
+  },
+  {
+    title: "Demo detail",
+    description:
+      "Open a single demo page with the final cut, Story links, and the exact prompts used to recreate it.",
+    href: "/demo/horror",
+    cta: "Open a demo detail",
+    access: "public",
+    icon: PlayCircle,
+    highlights: [
+      "YouTube embed + Story links",
+      "Copy all prompts in one click",
+      "Two clip prompts per demo",
     ],
     tone: "violet",
   },
@@ -110,6 +128,51 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Jump to remix projects after minting",
     ],
     tone: "sky",
+  },
+  {
+    title: "Dataset marketplace",
+    description:
+      "Browse datasets and open detail pages (/datasets/[ipId]) with Story + IPFS references.",
+    href: "/datasets",
+    cta: "Explore datasets",
+    access: "public",
+    icon: BookOpen,
+    highlights: [
+      "Marketplace listing for dataset IP assets",
+      "License minting and onchain references",
+      "Clear metadata + artifact fingerprints",
+    ],
+    tone: "sky",
+  },
+  {
+    title: "Project library",
+    description:
+      "Create and manage drafts with search, import/export bundles, and optional metadata sync to Convex.",
+    href: "/projects?create=1",
+    cta: "Create a project",
+    access: "wallet",
+    icon: FolderPlus,
+    highlights: [
+      "Local drafts with import/export bundles",
+      "Search + sort by updated/created/name",
+      "Quick-start remix projects from licensed IP",
+    ],
+    tone: "sky",
+  },
+  {
+    title: "Studio",
+    description:
+      "Generate with Sora and edit timelines in your browser—no installs, no render queue.",
+    href: "/projects",
+    cta: "Open studio",
+    access: "wallet",
+    icon: WandSparkles,
+    highlights: [
+      "Projects list + full-screen editor",
+      "AI Studio generation history",
+      "Export + publish flow inside the editor",
+    ],
+    tone: "violet",
   },
   {
     title: "Publish IP",
@@ -157,21 +220,6 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
     tone: "amber",
   },
   {
-    title: "Dataset marketplace",
-    description:
-      "Browse datasets and open detail pages (/datasets/[ipId]) with Story + IPFS references.",
-    href: "/datasets",
-    cta: "Explore datasets",
-    access: "public",
-    icon: BookOpen,
-    highlights: [
-      "Marketplace listing for dataset IP assets",
-      "License minting and onchain references",
-      "Clear metadata + artifact fingerprints",
-    ],
-    tone: "sky",
-  },
-  {
     title: "Enforcement",
     description:
       "Verify suspected content by hashes + C2PA, pin evidence, and raise Story disputes from one workspace.",
@@ -215,36 +263,6 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "OpenAI BYOK key management",
     ],
     tone: "violet",
-  },
-  {
-    title: "Demo hub",
-    description:
-      "Watch polished demo cuts and copy exact prompts—each demo includes Story links and references.",
-    href: "/demo",
-    cta: "Open demos",
-    access: "public",
-    icon: Clapperboard,
-    highlights: [
-      "Genre cards with demo timelines",
-      "YouTube embeds + Story explorer links",
-      "Copy-ready prompts for each clip",
-    ],
-    tone: "amber",
-  },
-  {
-    title: "Project library",
-    description:
-      "Create and manage drafts with search, import/export bundles, and optional metadata sync to Convex.",
-    href: "/projects?create=1",
-    cta: "Create a project",
-    access: "wallet",
-    icon: FolderPlus,
-    highlights: [
-      "Local drafts with import/export bundles",
-      "Search + sort by updated/created/name",
-      "Quick-start remix projects from licensed IP",
-    ],
-    tone: "sky",
   },
 ] as const;
 
@@ -295,8 +313,21 @@ const WORKFLOW_TONES: readonly ProductTone[] = [
 ] as const;
 
 function AccessBadge({ access }: { access: AccessType }) {
-  if (access === "public") return <Badge variant="outline">Public</Badge>;
-  return <Badge>Wallet</Badge>;
+  if (access === "public") {
+    return (
+      <Badge variant="outline" className="gap-1.5 whitespace-nowrap">
+        <Globe className="h-3.5 w-3.5" />
+        Browse
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge variant="outline" className="gap-1.5 whitespace-nowrap bg-muted/60">
+      <Wallet className="h-3.5 w-3.5" />
+      Connect wallet
+    </Badge>
+  );
 }
 
 function ProductMapCard({
@@ -529,7 +560,8 @@ export default function HomeClient() {
               </h2>
               <p className="mx-auto max-w-3xl text-muted-foreground">
                 Use this as your map: the full Cliplore surface area, organized into one-click entry
-                points.
+                points. Browse the public pages without a wallet, then connect to create, publish,
+                and enforce.
               </p>
             </motion.div>
 
