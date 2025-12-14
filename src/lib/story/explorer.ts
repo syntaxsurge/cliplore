@@ -24,5 +24,5 @@ export function getStoryTxExplorerUrl(params: {
 }) {
   const chainId = params.chainId ?? clientEnv.NEXT_PUBLIC_STORY_CHAIN_ID;
   const baseUrl = getStoryProtocolExplorerBaseUrl(chainId);
-  return `${baseUrl}/tx/${encodeURIComponent(params.txHash)}`;
+  return `${baseUrl}/transactions/${encodeURIComponent(params.txHash)}`;
 }
