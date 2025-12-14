@@ -32,8 +32,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 type AccessType = "public" | "wallet";
+
+type ProductTone = "violet" | "sky" | "emerald" | "amber" | "rose";
 
 type ProductMapItem = {
   title: string;
@@ -43,8 +46,39 @@ type ProductMapItem = {
   access: AccessType;
   icon: LucideIcon;
   highlights: readonly string[];
-  className?: string;
+  tone: ProductTone;
 };
+
+const PRODUCT_TONE_STYLES = {
+  violet: {
+    accent: "bg-gradient-to-r from-violet-500/55 via-indigo-500/30 to-transparent",
+    glow: "bg-gradient-to-br from-violet-500/10 via-transparent to-indigo-500/10",
+    icon: "border-violet-500/25 bg-violet-500/10 text-violet-700 dark:text-violet-200",
+  },
+  sky: {
+    accent: "bg-gradient-to-r from-sky-500/55 via-cyan-500/30 to-transparent",
+    glow: "bg-gradient-to-br from-sky-500/10 via-transparent to-cyan-500/10",
+    icon: "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-200",
+  },
+  emerald: {
+    accent: "bg-gradient-to-r from-emerald-500/55 via-teal-500/30 to-transparent",
+    glow: "bg-gradient-to-br from-emerald-500/10 via-transparent to-teal-500/10",
+    icon: "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200",
+  },
+  amber: {
+    accent: "bg-gradient-to-r from-amber-500/55 via-orange-500/30 to-transparent",
+    glow: "bg-gradient-to-br from-amber-500/10 via-transparent to-orange-500/10",
+    icon: "border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+  },
+  rose: {
+    accent: "bg-gradient-to-r from-rose-500/55 via-fuchsia-500/30 to-transparent",
+    glow: "bg-gradient-to-br from-rose-500/10 via-transparent to-fuchsia-500/10",
+    icon: "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-200",
+  },
+} as const satisfies Record<
+  ProductTone,
+  { accent: string; glow: string; icon: string }
+>;
 
 const PRODUCT_MAP: readonly ProductMapItem[] = [
   {
@@ -60,7 +94,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "AI Studio generation history",
       "Export + publish flow inside the editor",
     ],
-    className: "lg:col-span-7",
+    tone: "violet",
   },
   {
     title: "Explore marketplace",
@@ -75,7 +109,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "License minting from IP detail pages",
       "Jump to remix projects after minting",
     ],
-    className: "lg:col-span-5",
+    tone: "sky",
   },
   {
     title: "Publish IP",
@@ -90,7 +124,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Pin IPA metadata-standard JSON to IPFS",
       "Register + attach license terms on Story",
     ],
-    className: "lg:col-span-4",
+    tone: "emerald",
   },
   {
     title: "Assets",
@@ -105,7 +139,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Asset dashboard (/assets/[ipId]) + IPFi actions",
       "Royalties, licenses, and metadata tabs",
     ],
-    className: "lg:col-span-4",
+    tone: "rose",
   },
   {
     title: "Datasets",
@@ -120,7 +154,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Register dataset IP with versioned dataset payload",
       "Sync marketplace listing to Convex",
     ],
-    className: "lg:col-span-4",
+    tone: "amber",
   },
   {
     title: "Dataset marketplace",
@@ -135,7 +169,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "License minting and onchain references",
       "Clear metadata + artifact fingerprints",
     ],
-    className: "lg:col-span-6",
+    tone: "sky",
   },
   {
     title: "Enforcement",
@@ -150,7 +184,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Pin evidence bundles to IPFS via Pinata",
       "Raise disputes and track reports in Convex",
     ],
-    className: "lg:col-span-6",
+    tone: "rose",
   },
   {
     title: "Dashboard",
@@ -165,7 +199,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Fast jump into the studio",
       "Recent Story registrations and links",
     ],
-    className: "lg:col-span-3",
+    tone: "emerald",
   },
   {
     title: "Settings",
@@ -180,7 +214,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Creator display name",
       "OpenAI BYOK key management",
     ],
-    className: "lg:col-span-3",
+    tone: "violet",
   },
   {
     title: "Demo hub",
@@ -195,7 +229,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "YouTube embeds + Story explorer links",
       "Copy-ready prompts for each clip",
     ],
-    className: "lg:col-span-3",
+    tone: "amber",
   },
   {
     title: "Project library",
@@ -210,7 +244,7 @@ const PRODUCT_MAP: readonly ProductMapItem[] = [
       "Search + sort by updated/created/name",
       "Quick-start remix projects from licensed IP",
     ],
-    className: "lg:col-span-3",
+    tone: "sky",
   },
 ] as const;
 
@@ -251,9 +285,18 @@ const WORKFLOW: readonly {
   },
 ] as const;
 
+const WORKFLOW_TONES: readonly ProductTone[] = [
+  "violet",
+  "sky",
+  "emerald",
+  "rose",
+  "amber",
+  "sky",
+] as const;
+
 function AccessBadge({ access }: { access: AccessType }) {
   if (access === "public") return <Badge variant="outline">Public</Badge>;
-  return <Badge>Wallet required</Badge>;
+  return <Badge>Wallet</Badge>;
 }
 
 function ProductMapCard({
@@ -266,17 +309,37 @@ function ProductMapCard({
   fadeUp: (delay?: number) => any;
 }) {
   const Icon = card.icon;
+  const tone = PRODUCT_TONE_STYLES[card.tone];
   return (
-    <motion.div {...fadeUp(index * 0.04)} className={card.className}>
-      <Card className="group h-full overflow-hidden transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md">
-        <CardHeader className="space-y-3">
+    <motion.div {...fadeUp(index * 0.04)} className="h-full">
+      <Card className="group relative flex h-full flex-col overflow-hidden rounded-3xl border-border/70 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-border hover:shadow-lg">
+        <div
+          aria-hidden="true"
+          className={cn("pointer-events-none absolute inset-x-0 top-0 h-px", tone.accent)}
+        />
+        <div
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100",
+            tone.glow,
+          )}
+        />
+
+        <CardHeader className="relative space-y-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-muted/40 text-foreground">
+            <div className="flex min-w-0 items-center gap-3">
+              <div
+                className={cn(
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border",
+                  tone.icon,
+                )}
+              >
                 <Icon className="h-5 w-5" />
               </div>
-              <div className="space-y-1">
-                <CardTitle className="text-base">{card.title}</CardTitle>
+              <div className="min-w-0 space-y-1">
+                <CardTitle className="line-clamp-1 text-base leading-tight tracking-tight">
+                  {card.title}
+                </CardTitle>
                 <div className="flex flex-wrap items-center gap-2">
                   <AccessBadge access={card.access} />
                 </div>
@@ -284,27 +347,31 @@ function ProductMapCard({
             </div>
           </div>
 
-          <CardDescription className="text-sm leading-relaxed">
+          <CardDescription className="line-clamp-2 text-sm leading-relaxed">
             {card.description}
           </CardDescription>
         </CardHeader>
 
-        <CardContent className="space-y-4">
+        <CardContent className="relative flex-1 space-y-4">
           <ul className="space-y-2 text-sm text-muted-foreground">
             {card.highlights.map((item) => (
               <li key={item} className="flex gap-2">
-                <Check className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                <span>{item}</span>
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="line-clamp-1">{item}</span>
               </li>
             ))}
           </ul>
         </CardContent>
 
-        <CardFooter className="pt-0">
-          <Button asChild variant="secondary" className="w-full justify-between">
+        <CardFooter className="relative mt-auto pt-0">
+          <Button
+            asChild
+            variant="outline"
+            className="group/cta w-full justify-between rounded-xl bg-background/60"
+          >
             <Link href={card.href}>
               {card.cta}
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-4 w-4 transition-transform group-hover/cta:translate-x-0.5" />
             </Link>
           </Button>
         </CardFooter>
@@ -327,7 +394,7 @@ export default function HomeClient() {
   });
 
   return (
-    <div className="space-y-24 pb-24">
+    <div className="space-y-20 pb-24">
       <section className="relative overflow-hidden border-b border-border">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,119,198,0.22),transparent_65%)]" />
         <motion.div
@@ -451,147 +518,246 @@ export default function HomeClient() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
-        <motion.div {...fadeUp(0)} className="space-y-2 text-center">
-          <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">
-            Everything you can do in Cliplore
-          </h2>
-          <p className="mx-auto max-w-3xl text-muted-foreground">
-            Use this as your map: every major page is here, with a clear reason to click.
-          </p>
-        </motion.div>
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-muted/10 p-6 sm:p-8 lg:p-10">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,119,198,0.14),transparent_60%)]" />
+          <div className="relative space-y-10">
+            <motion.div {...fadeUp(0)} className="space-y-3 text-center">
+              <p className="text-sm font-medium text-muted-foreground">Product map</p>
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                Everything you can do in Cliplore
+              </h2>
+              <p className="mx-auto max-w-3xl text-muted-foreground">
+                Use this as your map: the full Cliplore surface area, organized into one-click entry
+                points.
+              </p>
+            </motion.div>
 
-        <div className="grid gap-4 lg:grid-cols-12">
-          {PRODUCT_MAP.map((card, index) => (
-            <ProductMapCard key={card.title} card={card} index={index} fadeUp={fadeUp} />
-          ))}
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {PRODUCT_MAP.map((card, index) => (
+                <ProductMapCard key={card.title} card={card} index={index} fadeUp={fadeUp} />
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
-        <motion.div {...fadeUp(0)} className="space-y-2 text-center">
-          <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">
-            A calm, end-to-end workflow
-          </h2>
-          <p className="mx-auto max-w-2xl text-muted-foreground">
-            From first prompt to enforceable rights—without losing context between tools.
-          </p>
-        </motion.div>
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-muted/10 p-6 sm:p-8 lg:p-10">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_60%)]" />
+          <div className="relative grid gap-10 lg:grid-cols-12 lg:items-start">
+            <motion.div {...fadeUp(0)} className="space-y-4 lg:col-span-4">
+              <p className="text-sm font-medium text-muted-foreground">Workflow</p>
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                A calm, end-to-end workflow
+              </h2>
+              <p className="text-muted-foreground">
+                From first prompt to enforceable rights—without losing context between tools.
+              </p>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {WORKFLOW.map((step, index) => {
-            const Icon = step.icon;
-            return (
-              <motion.div key={step.title} {...fadeUp(index * 0.05)}>
-                <Card className="h-full">
-                  <CardHeader className="space-y-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-muted/40 text-foreground">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <CardTitle className="text-lg">{step.title}</CardTitle>
-                    <CardDescription className="text-base leading-relaxed">
-                      {step.description}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              </motion.div>
-            );
-          })}
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline" className="gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Sora generation
+                </Badge>
+                <Badge variant="outline" className="gap-1.5">
+                  <Blocks className="h-3.5 w-3.5" />
+                  Story registration
+                </Badge>
+                <Badge variant="outline" className="gap-1.5">
+                  <Store className="h-3.5 w-3.5" />
+                  License minting
+                </Badge>
+                <Badge variant="outline" className="gap-1.5">
+                  <Gavel className="h-3.5 w-3.5" />
+                  Evidence + disputes
+                </Badge>
+              </div>
+            </motion.div>
+
+            <div className="grid gap-5 sm:grid-cols-2 lg:col-span-8 lg:grid-cols-3">
+              {WORKFLOW.map((step, index) => {
+                const Icon = step.icon;
+                const tone = PRODUCT_TONE_STYLES[WORKFLOW_TONES[index] ?? "violet"];
+                const stepNumber = String(index + 1).padStart(2, "0");
+                return (
+                  <motion.div key={step.title} {...fadeUp(0.05 + index * 0.04)} className="h-full">
+                    <Card className="group relative flex h-full flex-col overflow-hidden rounded-3xl border-border/70 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-border hover:shadow-lg">
+                      <div
+                        aria-hidden="true"
+                        className={cn(
+                          "pointer-events-none absolute inset-x-0 top-0 h-px",
+                          tone.accent,
+                        )}
+                      />
+                      <div
+                        aria-hidden="true"
+                        className={cn(
+                          "pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100",
+                          tone.glow,
+                        )}
+                      />
+
+                      <CardHeader className="relative space-y-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div
+                            className={cn(
+                              "flex h-11 w-11 items-center justify-center rounded-2xl border",
+                              tone.icon,
+                            )}
+                          >
+                            <Icon className="h-5 w-5" />
+                          </div>
+                          <Badge variant="outline" className="tabular-nums text-[11px]">
+                            {stepNumber}
+                          </Badge>
+                        </div>
+                        <CardTitle className="text-lg leading-tight tracking-tight">
+                          {step.title}
+                        </CardTitle>
+                        <CardDescription className="text-sm leading-relaxed">
+                          {step.description}
+                        </CardDescription>
+                      </CardHeader>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
-        <motion.div {...fadeUp(0)} className="mx-auto max-w-3xl space-y-2 text-center">
-          <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">FAQ</h2>
-          <p className="text-muted-foreground">
-            The quick answers that usually unblock first-time creators.
-          </p>
-        </motion.div>
-
-        <motion.div {...fadeUp(0.05)} className="mx-auto max-w-3xl">
-          <Card>
-            <CardHeader className="space-y-2">
-              <CardTitle className="text-base">Common questions</CardTitle>
-              <CardDescription>
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-muted/10 p-6 sm:p-8 lg:p-10">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_60%)]" />
+          <div className="relative grid gap-10 lg:grid-cols-12 lg:items-start">
+            <motion.div {...fadeUp(0)} className="space-y-4 lg:col-span-5">
+              <p className="text-sm font-medium text-muted-foreground">FAQ</p>
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                Quick answers
+              </h2>
+              <p className="text-muted-foreground">
                 Clear expectations for wallets, publishing, datasets, and enforcement.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Accordion type="single" collapsible className="w-full">
-                <AccordionItem value="wallet">
-                  <AccordionTrigger>Do I need a wallet to use Cliplore?</AccordionTrigger>
-                  <AccordionContent>
-                    Explore and demos are public. Studio pages (projects, dashboard, publishing,
-                    enforcement, and settings) are wallet-gated so IP ownership is tied to your
-                    account.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="publish">
-                  <AccordionTrigger>What happens when I publish an IP asset?</AccordionTrigger>
-                  <AccordionContent>
-                    Cliplore uploads your export, pins metadata to IPFS, registers the IP on Story
-                    Protocol, and applies license preset terms so remixers can mint licenses.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="datasets">
-                  <AccordionTrigger>What’s different about datasets?</AccordionTrigger>
-                  <AccordionContent>
-                    Datasets are registered as Story IP Assets with a versioned dataset payload,
-                    plus a manifest pointer and hashed artifacts—then listed under the dataset
-                    marketplace for licensing.
-                  </AccordionContent>
-                </AccordionItem>
-                <AccordionItem value="enforcement">
-                  <AccordionTrigger>How does enforcement work?</AccordionTrigger>
-                  <AccordionContent>
-                    You can hash a file upload or a remote URL, verify C2PA credentials when
-                    available, pin an evidence bundle to IPFS, and raise Story disputes to track and
-                    enforce rights.
-                  </AccordionContent>
-                </AccordionItem>
-              </Accordion>
-            </CardContent>
-          </Card>
-        </motion.div>
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button asChild variant="outline">
+                  <Link href="/demo">Open demo hub</Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link href="/explore">Explore IP</Link>
+                </Button>
+              </div>
+            </motion.div>
+
+            <motion.div {...fadeUp(0.05)} className="lg:col-span-7">
+              <div className="overflow-hidden rounded-2xl border border-border/70 bg-background/50">
+                <div className="border-b border-border/70 px-6 py-5">
+                  <p className="text-sm font-medium text-foreground">Common questions</p>
+                  <p className="text-sm text-muted-foreground">
+                    Short answers with enough detail to keep you moving.
+                  </p>
+                </div>
+
+                <div className="px-6">
+                  <Accordion type="single" collapsible className="w-full">
+                    <AccordionItem value="wallet" className="border-border/70 first:border-t">
+                      <AccordionTrigger className="py-5 text-base font-medium hover:no-underline">
+                        Do I need a wallet to use Cliplore?
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        Explore and demos are public. Studio pages (projects, dashboard, publishing,
+                        enforcement, and settings) are wallet-gated so IP ownership is tied to your
+                        account.
+                      </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="publish" className="border-border/70">
+                      <AccordionTrigger className="py-5 text-base font-medium hover:no-underline">
+                        What happens when I publish an IP asset?
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        Cliplore uploads your export, pins metadata to IPFS, registers the IP on
+                        Story Protocol, and applies license preset terms so remixers can mint
+                        licenses.
+                      </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="datasets" className="border-border/70">
+                      <AccordionTrigger className="py-5 text-base font-medium hover:no-underline">
+                        What’s different about datasets?
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        Datasets are registered as Story IP Assets with a versioned dataset payload,
+                        plus a manifest pointer and hashed artifacts—then listed under the dataset
+                        marketplace for licensing.
+                      </AccordionContent>
+                    </AccordionItem>
+                    <AccordionItem value="enforcement" className="border-border/70">
+                      <AccordionTrigger className="py-5 text-base font-medium hover:no-underline">
+                        How does enforcement work?
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        You can hash a file upload or a remote URL, verify C2PA credentials when
+                        available, pin an evidence bundle to IPFS, and raise Story disputes to track
+                        and enforce rights.
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <motion.div
           {...fadeUp(0)}
-          className="relative overflow-hidden rounded-3xl border border-border bg-card p-8 text-center"
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-500/25 via-sky-500/10 to-emerald-500/25 p-px"
         >
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.14),transparent_55%)]" />
-          <div className="relative mx-auto max-w-2xl space-y-4">
-            <h3 className="text-2xl font-semibold text-foreground sm:text-3xl">
-              Start with a project—or browse what’s already licensed
-            </h3>
-            <p className="text-muted-foreground">
-              Create your first timeline in the Studio, or explore IP and datasets you can license
-              today.
-            </p>
+          <div className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-8 text-center sm:p-10">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(120,119,198,0.16),transparent_55%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(16,185,129,0.14),transparent_55%)]" />
+            <div className="relative mx-auto max-w-2xl space-y-5">
+              <p className="text-sm font-medium text-muted-foreground">Get started</p>
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+                Start building Story-native video IP
+              </h2>
+              <p className="text-muted-foreground">
+                Open the Studio to create and publish, or explore licensed IP and datasets you can
+                remix safely.
+              </p>
 
-            <div className="flex flex-col justify-center gap-3 sm:flex-row">
-              <Button asChild size="lg">
-                <Link href="/projects">
-                  Open studio
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/explore">Explore IP</Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/datasets">Explore datasets</Link>
-              </Button>
-            </div>
+              <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                <Button asChild size="lg">
+                  <Link href="/projects">
+                    Open studio
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/explore">Explore IP</Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/datasets">Explore datasets</Link>
+                </Button>
+              </div>
 
-            <Separator className="my-2" />
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="outline">In-browser editor</Badge>
+                <Badge variant="outline">IPFS metadata</Badge>
+                <Badge variant="outline">License presets</Badge>
+                <Badge variant="outline">Evidence bundles</Badge>
+              </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
-              <span>Prefer a guided tour?</span>
-              <Button asChild variant="link" className="h-auto p-0 text-xs">
-                <Link href="/demo">Open the demo hub</Link>
-              </Button>
+              <Separator className="my-2" />
+
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
+                <span>Prefer a guided tour?</span>
+                <Button asChild variant="link" className="h-auto p-0 text-xs">
+                  <Link href="/demo">Open the demo hub</Link>
+                </Button>
+              </div>
             </div>
           </div>
         </motion.div>
