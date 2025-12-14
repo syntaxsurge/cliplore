@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { IpMetadata } from "@story-protocol/core-sdk";
 import { sha256, toHex, type Address, type Hash } from "viem";
+import { datasetMetadataInputSchema } from "@/lib/story/dataset-metadata";
 
 const uriSchema = z
   .string()
@@ -29,7 +30,7 @@ export const uploadIpMetadataSchema = z.object({
   ipType: z.string().min(1).max(64).optional(),
   tags: z.array(z.string().min(1).max(48)).max(32).optional(),
   mediaUri: uriSchema,
-  mediaHash: hashSchema.optional(),
+  mediaHash: hashSchema,
   thumbnailUri: uriSchema.optional(),
   imageHash: hashSchema.optional(),
   mediaMimeType: z.string().min(1).optional(),
@@ -39,18 +40,7 @@ export const uploadIpMetadataSchema = z.object({
   mediaResolution: z.string().min(1).optional(),
   thumbnailMimeType: z.string().min(1).optional(),
   thumbnailSizeBytes: z.number().int().positive().optional(),
-  dataset: z
-    .object({
-      type: z.enum(["pov", "drone", "mocap", "robotics", "medical", "other"]),
-      tags: z.array(z.string().min(1).max(48)).max(32).optional(),
-      captureDevice: z.string().min(1).max(140).optional(),
-      captureLocation: z.string().min(1).max(140).optional(),
-      usageNotes: z.string().min(1).max(280).optional(),
-      containsPeople: z.boolean().optional(),
-      containsSensitiveData: z.boolean().optional(),
-      rightsConfirmed: z.boolean().optional(),
-    })
-    .optional(),
+  dataset: datasetMetadataInputSchema.optional(),
 });
 
 export type UploadIpMetadataInput = z.infer<typeof uploadIpMetadataSchema>;
@@ -95,11 +85,6 @@ export function buildStoryIpMetadata(input: UploadIpMetadataInput) {
   }
   if (input.dataset) {
     metadata.dataset = input.dataset;
-    const mergedTags = new Set<string>([...(metadata.tags ?? [])]);
-    for (const tag of input.dataset.tags ?? []) mergedTags.add(tag);
-    if (mergedTags.size) {
-      metadata.tags = Array.from(mergedTags);
-    }
   }
 
   const primaryLabel =

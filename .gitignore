@@ -48,3 +48,4 @@ yarn-error.log*
 # root-only markdown (keep primary docs)
 /*.md
 !/README.md
+!/AGENTS.md

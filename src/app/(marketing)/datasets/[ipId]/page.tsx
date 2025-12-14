@@ -82,6 +82,12 @@ export default async function DatasetDetailPage({ params }: Props) {
 
   const datasetMetadata =
     ipMetadata && typeof ipMetadata === "object" ? (ipMetadata as any).dataset : null;
+  const dataset = datasetMetadata && typeof datasetMetadata === "object" ? (datasetMetadata as any) : null;
+  const datasetManifest = dataset?.manifest && typeof dataset.manifest === "object" ? dataset.manifest : null;
+  const datasetArtifacts = Array.isArray(dataset?.artifacts) ? (dataset.artifacts as any[]) : [];
+  const datasetModalities = Array.isArray(dataset?.modalities) ? (dataset.modalities as any[]) : [];
+  const datasetReleases = dataset?.releases && typeof dataset.releases === "object" ? dataset.releases : null;
+  const datasetCapture = dataset?.capture && typeof dataset.capture === "object" ? dataset.capture : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
@@ -245,9 +251,185 @@ export default async function DatasetDetailPage({ params }: Props) {
           {datasetMetadata ? (
             <div className="rounded-lg border border-border p-3">
               <p className="text-sm font-medium text-foreground">Dataset metadata</p>
-              <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs text-foreground">
-                {JSON.stringify(datasetMetadata, null, 2)}
-              </pre>
+              {dataset ? (
+                <div className="mt-3 grid gap-4">
+                  <div className="flex flex-wrap gap-2">
+                    {typeof dataset.schemaVersion === "string" ? (
+                      <Badge variant="outline">{dataset.schemaVersion}</Badge>
+                    ) : null}
+                    {typeof dataset.version === "string" ? (
+                      <Badge variant="outline">v{dataset.version}</Badge>
+                    ) : null}
+                    {datasetModalities.length ? (
+                      <Badge variant="outline">{datasetModalities.join(", ")}</Badge>
+                    ) : null}
+                  </div>
+
+                  {datasetCapture ? (
+                    <div className="rounded-md border border-border bg-muted/30 p-3">
+                      <p className="text-sm font-medium text-foreground">Capture</p>
+                      <div className="mt-2 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
+                        {datasetCapture.captureMethod ? (
+                          <div>
+                            <span className="text-foreground/80">Method: </span>
+                            {String(datasetCapture.captureMethod)}
+                          </div>
+                        ) : null}
+                        {datasetCapture.device ? (
+                          <div>
+                            <span className="text-foreground/80">Device: </span>
+                            {String(datasetCapture.device)}
+                          </div>
+                        ) : null}
+                        {datasetCapture.environment ? (
+                          <div>
+                            <span className="text-foreground/80">Environment: </span>
+                            {String(datasetCapture.environment)}
+                          </div>
+                        ) : null}
+                        {datasetCapture.resolution ? (
+                          <div>
+                            <span className="text-foreground/80">Resolution: </span>
+                            {String(datasetCapture.resolution)}
+                          </div>
+                        ) : null}
+                        {datasetCapture.fps ? (
+                          <div>
+                            <span className="text-foreground/80">FPS: </span>
+                            {String(datasetCapture.fps)}
+                          </div>
+                        ) : null}
+                        {datasetCapture.location?.country || datasetCapture.location?.region ? (
+                          <div className="sm:col-span-2">
+                            <span className="text-foreground/80">Location: </span>
+                            {datasetCapture.location?.privacyLevel
+                              ? `(${String(datasetCapture.location.privacyLevel)}) `
+                              : ""}
+                            {[datasetCapture.location?.region, datasetCapture.location?.country]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {datasetReleases ? (
+                    <div className="rounded-md border border-border bg-muted/30 p-3">
+                      <p className="text-sm font-medium text-foreground">Releases</p>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        {datasetReleases.rightsConfirmed ? (
+                          <Badge variant="success">Rights confirmed</Badge>
+                        ) : (
+                          <Badge variant="warning">Rights unconfirmed</Badge>
+                        )}
+                        {datasetReleases.modelRelease ? (
+                          <Badge variant="outline">Model release</Badge>
+                        ) : null}
+                        {datasetReleases.propertyRelease ? (
+                          <Badge variant="outline">Property release</Badge>
+                        ) : null}
+                        {datasetReleases.thirdPartyAudioCleared ? (
+                          <Badge variant="outline">Audio cleared</Badge>
+                        ) : null}
+                        {datasetReleases.containsPeople ? (
+                          <Badge variant="outline">Contains people</Badge>
+                        ) : null}
+                        {datasetReleases.containsSensitiveData ? (
+                          <Badge variant="warning">Sensitive</Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {datasetManifest?.uri ? (
+                    <div className="rounded-md border border-border bg-muted/30 p-3">
+                      <p className="text-sm font-medium text-foreground">Manifest</p>
+                      <p className="mt-1 break-all text-xs text-muted-foreground">
+                        {String(datasetManifest.uri)}
+                      </p>
+                      {datasetManifest.hash ? (
+                        <p className="mt-1 break-all text-xs text-muted-foreground">
+                          SHA-256: {String(datasetManifest.hash)}
+                        </p>
+                      ) : null}
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button asChild size="sm" variant="secondary">
+                          <a
+                            href={getIpfsGatewayLink(String(datasetManifest.uri))}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View manifest
+                          </a>
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {datasetArtifacts.length ? (
+                    <div className="rounded-md border border-border bg-muted/30 p-3">
+                      <p className="text-sm font-medium text-foreground">Artifacts</p>
+                      <div className="mt-2 space-y-2">
+                        {datasetArtifacts.slice(0, 12).map((artifact) => (
+                          <div key={`${artifact.role}:${artifact.uri}`} className="rounded-md bg-background/60 p-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {artifact.role ? <Badge variant="outline">{String(artifact.role)}</Badge> : null}
+                              {artifact.mimeType ? (
+                                <Badge variant="outline">{String(artifact.mimeType)}</Badge>
+                              ) : null}
+                              {typeof artifact.sizeBytes === "number" ? (
+                                <Badge variant="outline">{formatBytes(artifact.sizeBytes)}</Badge>
+                              ) : null}
+                            </div>
+                            {artifact.uri ? (
+                              <p className="mt-1 break-all text-xs text-muted-foreground">
+                                {String(artifact.uri)}
+                              </p>
+                            ) : null}
+                            {artifact.hash ? (
+                              <p className="mt-1 break-all text-xs text-muted-foreground">
+                                SHA-256: {String(artifact.hash)}
+                              </p>
+                            ) : null}
+                            {artifact.uri ? (
+                              <div className="mt-2">
+                                <Button asChild size="sm" variant="outline">
+                                  <a
+                                    href={ipfsUriToGatewayUrl(String(artifact.uri))}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    Open
+                                  </a>
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                        {datasetArtifacts.length > 12 ? (
+                          <p className="text-xs text-muted-foreground">
+                            Showing 12 / {datasetArtifacts.length} artifacts.
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <details className="rounded-md border border-border bg-muted/30 p-3">
+                    <summary className="cursor-pointer text-sm font-medium text-foreground">
+                      Raw dataset JSON
+                    </summary>
+                    <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs text-foreground">
+                      {JSON.stringify(datasetMetadata, null, 2)}
+                    </pre>
+                  </details>
+                </div>
+              ) : (
+                <pre className="mt-2 max-h-80 overflow-auto rounded-md bg-muted p-3 text-xs text-foreground">
+                  {JSON.stringify(datasetMetadata, null, 2)}
+                </pre>
+              )}
             </div>
           ) : null}
 

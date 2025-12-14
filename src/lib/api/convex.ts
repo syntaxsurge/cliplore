@@ -110,7 +110,15 @@ export async function createConvexIpAsset(input: {
   localProjectId?: string;
   projectTitle?: string;
   assetKind?: "video" | "dataset";
-  datasetType?: "pov" | "drone" | "mocap" | "robotics" | "medical" | "other";
+  datasetType?:
+    | "pov-video"
+    | "drone-footage"
+    | "stereo-video"
+    | "mocap"
+    | "robotics-teleop"
+    | "industrial-sensor"
+    | "medical-imaging"
+    | "mixed";
   tags?: string[];
   mediaMimeType?: string;
   mediaSizeBytes?: number;

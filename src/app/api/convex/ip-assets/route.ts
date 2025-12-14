@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getConvexClient } from "@/lib/db/convex/client";
-
-const datasetTypeSchema = z.enum([
-  "pov",
-  "drone",
-  "mocap",
-  "robotics",
-  "medical",
-  "other",
-]);
+import { datasetTypeSchema as datasetTypeSchemaZod } from "@/lib/story/dataset-metadata";
 
 const createSchema = z.object({
   wallet: z.string().min(1),
   localProjectId: z.string().min(1).optional(),
   projectTitle: z.string().min(1).optional(),
   assetKind: z.enum(["video", "dataset"]).optional(),
-  datasetType: datasetTypeSchema.optional(),
+  datasetType: datasetTypeSchemaZod.optional(),
   tags: z.array(z.string().min(1).max(48)).max(32).optional(),
   mediaMimeType: z.string().min(1).optional(),
   mediaSizeBytes: z.number().int().positive().optional(),
