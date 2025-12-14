@@ -117,12 +117,12 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 
 ## 8. IPFi proof: mint a license from a second wallet (MetaMask approval + confirm)
 - **URL:** https://cliplore.com/ip/[ipId]
-- **Shot:** Public IP page visible; then a second browser window (incognito) connected to a different wallet; a mint flow that triggers MetaMask confirmation.
+- **Shot:** Public IP page visible; then a second browser window connected to a different wallet; a mint flow that triggers MetaMask confirmation.
 - **Steps:**
   1. **Current page:** https://cliplore.com/ip/[ipId] — confirm “Mint license token” is visible.
-  2. **Current page:** https://cliplore.com/ip/[ipId] — **Navigate:** Open a new incognito browser window → open URL directly: https://cliplore.com/ip/[ipId] — confirm the same “IP Asset ID” is visible.
-  3. **Current page:** Incognito https://cliplore.com/ip/[ipId] — **Action:** Click “Connect wallet” → click “MetaMask” → confirm the connected address is different from your creator wallet (starts with “0x…”).
-  4. **Current page:** Incognito https://cliplore.com/ip/[ipId] — **Action:** Click “Mint license token” → confirm MetaMask opens a transaction.
+  2. **Current page:** https://cliplore.com/ip/[ipId] — **Navigate:** Open a new browser window → open URL directly: https://cliplore.com/ip/[ipId] — confirm the same “IP Asset ID” is visible.
+  3. **Current page:** New browser https://cliplore.com/ip/[ipId] — **Action:** Click “Connect wallet” → click “MetaMask” → confirm the connected address is different from your creator wallet (starts with “0x…”).
+  4. **Current page:** New browser https://cliplore.com/ip/[ipId] — **Action:** Click “Mint license token” → confirm MetaMask opens a transaction.
   5. **Current page:** MetaMask popup — **Action:** Click “Confirm” — wait for a “Transaction submitted” / “License minted” success toast on the public page.
   6. **Verify on-screen:** Confirm the public IP page shows a success confirmation (toast, “Minted” state, or a tx hash link shown after mint).
 - **Voiceover:**
@@ -132,15 +132,15 @@ One-liner: A wallet-first, Sora-assisted video editor that exports and publishes
 - **URL:** https://cliplore.com/assets
 - **Shot:** Creator Assets list → asset dashboard → Royalties tab showing Royalty Vault address, tip form, claim section, and wrap/unwrap controls.
 - **Steps:**
-  1. **Current page:** Incognito https://cliplore.com/ip/[ipId] — confirm the license mint succeeded (toast / tx link).
+  1. **Current page:** New browser https://cliplore.com/ip/[ipId] — confirm the license mint succeeded (toast / tx link).
   2. **Current page:** Original browser https://cliplore.com/ip/[ipId] — **Navigate:** Click “Assets” in the header → lands on https://cliplore.com/assets — confirm heading “Assets” is visible.
   3. **Current page:** https://cliplore.com/assets — **Action:** Click your newly published asset row/card → lands on https://cliplore.com/assets/[ipId] — confirm the IP ID (0x…) is visible on the header.
   4. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Click “Royalties” tab → confirm “Royalties vault” is visible and the vault address is NOT 0x000…000.
-  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Wrap / unwrap WIP” → **Enter values:** Wrap IP → WIP = [WRAP_AMOUNT_IP=1] → click “Wrap” → MetaMask → “Confirm”.
-  6. **Current page:** https://cliplore.com/assets/[ipId] — **Enter values:** In “Tip this IP”, Amount (WIP) = [TIP_WIP=1] → click “Send tip” → MetaMask → “Confirm”.
+  5. **Current page:** https://cliplore.com/assets/[ipId] — **Action:** Expand “Wrap / unwrap WIP” → **Enter values:** Wrap IP → WIP = [WRAP_AMOUNT_IP=0.2] → click “Wrap” → MetaMask → “Confirm”.
+  6. **Current page:** https://cliplore.com/assets/[ipId] — **Enter values:** In “Tip this IP”, Amount (WIP) = [TIP_WIP=0.2] → click “Send tip” → MetaMask → “Confirm”.
   7. **Verify on-screen:** In “Claim revenue”, leave “Claim as” = “IP account” (default) → click “Refresh claimable” and confirm “Claimable” updates from “—” to a value.
 - **Voiceover:**
-  > “Back in the creator asset dashboard, royalties are now activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 1 IP into WIP, then send a 1 WIP tip to the IP vault, refresh claimable, and you can see revenue appear—this demonstrates the full IPFi loop.”
+  > “Back in the creator asset dashboard, royalties are now activated after the first license mint. On the Royalties tab, the vault address is live. I wrap 0.2 IP into WIP, then send a 0.2 WIP tip to the IP vault, refresh claimable, and you can see revenue appear—this demonstrates the full IPFi loop.”
 
 ## 10. IPFi claim + fractionalize (transfer royalty tokens)
 - **URL:** https://cliplore.com/assets/[ipId]
