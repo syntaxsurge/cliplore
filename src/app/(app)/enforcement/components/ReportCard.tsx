@@ -13,15 +13,25 @@ import {
 } from "@/lib/api/convex";
 import { clientEnv } from "@/lib/env/client";
 import { getStoryTxExplorerUrl } from "@/lib/story/explorer";
+import { ipfsUriToGatewayUrl } from "@/lib/utils";
 import type { EvidenceBundle } from "@/lib/enforcement/evidence";
 import { evidenceBundleSchema } from "@/lib/enforcement/evidence";
+import { CopyIconButton } from "@/components/data-display/CopyIconButton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { ExternalLink, Gavel, Loader2 } from "lucide-react";
 import type { VerifyResult } from "./VerifyCard";
 
 const DEFAULT_LIVENESS_SECONDS = 60 * 60 * 24 * 30;
@@ -37,7 +47,15 @@ export function ReportCard({
   const { address } = useAccount();
 
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [status, setStatus] = useState<{
+    tone: "info" | "success" | "error";
+    message: string;
+  } | null>(null);
+  const [submission, setSubmission] = useState<{
+    evidenceUri: string;
+    disputeTxHash?: string;
+    disputeId?: string;
+  } | null>(null);
 
   const [targetIpId, setTargetIpId] = useState("");
   const [protectedIpId, setProtectedIpId] = useState<string>("");
@@ -83,6 +101,8 @@ export function ReportCard({
       setTargetIpId(prefill.matches[0].ipId);
     }
     setSuspectSha256(prefill.sha256);
+    setSubmission(null);
+    setStatus(null);
   }, [prefill]);
 
   const computeSuspectSha = useCallback(async () => {
@@ -97,6 +117,7 @@ export function ReportCard({
 
   const submit = useCallback(async () => {
     setStatus(null);
+    setSubmission(null);
     setBusy(true);
 
     try {
@@ -114,7 +135,7 @@ export function ReportCard({
         throw new Error("Liveness must be a positive number of seconds.");
       }
 
-      setStatus("Hashing suspect file…");
+      setStatus({ tone: "info", message: "Hashing suspect file…" });
       const nextSuspectSha = suspectSha256 ?? (await computeSuspectSha());
 
       const evidence: EvidenceBundle = {
@@ -147,7 +168,7 @@ export function ReportCard({
 
       const validated = evidenceBundleSchema.parse(evidence);
 
-      setStatus("Pinning evidence to IPFS…");
+      setStatus({ tone: "info", message: "Pinning evidence to IPFS…" });
       const pinRes = await fetch("/api/enforcement/pin-evidence", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -160,7 +181,7 @@ export function ReportCard({
         sha256: `0x${string}`;
       };
 
-      setStatus("Submitting Story dispute…");
+      setStatus({ tone: "info", message: "Submitting Story dispute…" });
       const disputeRes = await client.dispute.raiseDispute({
         targetIpId: targetIpId.trim() as `0x${string}`,
         cid: pinned.cid,
@@ -190,18 +211,20 @@ export function ReportCard({
       });
       onSubmitted?.();
 
-      if (txHash) {
-        toast.success("Dispute submitted");
-        setStatus(
-          `Dispute submitted.\nTx: ${getStoryTxExplorerUrl({ txHash })}\nEvidence: ${pinned.uri}`,
-        );
-      } else {
-        toast.success("Dispute prepared");
-        setStatus(`Evidence pinned: ${pinned.uri}`);
-      }
+      setSubmission({
+        evidenceUri: pinned.uri,
+        disputeTxHash: txHash,
+        disputeId,
+      });
+
+      toast.success(txHash ? "Dispute submitted" : "Evidence pinned");
+      setStatus({
+        tone: "success",
+        message: txHash ? "Dispute submitted on Story." : "Evidence pinned to IPFS.",
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setStatus(message);
+      setStatus({ tone: "error", message });
     } finally {
       setBusy(false);
     }
@@ -224,13 +247,68 @@ export function ReportCard({
   return (
     <Card className="h-fit">
       <CardHeader className="space-y-2">
-        <CardTitle className="text-base">Report</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Gavel className="h-4 w-4" />
+          Report
+        </CardTitle>
         <p className="text-sm text-muted-foreground">
           Pin an evidence bundle to IPFS, then open a dispute via the Story
           Dispute Module.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
+        {status ? (
+          <Alert
+            variant={
+              status.tone === "success"
+                ? "success"
+                : status.tone === "error"
+                  ? "destructive"
+                  : "info"
+            }
+          >
+            <AlertTitle>
+              {status.tone === "success"
+                ? "Submitted"
+                : status.tone === "error"
+                  ? "Couldn’t submit"
+                  : "Working…"}
+            </AlertTitle>
+            <AlertDescription className="whitespace-pre-wrap">
+              {status.message}
+            </AlertDescription>
+            {submission ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Button asChild size="sm" variant="secondary">
+                  <a
+                    href={ipfsUriToGatewayUrl(submission.evidenceUri)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Evidence
+                  </a>
+                </Button>
+                {submission.disputeTxHash ? (
+                  <Button asChild size="sm" variant="secondary">
+                    <a
+                      href={getStoryTxExplorerUrl({ txHash: submission.disputeTxHash })}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Tx
+                    </a>
+                  </Button>
+                ) : null}
+                {submission.disputeId ? (
+                  <Badge variant="outline">#{submission.disputeId}</Badge>
+                ) : null}
+              </div>
+            ) : null}
+          </Alert>
+        ) : null}
+
         <div className="space-y-2">
           <Label htmlFor="targetIpId">Target IP ID (dispute target)</Label>
           <Input
@@ -243,37 +321,50 @@ export function ReportCard({
 
         <div className="space-y-2">
           <Label htmlFor="protectedIpId">Protected IP (optional)</Label>
-          <select
-            id="protectedIpId"
-            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            value={protectedIpId}
-            onChange={(e) => setProtectedIpId(e.target.value)}
+          <Select
+            value={protectedIpId || "__none__"}
+            onValueChange={(value) => setProtectedIpId(value === "__none__" ? "" : value)}
           >
-            <option value="">None</option>
-            {myAssets.map((a) => (
-              <option key={a.ipId} value={a.ipId}>
-                {a.title} · {a.ipId.slice(0, 10)}…
-              </option>
-            ))}
-          </select>
-          {protectedIpId && <Badge variant="outline">{protectedIpId}</Badge>}
+            <SelectTrigger id="protectedIpId">
+              <SelectValue placeholder="Select an IP Asset" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">None</SelectItem>
+              {myAssets.map((asset) => (
+                <SelectItem key={asset.ipId} value={asset.ipId}>
+                  {asset.title} · {asset.ipId.slice(0, 10)}…
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {protectedIpId ? (
+            <div className="flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs">
+                {protectedIpId}
+              </code>
+              <CopyIconButton value={protectedIpId} label="Copy protected IP ID" />
+            </div>
+          ) : null}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="targetTag">Dispute tag</Label>
-            <select
-              id="targetTag"
-              className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            <Select
               value={targetTag}
-              onChange={(e) => setTargetTag(e.target.value as DisputeTargetTag)}
+              onValueChange={(value) => setTargetTag(value as DisputeTargetTag)}
             >
-              {Object.values(DisputeTargetTag).map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="targetTag">
+                <SelectValue placeholder="Select tag" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(DisputeTargetTag).map((tag) => (
+                  <SelectItem key={tag} value={tag}>
+                    {tag}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -308,11 +399,14 @@ export function ReportCard({
             accept="video/*,image/*,audio/*"
             onChange={(e) => setSuspectFile(e.target.files?.[0] ?? null)}
           />
-          {suspectSha256 && (
-            <div className="rounded-md border p-2 font-mono text-xs break-all">
-              {suspectSha256}
+          {suspectSha256 ? (
+            <div className="flex items-start justify-between gap-2 rounded-md border border-border bg-muted/20 p-2">
+              <code className="min-w-0 flex-1 break-all font-mono text-xs text-foreground">
+                {suspectSha256}
+              </code>
+              <CopyIconButton value={suspectSha256} label="Copy suspect SHA-256" />
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -328,19 +422,16 @@ export function ReportCard({
         <Button type="button" onClick={() => void submit()} disabled={busy}>
           {busy ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Working…
             </>
           ) : (
-            "Pin evidence & raise dispute"
+            <>
+              <Gavel className="h-4 w-4" />
+              Pin evidence & raise dispute
+            </>
           )}
         </Button>
-
-        {status && (
-          <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">
-            {status}
-          </div>
-        )}
       </CardContent>
     </Card>
   );

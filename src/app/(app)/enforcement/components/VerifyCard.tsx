@@ -4,13 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { C2paSdk, ManifestStore } from "@contentauth/c2pa-web";
 import { fetchConvexIpAssetsBySha256 } from "@/lib/api/convex";
 import { sha256HexFromFile } from "@/lib/crypto/sha256";
-import { formatBytes } from "@/lib/utils";
+import { getStoryIpaExplorerUrl } from "@/lib/story/explorer";
+import { formatBytes, ipfsUriToGatewayUrl } from "@/lib/utils";
+import { CopyIconButton } from "@/components/data-display/CopyIconButton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExternalLink, FileSearch, Link as LinkIcon, Loader2 } from "lucide-react";
 
 type VerificationMode = "file" | "url";
 
@@ -219,33 +223,30 @@ export function VerifyCard({ onResult }: { onResult: (result: VerifyResult | nul
     <Card className="h-fit">
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">Verify</CardTitle>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === "file" ? "secondary" : "outline"}
-              onClick={() => setMode("file")}
-            >
-              File
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={mode === "url" ? "secondary" : "outline"}
-              onClick={() => setMode("url")}
-            >
-              URL
-            </Button>
-          </div>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileSearch className="h-4 w-4" />
+            Verify
+          </CardTitle>
+          <Badge variant="outline" className="tabular-nums">
+            {matches.length} {matches.length === 1 ? "match" : "matches"}
+          </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
           Compute a content hash (SHA-256) and check for C2PA Content Credentials.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        {mode === "file" ? (
-          <div className="space-y-2">
+        <Tabs value={mode} onValueChange={(value) => setMode(value as VerificationMode)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="file" className="flex-1">
+              Upload
+            </TabsTrigger>
+            <TabsTrigger value="url" className="flex-1">
+              URL
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="file" className="mt-4 space-y-2">
             <Label htmlFor="verifyFile">Upload file</Label>
             <Input
               id="verifyFile"
@@ -253,9 +254,12 @@ export function VerifyCard({ onResult }: { onResult: (result: VerifyResult | nul
               accept="video/*,image/*,audio/*"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-          </div>
-        ) : (
-          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Best for C2PA checks. Supported: video, image, audio.
+            </p>
+          </TabsContent>
+
+          <TabsContent value="url" className="mt-4 space-y-2">
             <Label htmlFor="verifyUrl">URL</Label>
             <Input
               id="verifyUrl"
@@ -264,16 +268,16 @@ export function VerifyCard({ onResult }: { onResult: (result: VerifyResult | nul
               placeholder="https://… or ipfs://…"
             />
             <p className="text-xs text-muted-foreground">
-              URL hashing is server-side with SSRF + size limits.
+              URL hashing runs server-side with SSRF + size limits.
             </p>
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
 
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => void verify()} disabled={!canVerify}>
             {busy ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Working…
               </>
             ) : (
@@ -285,29 +289,62 @@ export function VerifyCard({ onResult }: { onResult: (result: VerifyResult | nul
           </Button>
         </div>
 
-        {status && (
-          <div className="rounded-md border p-3 text-sm whitespace-pre-wrap">
-            {status}
-          </div>
-        )}
+        {status ? (
+          <Alert variant={busy ? "info" : "destructive"}>
+            <AlertTitle>{busy ? "Working…" : "Couldn’t verify"}</AlertTitle>
+            <AlertDescription className="whitespace-pre-wrap">{status}</AlertDescription>
+          </Alert>
+        ) : null}
 
         {sha256 && (
-          <div className="space-y-2 rounded-md border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-sm font-medium">Fingerprint</div>
-              {bytes !== null && (
-                <Badge variant="outline">{formatBytes(bytes)}</Badge>
-              )}
+          <div className="space-y-2 rounded-xl border border-border p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-medium text-foreground">Fingerprint</div>
+              <div className="flex flex-wrap gap-2">
+                {bytes !== null ? (
+                  <Badge variant="outline">{formatBytes(bytes)}</Badge>
+                ) : null}
+                {contentType ? <Badge variant="outline">{contentType}</Badge> : null}
+              </div>
             </div>
-            <div className="font-mono text-xs break-all">{sha256}</div>
-            {contentType && (
-              <div className="text-xs text-muted-foreground">{contentType}</div>
-            )}
+            <div className="flex items-start justify-between gap-2">
+              <code className="min-w-0 flex-1 break-all rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs">
+                {sha256}
+              </code>
+              <CopyIconButton value={sha256} label="Copy SHA-256" />
+            </div>
+            {mode === "url" && url.trim() ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <LinkIcon className="h-3.5 w-3.5" />
+                <span className="break-all">{url.trim()}</span>
+              </div>
+            ) : null}
           </div>
         )}
 
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="text-sm font-medium">C2PA</div>
+        <div className="space-y-2 rounded-xl border border-border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-medium text-foreground">C2PA</div>
+            <Badge
+              variant={
+                c2pa.status === "present"
+                  ? "success"
+                  : c2pa.status === "unsupported" || c2pa.status === "error"
+                    ? "warning"
+                    : "outline"
+              }
+            >
+              {c2pa.status === "present"
+                ? "Present"
+                : c2pa.status === "none"
+                  ? "None"
+                  : c2pa.status === "unsupported"
+                    ? "Unsupported"
+                    : c2pa.status === "error"
+                      ? "Error"
+                      : "—"}
+            </Badge>
+          </div>
           {c2pa.status === "idle" && (
             <div className="text-sm text-muted-foreground">—</div>
           )}
@@ -342,28 +379,67 @@ export function VerifyCard({ onResult }: { onResult: (result: VerifyResult | nul
           )}
         </div>
 
-        <div className="space-y-2 rounded-md border p-3">
-          <div className="text-sm font-medium">
-            Matches <span className="text-muted-foreground">({matches.length})</span>
+        <div className="space-y-2 rounded-xl border border-border p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-sm font-medium text-foreground">Matches</div>
+            <Badge variant="outline" className="tabular-nums">
+              {matches.length}
+            </Badge>
           </div>
           {!matches.length ? (
             <div className="text-sm text-muted-foreground">No match found.</div>
           ) : (
             <ul className="space-y-2 text-sm">
               {matches.map((m: any) => (
-                <li key={`${m.ipId}-${m.matchOn}`} className="rounded-md border p-3">
+                <li
+                  key={`${m.ipId}-${m.matchOn}`}
+                  className="rounded-xl border border-border bg-background p-3"
+                >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-medium">{m.title}</div>
+                    <div className="font-medium text-foreground">{m.title}</div>
                     <Badge variant="outline">{m.matchOn}</Badge>
                   </div>
-                  <div className="mt-1 font-mono text-xs break-all">{m.ipId}</div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs">
+                      {m.ipId}
+                    </code>
+                    <CopyIconButton value={m.ipId} label="Copy IP Asset ID" />
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Button asChild size="sm" variant="outline">
                       <a href={`/assets/${m.ipId}`}>Open dashboard</a>
                     </Button>
                     <Button asChild size="sm" variant="outline">
-                      <a href={m.videoUrl} target="_blank" rel="noreferrer">
-                        Open video
+                      <a
+                        href={
+                          (m.assetKind ?? "").toLowerCase() === "dataset"
+                            ? `/datasets/${encodeURIComponent(m.ipId)}`
+                            : `/ip/${encodeURIComponent(m.ipId)}`
+                        }
+                      >
+                        Public page
+                      </a>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <a
+                        href={ipfsUriToGatewayUrl(m.videoUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Open file
+                      </a>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <a
+                        href={getStoryIpaExplorerUrl({
+                          ipId: m.ipId,
+                          chainId: typeof m.chainId === "number" ? m.chainId : undefined,
+                        })}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Story
                       </a>
                     </Button>
                   </div>

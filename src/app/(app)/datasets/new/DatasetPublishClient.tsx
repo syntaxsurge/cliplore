@@ -15,12 +15,36 @@ import { LICENSE_PRESETS, type LicensePreset } from "@/lib/story/license-presets
 import { sha256HexFromFile } from "@/lib/crypto/sha256";
 import { uploadFileToB2, type StorageUploadScope } from "@/lib/storage/upload-client";
 import { formatBytes } from "@/lib/utils";
+import { CopyIconButton } from "@/components/data-display/CopyIconButton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  ArrowLeft,
+  CircleAlert,
+  CheckCircle2,
+  FileText,
+  Globe,
+  Image as ImageIcon,
+  Loader2,
+  RefreshCw,
+  UploadCloud,
+} from "lucide-react";
 
 const DATASET_SCHEMA_VERSION = "cliplore.dataset.v1" as const;
 
@@ -206,21 +230,27 @@ function CheckboxRow(props: {
   onChange: (next: boolean) => void;
   title: string;
   description: string;
+  disabled?: boolean;
 }) {
   return (
-    <label htmlFor={props.id} className="flex items-start gap-3 rounded-lg border border-border p-3">
-      <input
+    <div className="flex items-start gap-3 rounded-xl border border-border bg-background p-3">
+      <Checkbox
         id={props.id}
-        type="checkbox"
         checked={props.checked}
-        onChange={(e) => props.onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 accent-primary"
+        onCheckedChange={(next) => props.onChange(Boolean(next))}
+        disabled={props.disabled}
+        className="mt-1"
       />
-      <span className="space-y-1">
-        <span className="block text-sm font-medium text-foreground">{props.title}</span>
-        <span className="block text-xs text-muted-foreground">{props.description}</span>
-      </span>
-    </label>
+      <div className="grid gap-1">
+        <Label
+          htmlFor={props.id}
+          className="cursor-pointer text-sm font-medium text-foreground"
+        >
+          {props.title}
+        </Label>
+        <p className="text-xs text-muted-foreground">{props.description}</p>
+      </div>
+    </div>
   );
 }
 
@@ -658,26 +688,366 @@ export default function DatasetPublishClient() {
                   ? "Error"
                   : "Ready";
 
+  const busy = status !== "idle" && status !== "success" && status !== "error";
+  const statusBadgeVariant =
+    status === "success" ? "success" : status === "error" ? "warning" : "outline";
+
+  const datasetTypeLabel =
+    DATASET_TYPE_OPTIONS.find((opt) => opt.value === datasetType)?.label ??
+    datasetType;
+  const captureMethodLabel =
+    CAPTURE_METHOD_OPTIONS.find((opt) => opt.value === captureMethod)?.label ??
+    captureMethod;
+  const licenseLabel = LICENSE_PRESETS[licensePreset]?.label ?? licensePreset;
+
+  const datasetUploadPercent = uploadDatasetProgress
+    ? Math.round(
+        (uploadDatasetProgress.uploadedBytes /
+          Math.max(uploadDatasetProgress.totalBytes, 1)) *
+          100,
+      )
+    : null;
+  const thumbnailUploadPercent = uploadThumbnailProgress
+    ? Math.round(
+        (uploadThumbnailProgress.uploadedBytes /
+          Math.max(uploadThumbnailProgress.totalBytes, 1)) *
+          100,
+      )
+    : null;
+
+  const requirements = [
+    {
+      key: "wallet",
+      ok: Boolean(address),
+      title: "Wallet connected",
+      hint: "Connect a wallet to register on Story.",
+    },
+    {
+      key: "dataset",
+      ok: Boolean(datasetFile),
+      title: "Dataset sample selected",
+      hint: "Choose the primary dataset sample file.",
+    },
+    {
+      key: "cover",
+      ok: Boolean(thumbnailFile),
+      title: "Cover image selected",
+      hint: "Add a cover image for marketplace previews.",
+    },
+    {
+      key: "title",
+      ok: title.trim().length >= 3,
+      title: "Title",
+      hint: "Use at least 3 characters.",
+    },
+    {
+      key: "description",
+      ok: description.trim().length >= 5,
+      title: "Description",
+      hint: "Use at least 5 characters.",
+    },
+    {
+      key: "version",
+      ok: datasetVersion.trim().length >= 1,
+      title: "Version",
+      hint: "Set a version like 1.0.0.",
+    },
+    {
+      key: "modalities",
+      ok: modalities.length >= 1,
+      title: "Modalities",
+      hint: "Select at least one modality.",
+    },
+    {
+      key: "rights",
+      ok: rightsConfirmed,
+      title: "Rights confirmed",
+      hint: "Confirm you have rights to license this dataset sample.",
+    },
+  ] as const;
+
+  const missingCount = requirements.filter((item) => !item.ok).length;
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8 space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">Data track</p>
-          <h1 className="text-4xl font-semibold text-foreground">Publish dataset</h1>
-          <p className="max-w-2xl text-muted-foreground">
-            Upload a rights-cleared sample, pin Story IPA metadata to IPFS, register on Story, and
-            list it for licensing.
-          </p>
+    <TooltipProvider>
+      <div className="mx-auto max-w-7xl space-y-8 px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">Data track</p>
+            <h1 className="text-4xl font-semibold tracking-tight text-foreground">
+              Publish dataset
+            </h1>
+            <p className="max-w-3xl text-muted-foreground">
+              Upload a rights-cleared sample, pin Story IPA metadata to IPFS, register on Story,
+              and list it for licensing.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={statusBadgeVariant} className="gap-1.5">
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+              {statusLabel}
+            </Badge>
+            <Button asChild variant="outline">
+              <Link href="/datasets">
+                <ArrowLeft className="h-4 w-4" />
+                Back to datasets
+              </Link>
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={status === "error" ? "warning" : status === "success" ? "success" : "outline"}>
-            {statusLabel}
-          </Badge>
-          <Button asChild variant="outline">
-            <Link href="/datasets">Back to datasets</Link>
-          </Button>
-        </div>
-      </div>
+
+      <Card>
+        <CardHeader className="space-y-2">
+          <CardTitle className="text-base">Publish controls</CardTitle>
+          <CardDescription>
+            Confirm requirements, pick a license preset, and register the dataset on Story.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!address ? (
+            <Alert variant="warning">
+              <AlertTitle>Wallet required</AlertTitle>
+              <AlertDescription>
+                Connect your wallet to register on Story and list this dataset in the marketplace.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid gap-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Dataset type</span>
+              <span className="font-medium text-foreground">{datasetTypeLabel}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Capture method</span>
+              <span className="font-medium text-foreground">{captureMethodLabel}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">License preset</span>
+              <span className="font-medium text-foreground">{licenseLabel}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Modalities</span>
+              <span className="font-medium text-foreground">{modalities.length}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Tags</span>
+              <span className="font-medium text-foreground">{tags.length}</span>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-foreground">Requirements</p>
+              <Badge variant="outline" className="tabular-nums">
+                {missingCount === 0 ? "Ready" : `${missingCount} missing`}
+              </Badge>
+            </div>
+            <ul className="space-y-2">
+              {requirements.map((item) => (
+                <li key={item.key} className="flex gap-2">
+                  {item.ok ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                  ) : (
+                    <CircleAlert className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  )}
+                  <div className="min-w-0">
+                    <p
+                      className={`text-sm ${
+                        item.ok ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      {item.title}
+                    </p>
+                    {!item.ok ? (
+                      <p className="text-xs text-muted-foreground">{item.hint}</p>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {(uploadDatasetProgress || uploadThumbnailProgress) ? (
+            <>
+              <Separator />
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-foreground">Upload progress</p>
+
+                {uploadDatasetProgress ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5" />
+                        Dataset sample
+                      </span>
+                      <span className="tabular-nums">
+                        {formatBytes(uploadDatasetProgress.uploadedBytes)} /{" "}
+                        {formatBytes(uploadDatasetProgress.totalBytes)}
+                      </span>
+                    </div>
+                    <Progress value={datasetUploadPercent ?? 0} />
+                    <p className="text-xs text-muted-foreground">
+                      Part {uploadDatasetProgress.partNumber} / {uploadDatasetProgress.totalParts}
+                    </p>
+                  </div>
+                ) : null}
+
+                {uploadThumbnailProgress ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        Cover image
+                      </span>
+                      <span className="tabular-nums">
+                        {formatBytes(uploadThumbnailProgress.uploadedBytes)} /{" "}
+                        {formatBytes(uploadThumbnailProgress.totalBytes)}
+                      </span>
+                    </div>
+                    <Progress value={thumbnailUploadPercent ?? 0} />
+                    <p className="text-xs text-muted-foreground">
+                      Part {uploadThumbnailProgress.partNumber} /{" "}
+                      {uploadThumbnailProgress.totalParts}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : null}
+
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTitle>Publish failed</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          {marketplaceSyncError ? (
+            <Alert variant="warning">
+              <AlertTitle>Marketplace sync failed</AlertTitle>
+              <AlertDescription>{marketplaceSyncError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button onClick={() => void handlePublish()} disabled={!canPublish} className="flex-1">
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {statusLabel}
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="h-4 w-4" />
+                  Register on Story
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDatasetId(crypto.randomUUID());
+                setDatasetFile(null);
+                setThumbnailFile(null);
+                setTitle("");
+                setDescription("");
+                setDatasetType("pov-video");
+                setDatasetVersion("1.0.0");
+                setModalities(["video"]);
+                setTagsInput("");
+                setCaptureMethod("handheld");
+                setCaptureDevice("");
+                setCaptureEnvironment("");
+                setCaptureLighting("");
+                setCaptureFps("");
+                setCaptureResolution("");
+                setLocationPrivacy("coarse");
+                setCaptureCountry("");
+                setCaptureRegion("");
+                setUsageNotes("");
+                setContainsPeople(false);
+                setContainsSensitiveData(false);
+                setRightsConfirmed(false);
+                setModelRelease(false);
+                setPropertyRelease(false);
+                setThirdPartyAudioCleared(false);
+                setReleaseProofs([]);
+                setSensors([]);
+                setHasLabels(false);
+                setLabelFormat("");
+                setLabelTaxonomy("");
+                setLabelingTool("");
+                setLabelManifestUri("");
+                setLabelManifestHash("");
+                setSplitTrain("");
+                setSplitVal("");
+                setSplitTest("");
+                setArtifacts([]);
+                setCaptureSigned(false);
+                setDeviceSignature("");
+                setC2paManifestUri("");
+                setC2paManifestHash("");
+                setLicensePreset("commercial-5");
+                setUploadDatasetProgress(null);
+                setUploadThumbnailProgress(null);
+                setError(null);
+                setMarketplaceSyncError(null);
+                setResult(null);
+                setHashJobs({});
+                setStatus("idle");
+                toast.success("Reset form");
+              }}
+              disabled={status !== "idle" && status !== "success" && status !== "error"}
+              className="sm:w-[160px]"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Reset
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {result ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Published</CardTitle>
+            <CardDescription>Your dataset is registered on Story and ready to license.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+              <Label>IP Asset ID</Label>
+              <div className="flex items-center gap-2">
+                <code className="max-w-full truncate rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-xs">
+                  {result.ipId}
+                </code>
+                <CopyIconButton value={result.ipId} label="Copy IP Asset ID" />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm">
+                <a
+                  href={getStoryIpaExplorerUrl({ ipId: result.ipId })}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Globe className="h-4 w-4" />
+                  Story Explorer
+                </a>
+              </Button>
+              <Button asChild size="sm" variant="secondary">
+                <Link href={`/datasets/${encodeURIComponent(result.ipId)}`}>
+                  View dataset page
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader>
@@ -879,18 +1249,23 @@ export default function DatasetPublishClient() {
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
               <Label htmlFor="location-privacy">Location privacy</Label>
-              <select
-                id="location-privacy"
+              <Select
                 value={locationPrivacy}
-                onChange={(e) => setLocationPrivacy(e.target.value as LocationPrivacy)}
-                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                onValueChange={(value) =>
+                  setLocationPrivacy(value as LocationPrivacy)
+                }
               >
-                {LOCATION_PRIVACY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="location-privacy">
+                  <SelectValue placeholder="Select privacy level" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOCATION_PRIVACY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="capture-country">Country</Label>
@@ -957,26 +1332,29 @@ export default function DatasetPublishClient() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label htmlFor={`sensor-type-${sensor.id}`}>Type</Label>
-                    <select
-                      id={`sensor-type-${sensor.id}`}
+                    <Select
                       value={sensor.sensorType}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         setSensors((prev) =>
                           prev.map((s) =>
                             s.id === sensor.id
-                              ? { ...s, sensorType: e.target.value as SensorType }
+                              ? { ...s, sensorType: value as SensorType }
                               : s,
                           ),
                         )
                       }
-                      className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
-                      {SENSOR_TYPE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger id={`sensor-type-${sensor.id}`}>
+                        <SelectValue placeholder="Select sensor type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SENSOR_TYPE_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid gap-2">
@@ -1204,26 +1582,29 @@ export default function DatasetPublishClient() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="grid gap-2">
                         <Label htmlFor={`proof-type-${proof.id}`}>Type</Label>
-                        <select
-                          id={`proof-type-${proof.id}`}
+                        <Select
                           value={proof.type}
-                          onChange={(e) =>
+                          onValueChange={(value) =>
                             setReleaseProofs((prev) =>
                               prev.map((p) =>
                                 p.id === proof.id
-                                  ? { ...p, type: e.target.value as ReleaseProofType }
+                                  ? { ...p, type: value as ReleaseProofType }
                                   : p,
                               ),
                             )
                           }
-                          className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                         >
-                          {RELEASE_PROOF_TYPE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger id={`proof-type-${proof.id}`}>
+                            <SelectValue placeholder="Select proof type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {RELEASE_PROOF_TYPE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="grid gap-2">
@@ -1461,26 +1842,29 @@ export default function DatasetPublishClient() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="grid gap-2">
                         <Label htmlFor={`artifact-role-${artifact.id}`}>Role</Label>
-                        <select
-                          id={`artifact-role-${artifact.id}`}
+                        <Select
                           value={artifact.role}
-                          onChange={(e) =>
+                          onValueChange={(value) =>
                             setArtifacts((prev) =>
                               prev.map((a) =>
                                 a.id === artifact.id
-                                  ? { ...a, role: e.target.value as ArtifactRole }
+                                  ? { ...a, role: value as ArtifactRole }
                                   : a,
                               ),
                             )
                           }
-                          className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
                         >
-                          {ARTIFACT_ROLE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger id={`artifact-role-${artifact.id}`}>
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ARTIFACT_ROLE_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="grid gap-2">
                         <Label htmlFor={`artifact-mime-${artifact.id}`}>MIME type</Label>
@@ -1658,135 +2042,7 @@ export default function DatasetPublishClient() {
           ))}
         </CardContent>
       </Card>
-
-      {uploadDatasetProgress || uploadThumbnailProgress ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Upload progress</CardTitle>
-            <CardDescription>Backblaze B2 upload (single or multipart).</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-muted-foreground">
-            {uploadDatasetProgress ? (
-              <div>
-                Dataset: {formatBytes(uploadDatasetProgress.uploadedBytes)} /{" "}
-                {formatBytes(uploadDatasetProgress.totalBytes)} · Part{" "}
-                {uploadDatasetProgress.partNumber} / {uploadDatasetProgress.totalParts}
-              </div>
-            ) : null}
-            {uploadThumbnailProgress ? (
-              <div>
-                Cover: {formatBytes(uploadThumbnailProgress.uploadedBytes)} /{" "}
-                {formatBytes(uploadThumbnailProgress.totalBytes)} · Part{" "}
-                {uploadThumbnailProgress.partNumber} / {uploadThumbnailProgress.totalParts}
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null}
-
-      {marketplaceSyncError ? (
-        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
-          {marketplaceSyncError}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void handlePublish()} disabled={!canPublish}>
-          Register dataset on Story
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => {
-            setDatasetId(crypto.randomUUID());
-            setDatasetFile(null);
-            setThumbnailFile(null);
-            setTitle("");
-            setDescription("");
-            setDatasetType("pov-video");
-            setDatasetVersion("1.0.0");
-            setModalities(["video"]);
-            setTagsInput("");
-            setCaptureMethod("handheld");
-            setCaptureDevice("");
-            setCaptureEnvironment("");
-            setCaptureLighting("");
-            setCaptureFps("");
-            setCaptureResolution("");
-            setLocationPrivacy("coarse");
-            setCaptureCountry("");
-            setCaptureRegion("");
-            setUsageNotes("");
-            setContainsPeople(false);
-            setContainsSensitiveData(false);
-            setRightsConfirmed(false);
-            setModelRelease(false);
-            setPropertyRelease(false);
-            setThirdPartyAudioCleared(false);
-            setReleaseProofs([]);
-            setSensors([]);
-            setHasLabels(false);
-            setLabelFormat("");
-            setLabelTaxonomy("");
-            setLabelingTool("");
-            setLabelManifestUri("");
-            setLabelManifestHash("");
-            setSplitTrain("");
-            setSplitVal("");
-            setSplitTest("");
-            setArtifacts([]);
-            setCaptureSigned(false);
-            setDeviceSignature("");
-            setC2paManifestUri("");
-            setC2paManifestHash("");
-            setLicensePreset("commercial-5");
-            setUploadDatasetProgress(null);
-            setUploadThumbnailProgress(null);
-            setError(null);
-            setMarketplaceSyncError(null);
-            setResult(null);
-            setHashJobs({});
-            setStatus("idle");
-            toast.success("Reset form");
-          }}
-          disabled={status !== "idle" && status !== "success" && status !== "error"}
-        >
-          Reset
-        </Button>
       </div>
-
-      {result ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Published</CardTitle>
-            <CardDescription>Your dataset is registered on Story and ready to license.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="success">IP ID</Badge>
-              <code className="break-all rounded-md bg-muted px-2 py-1 text-xs text-foreground">
-                {result.ipId}
-              </code>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="sm">
-                <a href={getStoryIpaExplorerUrl({ ipId: result.ipId })} target="_blank" rel="noreferrer">
-                  Open Story Explorer
-                </a>
-              </Button>
-              <Button asChild size="sm" variant="secondary">
-                <Link href={`/datasets/${encodeURIComponent(result.ipId)}`}>View dataset page</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
+    </TooltipProvider>
   );
 }
