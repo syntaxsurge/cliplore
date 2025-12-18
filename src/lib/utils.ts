@@ -29,6 +29,42 @@ export function getYouTubeVideoId(url: string): string | null {
   }
 }
 
+export function getCanvaDesignUrl(url: string, options: { embed?: boolean } = {}): string | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    if (hostname !== "www.canva.com" && hostname !== "canva.com") return null;
+
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const designIndex = parts.indexOf("design");
+    if (designIndex === -1) return null;
+
+    const designId = parts[designIndex + 1];
+    if (!designId) return null;
+
+    const maybeKey = parts[designIndex + 2];
+    const hasKey = Boolean(maybeKey && maybeKey !== "view" && maybeKey !== "edit");
+    const designKey = hasKey ? maybeKey : null;
+
+    const viewUrl = new URL("https://www.canva.com");
+    viewUrl.pathname = designKey
+      ? `/design/${designId}/${designKey}/view`
+      : `/design/${designId}/view`;
+
+    if (options.embed) {
+      viewUrl.search = "?embed";
+    }
+
+    return viewUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function stableJsonStringify(value: unknown) {
   const seen = new WeakSet<object>();
 

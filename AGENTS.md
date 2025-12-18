@@ -360,7 +360,7 @@ Cliplore is a Next.js 15 App Router app for Sora-assisted video creation, in-bro
 ## Route Inventory
 
 - **Public routes (marketing)**
-  - `/`: marketing home (product overview + CTAs)
+  - `/`: marketing home (product overview + tabbed demo video/pitch deck embeds + CTAs)
   - `/explore`: IP marketplace list (Convex-backed)
   - `/datasets`: dataset marketplace list (Convex-backed)
   - `/demo`: demo hub (genre cards with video/prompt links)

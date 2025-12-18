@@ -35,7 +35,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { cn, getYouTubeVideoId } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn, getCanvaDesignUrl, getYouTubeVideoId } from "@/lib/utils";
 
 type AccessType = "public" | "wallet";
 
@@ -413,15 +414,22 @@ function ProductMapCard({
 
 type HomeClientProps = {
   demoVideoUrl: string;
+  pitchDeckUrl: string;
 };
 
-export default function HomeClient({ demoVideoUrl }: HomeClientProps) {
+export default function HomeClient({ demoVideoUrl, pitchDeckUrl }: HomeClientProps) {
   const reduceMotion = useReducedMotion();
   const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
-  const demoVideoId = getYouTubeVideoId(demoVideoUrl.trim());
+  const trimmedDemoVideoUrl = demoVideoUrl.trim();
+  const demoVideoId = getYouTubeVideoId(trimmedDemoVideoUrl);
   const demoEmbedSrc = demoVideoId
     ? `https://www.youtube-nocookie.com/embed/${demoVideoId}?rel=0&modestbranding=1`
     : null;
+  const trimmedPitchDeckUrl = pitchDeckUrl.trim();
+  const pitchDeckEmbedSrc = getCanvaDesignUrl(trimmedPitchDeckUrl, { embed: true });
+  const pitchDeckViewUrl = getCanvaDesignUrl(trimmedPitchDeckUrl) ?? trimmedPitchDeckUrl;
+  const showcaseDefaultTab = demoEmbedSrc ? "video" : "deck";
+  const shouldShowcase = Boolean(demoEmbedSrc || pitchDeckEmbedSrc);
 
   const fadeUp = (delay = 0) => ({
     initial: { opacity: 0, y: 14 },
@@ -557,21 +565,21 @@ export default function HomeClient({ demoVideoUrl }: HomeClientProps) {
         </div>
       </section>
 
-      {demoEmbedSrc ? (
+      {shouldShowcase ? (
         <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-muted/10 p-6 sm:p-8 lg:p-10">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_60%)]" />
 
-            <div className="relative space-y-10">
+            <Tabs defaultValue={showcaseDefaultTab} className="relative space-y-10">
               <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
                 <motion.div {...fadeUp(0)} className="space-y-3 lg:col-span-8">
-                  <p className="text-sm font-medium text-muted-foreground">Demo video</p>
+                  <p className="text-sm font-medium text-muted-foreground">Live demo</p>
                   <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                    Watch Cliplore in action
+                    Watch the walkthrough or skim the deck
                   </h2>
                   <p className="max-w-2xl text-muted-foreground">
-                    A quick walkthrough of Sora generation, timeline editing, Story publishing, and
-                    enforcement—end to end.
+                    Switch between the demo video and the Canva pitch deck without leaving the
+                    page.
                   </p>
                 </motion.div>
 
@@ -579,36 +587,115 @@ export default function HomeClient({ demoVideoUrl }: HomeClientProps) {
                   {...fadeUp(0.05)}
                   className="flex flex-col gap-3 sm:flex-row lg:col-span-4 lg:justify-end"
                 >
-                  <Button asChild size="lg">
-                    <a href={demoVideoUrl} target="_blank" rel="noreferrer">
-                      Watch on YouTube
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
-                  </Button>
-                  <Button asChild size="lg" variant="outline">
-                    <Link href="/demo">More demos</Link>
-                  </Button>
+                  <TabsList className="w-full sm:w-auto">
+                    {demoEmbedSrc ? (
+                      <TabsTrigger value="video" className="flex-1 sm:flex-none">
+                        <PlayCircle className="h-4 w-4" />
+                        Demo video
+                      </TabsTrigger>
+                    ) : null}
+                    {pitchDeckEmbedSrc ? (
+                      <TabsTrigger value="deck" className="flex-1 sm:flex-none">
+                        <BookOpen className="h-4 w-4" />
+                        Pitch deck
+                      </TabsTrigger>
+                    ) : null}
+                  </TabsList>
                 </motion.div>
               </div>
 
-              <motion.div {...fadeUp(0.1)} className="relative">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_center,rgba(120,119,198,0.20),transparent_65%)]"
-                />
-                <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-border bg-black shadow-2xl">
-                  <iframe
-                    className="absolute inset-0 h-full w-full"
-                    src={demoEmbedSrc}
-                    title="Cliplore demo video"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    loading="lazy"
-                    referrerPolicy="strict-origin-when-cross-origin"
-                  />
-                </div>
-              </motion.div>
-            </div>
+              {demoEmbedSrc ? (
+                <TabsContent value="video" className="mt-0 space-y-8">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                        Watch Cliplore in action
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        A quick end-to-end walkthrough: Sora generation, timeline editing, Story
+                        publishing, and enforcement.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button asChild size="lg">
+                        <a href={trimmedDemoVideoUrl} target="_blank" rel="noreferrer">
+                          Watch on YouTube
+                          <ArrowRight className="h-4 w-4" />
+                        </a>
+                      </Button>
+                      <Button asChild size="lg" variant="outline">
+                        <Link href="/demo">More demos</Link>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <motion.div {...fadeUp(0.1)} className="relative">
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_center,rgba(120,119,198,0.20),transparent_65%)]"
+                    />
+                    <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-border bg-black shadow-2xl">
+                      <iframe
+                        className="absolute inset-0 h-full w-full"
+                        src={demoEmbedSrc}
+                        title="Cliplore demo video"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        loading="lazy"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                      />
+                    </div>
+                  </motion.div>
+                </TabsContent>
+              ) : null}
+
+              {pitchDeckEmbedSrc ? (
+                <TabsContent value="deck" className="mt-0 space-y-8">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <h3 className="text-lg font-semibold tracking-tight text-foreground">
+                        Browse the pitch deck
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        Product vision, architecture, and the Story Protocol workflow—slide by
+                        slide.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button asChild size="lg">
+                        <a href={pitchDeckViewUrl} target="_blank" rel="noreferrer">
+                          Open pitch deck
+                          <ArrowRight className="h-4 w-4" />
+                        </a>
+                      </Button>
+                      <Button asChild size="lg" variant="outline">
+                        <Link href="/demo">See demos</Link>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <motion.div {...fadeUp(0.1)} className="relative">
+                    <div
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 rounded-3xl bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.18),transparent_65%)]"
+                    />
+                    <div className="relative aspect-video w-full overflow-hidden rounded-3xl border border-border bg-background shadow-2xl">
+                      <iframe
+                        className="absolute inset-0 h-full w-full"
+                        src={pitchDeckEmbedSrc}
+                        title="Cliplore pitch deck"
+                        allow="fullscreen"
+                        allowFullScreen
+                        loading="lazy"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                      />
+                    </div>
+                  </motion.div>
+                </TabsContent>
+              ) : null}
+            </Tabs>
           </div>
         </section>
       ) : null}
